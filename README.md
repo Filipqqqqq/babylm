@@ -156,6 +156,25 @@ configs/eval/                  # configs for model paths, tasks, and outputs
 Evaluation outputs should stay outside git, for example under
 `/SSD2/babylm-baby-steps-runs/evaluation/`.
 
+Run fast zero-shot evaluation over every Hugging Face checkpoint in a completed
+training run:
+
+```bash
+conda run -n babylm python scripts/eval_babylm_checkpoints.py \
+  --config configs/eval/fast_eval.yaml \
+  --run-dir /SSD2/babylm-baby-steps-runs/training/YOUR_RUN \
+  --eval-data-dir /SSD/tokenPred/babylm_10m/evaluation-pipeline-2025/evaluation_data/fast_eval \
+  --output-dir /SSD2/babylm-baby-steps-runs/evaluation/YOUR_RUN_fast_eval \
+  --device 1
+```
+
+The wrapper writes raw BabyLM outputs plus parsed summaries:
+
+```text
+summary.json  # averages and subtask scores by checkpoint
+summary.csv   # flattened score table for plotting
+```
+
 ## Developer Checks
 
 These checks are guardrails for people editing the training code. They do not
