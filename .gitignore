@@ -18,6 +18,9 @@ env/
 .env
 *.env
 hf_token.txt
+git_pat.txt
+*_pat.txt
+*token*.txt
 *.key
 *.pem
 manifests/paths.local.yaml
