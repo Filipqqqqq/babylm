@@ -1,0 +1,23 @@
+name: babylm10m_gpt2_pretrained_block512_eos
+
+data:
+  clean_train_dir: /SSD/tokenPred/babylm_10m/train_files/CustomLlama/data/babylm_10M_clean
+  clean_dev_dir: /SSD/tokenPred/babylm_10m/train_files/CustomLlama/data/babylm_dev_clean
+  sources:
+    - childes
+    - switchboard
+    - bnc_spoken
+    - gutenberg
+    - open_subtitles
+    - simple_wiki
+
+tokenizer:
+  kind: pretrained_hf
+  name_or_path: gpt2
+
+chunks:
+  chunk_size: 512
+  wrap_with_eos: true
+  drop_remainder: true
+  add_special_tokens: false
+  output_dir: /SSD2/babylm-baby-steps-artifacts/token_chunks/babylm10m_gpt2_pretrained_block512_eos

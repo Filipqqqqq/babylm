@@ -1,0 +1,23 @@
+name: babylm_10m
+
+raw:
+  train_dir: /SSD/tokenPred/babylm_10m/train_files/CustomLlama/data/babylm_10M
+  dev_dir: /SSD/tokenPred/babylm_10m/train_files/CustomLlama/data/babylm_dev
+
+clean:
+  train_dir: /SSD2/babylm-baby-steps-artifacts/clean_text/babylm_10m/train
+  dev_dir: /SSD2/babylm-baby-steps-artifacts/clean_text/babylm_10m/dev
+  manifest_path: /SSD2/babylm-baby-steps-artifacts/clean_text/babylm_10m/manifest.json
+
+sources:
+  - bnc_spoken
+  - childes
+  - gutenberg
+  - open_subtitles
+  - simple_wiki
+  - switchboard
+
+cleaning:
+  seq_length: 128
+  encoding: utf-8
+  overwrite: true
