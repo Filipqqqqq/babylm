@@ -54,12 +54,16 @@ def compute_causal_lm_loss(
     logits = outputs.logits
     vocab_size = logits.size(-1)
 
+    # The dataloader has already shifted labels one token to the right, so each
+    # logit position predicts the matching label position.
     token_losses = F.cross_entropy(
         logits.reshape(-1, vocab_size),
         labels.reshape(-1),
         reduction="none",
     ).reshape_as(labels)
 
+    # Average by real target tokens instead of by sequence length so padding
+    # does not change the loss scale across batches.
     mask = loss_mask.to(dtype=token_losses.dtype)
     token_count = mask.sum().clamp_min(1)
     loss = (token_losses * mask).sum() / token_count
@@ -94,6 +98,8 @@ def evaluate_causal_lm_loss(
             total_tokens += token_count
 
     if accelerator.num_processes > 1:
+        # Each process sees a shard of the validation loader; reduce token sums
+        # before forming the final token-averaged loss.
         total_loss = accelerator.reduce(total_loss, reduction="sum")
         total_tokens = accelerator.reduce(total_tokens, reduction="sum")
 
@@ -115,6 +121,8 @@ def save_hf_checkpoint(
     if not accelerator.is_main_process:
         return
 
+    # Only the main process writes files, while accelerator.save handles the
+    # distributed-safe tensor serialization details.
     checkpoint_dir = Path(output_dir) / name
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     unwrapped_model = accelerator.unwrap_model(model)
@@ -164,6 +172,8 @@ def train_causal_lm(
         )
 
         for input_ids, labels, loss_mask, attention_mask in progress:
+            # accelerator.accumulate handles no_sync during gradient
+            # accumulation and flips sync_gradients on optimizer-update steps.
             with accelerator.accumulate(model):
                 with accelerator.autocast():
                     loss, token_count = compute_causal_lm_loss(
@@ -189,6 +199,7 @@ def train_causal_lm(
                 loss_sum = accelerator.reduce(loss_sum, reduction="sum")
                 token_count = accelerator.reduce(token_count, reduction="sum")
 
+            # Count only optimizer-update steps, not every microbatch.
             if accelerator.sync_gradients:
                 global_step += 1
 
@@ -229,6 +240,8 @@ def train_causal_lm(
                 and global_step % eval_every_steps == 0
             )
             if should_eval:
+                # Evaluation is intentionally inside the loop but outside the
+                # gradient path; it restores train mode before returning.
                 val_loss = evaluate_causal_lm_loss(
                     model,
                     val_loader,
