@@ -3,8 +3,17 @@ name = "babylm-baby-steps"
 version = "0.1.0"
 description = "Clean team workspace for BabyLM Challenge data, training, evaluation, and analysis workflows."
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "accelerate",
+    "numpy",
+    "pytest",
+    "pyyaml",
+    "torch",
+    "tqdm",
+    "transformers",
+]
 
 [tool.pytest.ini_options]
+addopts = "-p no:cacheprovider"
 pythonpath = ["src"]
 testpaths = ["tests"]
