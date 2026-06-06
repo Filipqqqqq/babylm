@@ -3,7 +3,7 @@
 
 paths:
   raw_data_dir: /SSD2/datasets/babylm_100m/train_files/train_100M
-  processed_dir: /SSD2/babylm-baby-steps-artifacts/processed
+  processed_dir: /SSD2/babylm-baby-steps-cache/processed
   runs_dir: /SSD2/babylm-baby-steps-runs
   eval_pipeline_dir: /SSD2/babylm-baby-steps-tools/evaluation-pipeline-2025
   model_dir: /SSD2/babylm-baby-steps-runs/training/babylm_100m_gpt2_baseline/checkpoints/latest
@@ -11,7 +11,7 @@ paths:
 
 environment:
   BABYSTEPS_RAW_DATA_DIR: /SSD2/datasets/babylm_100m/train_files/train_100M
-  BABYSTEPS_PROCESSED_DIR: /SSD2/babylm-baby-steps-artifacts/processed
+  BABYSTEPS_PROCESSED_DIR: /SSD2/babylm-baby-steps-cache/processed
   BABYSTEPS_RUNS_DIR: /SSD2/babylm-baby-steps-runs
   BABYSTEPS_EVAL_PIPELINE_DIR: /SSD2/babylm-baby-steps-tools/evaluation-pipeline-2025
   BABYSTEPS_MODEL_DIR: /SSD2/babylm-baby-steps-runs/training/babylm_100m_gpt2_baseline/checkpoints/latest

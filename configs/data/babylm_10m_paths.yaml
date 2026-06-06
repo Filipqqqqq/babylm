@@ -5,9 +5,9 @@ raw:
   dev_dir: /SSD/tokenPred/babylm_10m/train_files/CustomLlama/data/babylm_dev
 
 clean:
-  train_dir: /SSD2/babylm-baby-steps-artifacts/clean_text/babylm_10m/train
-  dev_dir: /SSD2/babylm-baby-steps-artifacts/clean_text/babylm_10m/dev
-  manifest_path: /SSD2/babylm-baby-steps-artifacts/clean_text/babylm_10m/manifest.json
+  train_dir: /SSD2/babylm-baby-steps-cache/clean_text/babylm_10m/train
+  dev_dir: /SSD2/babylm-baby-steps-cache/clean_text/babylm_10m/dev
+  manifest_path: /SSD2/babylm-baby-steps-cache/clean_text/babylm_10m/manifest.json
 
 sources:
   - bnc_spoken

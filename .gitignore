@@ -28,7 +28,7 @@ configs/**/*.local.yaml
 
 # Generated outputs
 runs/**
-artifacts/**
+cache/**
 checkpoints/**
 logs/**
 wandb/
@@ -36,7 +36,7 @@ mlruns/
 
 # Keep empty output directories visible in a fresh clone.
 !runs/.gitkeep
-!artifacts/.gitkeep
+!cache/.gitkeep
 
 # Heavy data/cache formats
 *.arrow

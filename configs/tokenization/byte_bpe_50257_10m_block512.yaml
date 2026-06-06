@@ -17,11 +17,11 @@ tokenizer:
   min_frequency: 4
   special_tokens:
     - <|endoftext|>
-  output_dir: /SSD2/babylm-baby-steps-artifacts/tokenizers/babylm10m_byte_bpe_50257
+  output_dir: /SSD2/babylm-baby-steps-cache/tokenizers/babylm10m_byte_bpe_50257
 
 chunks:
   chunk_size: 512
   wrap_with_eos: true
   drop_remainder: true
   add_special_tokens: false
-  output_dir: /SSD2/babylm-baby-steps-artifacts/token_chunks/babylm10m_byte_bpe_50257_block512_eos
+  output_dir: /SSD2/babylm-baby-steps-cache/token_chunks/babylm10m_byte_bpe_50257_block512_eos

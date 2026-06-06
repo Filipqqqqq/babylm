@@ -20,4 +20,4 @@ chunks:
   wrap_with_eos: true
   drop_remainder: true
   add_special_tokens: false
-  output_dir: /SSD2/babylm-baby-steps-artifacts/token_chunks/babylm10m_gpt2_pretrained_block512_eos
+  output_dir: /SSD2/babylm-baby-steps-cache/token_chunks/babylm10m_gpt2_pretrained_block512_eos
