@@ -1,0 +1,17 @@
+evaluation:
+  name: babylm_fast_eval
+  pipeline_dir: ${BABYSTEPS_EVAL_PIPELINE_DIR}
+  suite: fast_eval
+
+model:
+  path: ${BABYSTEPS_MODEL_DIR}
+  tokenizer: gpt2
+
+tasks:
+  - blimp_fast
+  - ewok_fast
+  - entity_tracking_fast
+  - reading
+
+outputs:
+  result_dir: ${BABYSTEPS_RUNS_DIR}/eval/babylm_fast_eval

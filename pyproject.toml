@@ -1,0 +1,10 @@
+[project]
+name = "babylm-baby-steps"
+version = "0.1.0"
+description = "Clean team workspace for BabyLM Challenge data, training, evaluation, and analysis workflows."
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

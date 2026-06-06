@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Local machine config and secrets
+.env
+*.env
+hf_token.txt
+*.key
+*.pem
+manifests/paths.local.yaml
+configs/**/*.local.yaml
+
+# Generated outputs
+runs/**
+artifacts/**
+checkpoints/**
+logs/**
+wandb/
+mlruns/
+
+# Keep empty output directories visible in a fresh clone.
+!runs/.gitkeep
+!artifacts/.gitkeep
+
+# Heavy data/cache formats
+*.arrow
+*.bin
+*.ckpt
+*.npy
+*.npz
+*.pkl
+*.pickle
+*.pt
+*.safetensors
+*.zip
+*.tar
+*.tar.gz
+
+# OS/editor noise
+.DS_Store
+*.swp
+*.swo
