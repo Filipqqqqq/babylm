@@ -1,0 +1,3 @@
+[submodule "external/babylm-eval"]
+	path = external/babylm-eval
+	url = https://github.com/babylm-org/babylm-eval.git

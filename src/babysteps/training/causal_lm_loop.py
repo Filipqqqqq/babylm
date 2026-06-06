@@ -6,20 +6,12 @@ import json
 import random
 from itertools import islice
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 from tqdm.auto import tqdm
-
-
-DEFAULT_GENERATION_PROMPTS = [
-    "Sunlight filtered through the ancient oak's twisting branches.",
-    "A curious cat perched on the windowsill.",
-    "Alice loves spicy food, while Bob hates it. When the waiter brought the extra-hot curry,",
-    "John believes his keys are in his pocket, but they are actually on the table. He reaches",
-]
 
 
 def set_all_seeds(seed: int, *, deterministic: bool = False) -> None:
@@ -109,33 +101,6 @@ def evaluate_causal_lm_loss(
     return (total_loss / total_tokens.clamp_min(1)).item()
 
 
-def generate_sample(
-    model: torch.nn.Module,
-    tokenizer,
-    accelerator,
-    *,
-    prompts: Sequence[str],
-    max_new_tokens: int = 40,
-) -> str:
-    """Generate one sample from a random prompt on the main process."""
-
-    prompt = random.choice(list(prompts))
-    unwrapped_model = accelerator.unwrap_model(model)
-    inputs = tokenizer(prompt, return_tensors="pt").to(accelerator.device)
-
-    with torch.no_grad():
-        generated = unwrapped_model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            top_k=50,
-            pad_token_id=tokenizer.pad_token_id,
-            eos_token_id=tokenizer.eos_token_id,
-        )
-
-    return tokenizer.decode(generated[0], skip_special_tokens=True)
-
-
 def save_hf_checkpoint(
     model: torch.nn.Module,
     tokenizer,
@@ -171,9 +136,6 @@ def train_causal_lm(
     log_every_steps: int = 50,
     eval_every_steps: int = 500,
     eval_max_batches: int | None = 20,
-    generate_every_steps: int = 500,
-    generation_prompts: Sequence[str] | None = DEFAULT_GENERATION_PROMPTS,
-    max_new_tokens: int = 40,
     gradient_clip_norm: float | None = None,
     save_every_epochs: int | None = 1,
     save_final: bool = True,
@@ -184,8 +146,6 @@ def train_causal_lm(
     metrics_path = output_dir / "metrics_history.json"
     history: list[dict[str, Any]] = []
     global_step = 0
-    if generation_prompts is None:
-        generation_prompts = DEFAULT_GENERATION_PROMPTS
 
     if accelerator.is_main_process:
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -287,33 +247,6 @@ def train_causal_lm(
                         }
                     )
                     save_json_atomic(history, metrics_path)
-
-            should_generate = (
-                generate_every_steps > 0
-                and accelerator.sync_gradients
-                and global_step % generate_every_steps == 0
-                and accelerator.is_main_process
-            )
-            if should_generate:
-                model.eval()
-                sample = generate_sample(
-                    model,
-                    tokenizer,
-                    accelerator,
-                    prompts=generation_prompts,
-                    max_new_tokens=max_new_tokens,
-                )
-                print(f"[step {global_step:06d}] sample: {sample}")
-                history.append(
-                    {
-                        "type": "sample",
-                        "epoch": epoch,
-                        "step": global_step,
-                        "text": sample,
-                    }
-                )
-                save_json_atomic(history, metrics_path)
-                model.train()
 
         epoch_loss = epoch_loss_sum / max(1.0, epoch_tokens)
         if accelerator.is_main_process:

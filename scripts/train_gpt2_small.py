@@ -104,7 +104,6 @@ def main() -> None:
     training_config = config["training"]
     logging_config = config.get("logging", {})
     checkpoint_config = config.get("checkpointing", {})
-    generation_config = config.get("generation", {})
 
     output_dir = resolve_output_dir(config)
     seed = int(run_config.get("seed", 42))
@@ -198,9 +197,6 @@ def main() -> None:
         log_every_steps=int(logging_config.get("log_every_steps", 50)),
         eval_every_steps=int(logging_config.get("eval_every_steps", 250)),
         eval_max_batches=logging_config.get("eval_max_batches", 20),
-        generate_every_steps=int(generation_config.get("every_steps", 250)),
-        generation_prompts=generation_config.get("prompts"),
-        max_new_tokens=int(generation_config.get("max_new_tokens", 40)),
         gradient_clip_norm=training_config.get("gradient_clip_norm"),
         save_every_epochs=checkpoint_config.get("save_every_epochs", 1),
         save_final=bool(checkpoint_config.get("save_final", True)),

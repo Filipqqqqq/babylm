@@ -44,15 +44,6 @@ logging:
   eval_every_steps: 250
   eval_max_batches: 20
 
-generation:
-  every_steps: 250
-  max_new_tokens: 40
-  prompts:
-    - "Sunlight filtered through the ancient oak's twisting branches."
-    - "A curious cat perched on the windowsill."
-    - "Alice loves spicy food, while Bob hates it. When the waiter brought the extra-hot curry,"
-    - "John believes his keys are in his pocket, but they are actually on the table. He reaches"
-
 checkpointing:
   save_every_epochs: 1
   save_final: true

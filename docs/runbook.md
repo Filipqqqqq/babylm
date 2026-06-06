@@ -2,9 +2,15 @@
 
 ## First Setup
 
-1. Copy `manifests/paths.example.yaml` to `manifests/paths.local.yaml`.
-2. Edit the local paths for the current machine.
-3. Keep raw data, generated caches, checkpoints, and evaluation results outside git.
+1. Clone with submodules, or initialize them after cloning:
+
+```bash
+git submodule update --init --recursive
+```
+
+2. Copy `manifests/paths.example.yaml` to `manifests/paths.local.yaml`.
+3. Edit the local paths for the current machine.
+4. Keep raw data, generated caches, checkpoints, and evaluation results outside git.
 
 ## Adding a Workflow
 
@@ -41,6 +47,26 @@ CUDA_VISIBLE_DEVICES=0 python scripts/smoke_10_batch_deterministic.py --device c
 ```
 
 These checks compare the new implementation with the relevant behavior of the older BabyLM 10M `train_gpt.py` without importing that script or triggering its Hugging Face side effects.
+
+## BabyLM Evaluation Submodule
+
+The official evaluation pipeline lives at:
+
+```text
+external/babylm-eval/
+```
+
+Update it intentionally, then commit the changed submodule pointer:
+
+```bash
+cd external/babylm-eval
+git pull
+cd ../..
+git status
+```
+
+Keep wrappers and local integration code in `src/babysteps/evaluation/`, not by
+editing the upstream submodule directly.
 
 ## Notebook Policy
 

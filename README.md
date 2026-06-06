@@ -36,12 +36,20 @@ src/babysteps/data/token_chunks.py       # token-chunk Dataset/DataLoader helper
 src/babysteps/training/causal_lm_loop.py # causal LM train/eval loop
 ```
 
+If you cloned the repo without submodules, initialize the BabyLM evaluation
+pipeline with:
+
+```bash
+git submodule update --init --recursive
+```
+
 ## Layout
 
 ```text
 babylm-baby-steps/
   configs/        Experiment recipes for data, training, and evaluation.
   docs/           Decisions, runbooks, and project notes.
+  external/       Pinned external repos such as the official BabyLM eval code.
   manifests/      Dataset descriptions and local path templates.
   scripts/        Thin command-line wrappers around package code.
   src/babysteps/  Reusable Python package code.
@@ -70,6 +78,27 @@ cp manifests/paths.example.yaml manifests/paths.local.yaml
 
 `manifests/paths.local.yaml` is ignored by git so machine-specific paths stay
 local.
+
+## Evaluation Pipeline
+
+The official BabyLM evaluation repository is tracked as a Git submodule:
+
+```text
+external/babylm-eval/
+```
+
+That keeps the eval code pinned to an exact upstream commit while still letting
+us build project-specific wrappers in this repo. The intended boundary is:
+
+```text
+external/babylm-eval/          # official eval implementation
+src/babysteps/evaluation/      # our reusable wrapper code
+scripts/                       # thin commands that run eval recipes
+configs/eval/                  # configs for model paths, tasks, and outputs
+```
+
+Evaluation outputs should stay outside git, for example under
+`/SSD2/babylm-baby-steps-runs/evaluation/`.
 
 ## Developer Checks
 

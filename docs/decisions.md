@@ -13,3 +13,14 @@ Raw data, checkpoints, large pickle files, and evaluation outputs should live ou
 The first training implementation should stay close to the older BabyLM 10M `train_gpt.py` path while removing hardcoded secrets, hub push side effects, and output clutter.
 
 Parity coverage now checks token collation, causal-LM loss, one optimizer/scheduler step, and deterministic 10-batch smoke behavior. This lets future changes move toward a cleaner team workflow without losing the known-good baseline.
+
+## 2026-06-06 - Track BabyLM Eval As A Submodule
+
+Use `external/babylm-eval/` as a Git submodule for the official BabyLM
+evaluation pipeline.
+
+This keeps evaluation reproducible by pinning the upstream repo to a specific
+commit. Project-specific integration code should live in
+`src/babysteps/evaluation/`, with scripts and configs in this repo. Do not edit
+the submodule for local wrapper behavior unless the change should become an
+upstream BabyLM eval contribution.
