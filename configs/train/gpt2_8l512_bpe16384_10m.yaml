@@ -1,0 +1,49 @@
+run:
+  name: gpt2_8l512_bpe16384_10m
+  seed: 42
+  deterministic: false
+  output_root: /SSD2/babylm-baby-steps-runs/training
+  append_timestamp: true
+
+data:
+  train_chunks: /SSD2/babylm-baby-steps-cache/token_chunks/babylm10m_byte_bpe_16384_block512_eos/train.pkl
+  val_chunks: /SSD2/babylm-baby-steps-cache/token_chunks/babylm10m_byte_bpe_16384_block512_eos/dev.pkl
+  max_train_chunks:
+  max_val_chunks:
+  num_workers: 0
+
+tokenizer:
+  name: /SSD2/babylm-baby-steps-cache/tokenizers/babylm10m_byte_bpe_16384
+
+model:
+  architecture: gpt2
+  size: 8l512
+  vocab_size: 16384
+  context_length: 1024
+  n_layer: 8
+  n_head: 8
+  n_embd: 512
+  resid_pdrop: 0.1
+  embd_pdrop: 0.1
+  attn_pdrop: 0.1
+
+training:
+  epochs: 10
+  batch_size: 16
+  learning_rate: 0.00005
+  betas: [0.9, 0.999]
+  eps: 0.00000001
+  weight_decay: 0.0
+  warmup_ratio: 0.01
+  gradient_accumulation_steps: 1
+  gradient_clip_norm: 1.0
+  mixed_precision: "no"
+
+logging:
+  log_every_steps: 50
+  eval_every_steps: 500
+  eval_max_batches: 20
+
+checkpointing:
+  save_every_epochs: 1
+  save_final: true

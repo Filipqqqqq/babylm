@@ -220,7 +220,7 @@ def train_causal_lm(
             )
             if should_log and accelerator.is_main_process:
                 window_loss = window_loss_sum / max(1.0, window_tokens)
-                print(f"[step {global_step:06d}] train_loss={window_loss:.4f}")
+                print(f"[step {global_step:06d}] train_loss={window_loss:.4f}", flush=True)
                 history.append(
                     {
                         "type": "train",
@@ -249,7 +249,7 @@ def train_causal_lm(
                     max_batches=eval_max_batches,
                 )
                 if accelerator.is_main_process:
-                    print(f"[step {global_step:06d}] val_loss={val_loss:.4f}")
+                    print(f"[step {global_step:06d}] val_loss={val_loss:.4f}", flush=True)
                     history.append(
                         {
                             "type": "validation",
@@ -263,7 +263,7 @@ def train_causal_lm(
 
         epoch_loss = epoch_loss_sum / max(1.0, epoch_tokens)
         if accelerator.is_main_process:
-            print(f"Epoch {epoch} train_loss={epoch_loss:.4f}")
+            print(f"Epoch {epoch} train_loss={epoch_loss:.4f}", flush=True)
             history.append(
                 {
                     "type": "epoch",

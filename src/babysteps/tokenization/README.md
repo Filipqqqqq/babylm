@@ -28,6 +28,13 @@ python scripts/build_token_chunks.py --config configs/tokenization/gpt2_pretrain
 python scripts/build_token_chunks.py --config configs/tokenization/byte_bpe_8192_10m_block512.yaml
 ```
 
+Smoke-train tiny GPT-2 models from the custom BPE chunks:
+
+```bash
+python scripts/train_gpt2_small.py --config configs/train/gpt2_tiny_bpe8192_10m_smoke.yaml
+python scripts/train_gpt2_small.py --config configs/train/gpt2_tiny_bpe16384_10m_smoke.yaml
+```
+
 Current flow:
 
 ```text

@@ -49,6 +49,56 @@ def load_yaml_config(path: str | Path) -> dict[str, Any]:
     return expand_env_vars(config)
 
 
+def parse_override_value(raw_value: str) -> Any:
+    """Parse one CLI override value with YAML scalar/list/dict semantics."""
+
+    try:
+        value = yaml.safe_load(raw_value)
+    except yaml.YAMLError as exc:
+        raise ValueError(f"Could not parse override value {raw_value!r}: {exc}") from exc
+
+    # PyYAML keeps values like "1e-4" as strings, but those are convenient for
+    # learning-rate sweeps. Convert only when Python can clearly parse a number.
+    if isinstance(value, str) and any(char in value for char in ("e", "E")):
+        try:
+            value = float(value)
+        except ValueError:
+            pass
+
+    return expand_env_vars(value)
+
+
+def apply_config_override(config: dict[str, Any], override: str) -> None:
+    """Apply a dotted ``section.key=value`` override to a loaded config."""
+
+    if "=" not in override:
+        raise ValueError(f"Override must look like section.key=value, got {override!r}.")
+
+    dotted_key, raw_value = override.split("=", 1)
+    keys = [key.strip() for key in dotted_key.split(".") if key.strip()]
+    if not keys:
+        raise ValueError(f"Override key cannot be empty: {override!r}.")
+
+    cursor: dict[str, Any] = config
+    for key in keys[:-1]:
+        next_value = cursor.get(key)
+        if next_value is None:
+            next_value = {}
+            cursor[key] = next_value
+        if not isinstance(next_value, dict):
+            raise ValueError(
+                f"Cannot set {override!r}: {'.'.join(keys[:-1])} is not a mapping."
+            )
+        cursor = next_value
+
+    cursor[keys[-1]] = parse_override_value(raw_value)
+
+
+def apply_config_overrides(config: dict[str, Any], overrides: list[str]) -> None:
+    for override in overrides:
+        apply_config_override(config, override)
+
+
 def resolve_output_dir(config: dict[str, Any]) -> Path:
     run = config["run"]
     output_dir = run.get("output_dir")
@@ -71,7 +121,10 @@ def resolve_output_dir(config: dict[str, Any]) -> Path:
 def build_gpt2_config(config: dict[str, Any], tokenizer) -> GPT2Config:
     model_config = config["model"]
     context_length = int(model_config.get("context_length", 1024))
-    vocab_size = int(model_config.get("vocab_size", len(tokenizer)))
+    vocab_size = model_config.get("vocab_size")
+    if vocab_size is None:
+        vocab_size = len(tokenizer)
+    vocab_size = int(vocab_size)
 
     return GPT2Config(
         vocab_size=vocab_size,
@@ -89,6 +142,65 @@ def build_gpt2_config(config: dict[str, Any], tokenizer) -> GPT2Config:
     )
 
 
+def token_chunk_summary(dataset) -> dict[str, int]:
+    """Return small compatibility stats for an already-loaded chunk dataset."""
+
+    max_length = 0
+    max_token_id = -1
+    for chunk in dataset.chunks:
+        if not chunk:
+            continue
+        max_length = max(max_length, len(chunk))
+        max_token_id = max(max_token_id, max(chunk))
+    return {"max_length": max_length, "max_token_id": max_token_id}
+
+
+def validate_training_inputs(
+    config: dict[str, Any],
+    tokenizer,
+    train_dataset,
+    val_dataset,
+) -> None:
+    """Fail early for config/data mismatches that otherwise crash on GPU."""
+
+    model_config = config["model"]
+    context_length = int(model_config.get("context_length", 1024))
+    vocab_size = model_config.get("vocab_size")
+    if vocab_size is None:
+        vocab_size = len(tokenizer)
+    vocab_size = int(vocab_size)
+
+    for split_name, dataset in (("train", train_dataset), ("val", val_dataset)):
+        summary = token_chunk_summary(dataset)
+        max_input_length = max(0, summary["max_length"] - 1)
+        if max_input_length > context_length:
+            raise ValueError(
+                f"{split_name} chunks produce {max_input_length} input positions, "
+                f"but model.context_length is {context_length}. Increase "
+                "model.context_length or rebuild chunks with a smaller chunk_size."
+            )
+        if summary["max_token_id"] >= vocab_size:
+            raise ValueError(
+                f"{split_name} chunks contain token id {summary['max_token_id']}, "
+                f"but model.vocab_size is {vocab_size}. Increase model.vocab_size "
+                "or rebuild chunks with the matching tokenizer."
+            )
+
+
+def release_cuda_memory() -> None:
+    """Best-effort CUDA cache cleanup for interrupted direct runs."""
+
+    if not torch.cuda.is_available():
+        return
+
+    torch.cuda.empty_cache()
+    try:
+        torch.cuda.ipc_collect()
+    except RuntimeError:
+        # ipc_collect can fail if CUDA is already tearing down after an error.
+        pass
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -96,9 +208,26 @@ def main() -> None:
         default=str(ROOT / "configs" / "train" / "gpt2_small_10m_smoke.yaml"),
         help="Path to a YAML training config.",
     )
+    parser.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        dest="overrides",
+        metavar="KEY=VALUE",
+        help=(
+            "Override a config value after loading YAML. "
+            "Can be passed more than once, e.g. "
+            "--set run.seed=43 --set training.learning_rate=1e-4."
+        ),
+    )
     args = parser.parse_args()
 
     config = load_yaml_config(args.config)
+    try:
+        apply_config_overrides(config, args.overrides)
+    except ValueError as exc:
+        parser.error(str(exc))
+
     run_config = config["run"]
     data_config = config["data"]
     training_config = config["training"]
@@ -117,7 +246,7 @@ def main() -> None:
     if accelerator.is_main_process:
         output_dir.mkdir(parents=True, exist_ok=True)
         save_json_atomic(config, output_dir / "config.json")
-        print(f"Output dir: {output_dir}")
+        print(f"Output dir: {output_dir}", flush=True)
 
     tokenizer_name = config["tokenizer"].get("name", "gpt2")
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
@@ -146,13 +275,15 @@ def main() -> None:
     )
 
     if accelerator.is_main_process:
-        print(f"Train chunks: {len(train_dataset):,}")
-        print(f"Val chunks: {len(val_dataset):,}")
+        print(f"Train chunks: {len(train_dataset):,}", flush=True)
+        print(f"Val chunks: {len(val_dataset):,}", flush=True)
+
+    validate_training_inputs(config, tokenizer, train_dataset, val_dataset)
 
     model = GPT2LMHeadModel(build_gpt2_config(config, tokenizer))
     if accelerator.is_main_process:
         params = sum(p.numel() for p in model.parameters())
-        print(f"Model parameters: {params:,}")
+        print(f"Model parameters: {params:,}", flush=True)
 
     optimizer = AdamW(
         model.parameters(),
@@ -204,4 +335,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        release_cuda_memory()
+        sys.exit(130)
