@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import random
+import time
 from itertools import islice
 from pathlib import Path
 from typing import Any, Iterable
@@ -147,6 +148,7 @@ def train_causal_lm(
     gradient_clip_norm: float | None = None,
     save_every_epochs: int | None = 1,
     save_final: bool = True,
+    profile_optimizer_steps: bool = False,
 ) -> list[dict[str, Any]]:
     """Train a causal LM and return the metric history."""
 
@@ -164,6 +166,8 @@ def train_causal_lm(
         epoch_tokens = 0.0
         window_loss_sum = 0.0
         window_tokens = 0.0
+        window_optimizer_step_seconds = 0.0
+        window_optimizer_steps = 0
 
         progress = tqdm(
             train_loader,
@@ -188,7 +192,17 @@ def train_causal_lm(
                 if gradient_clip_norm and accelerator.sync_gradients:
                     accelerator.clip_grad_norm_(model.parameters(), gradient_clip_norm)
 
+                optimizer_step_start = None
+                if profile_optimizer_steps and accelerator.sync_gradients:
+                    if accelerator.device.type == "cuda":
+                        torch.cuda.synchronize(accelerator.device)
+                    optimizer_step_start = time.perf_counter()
                 optimizer.step()
+                if optimizer_step_start is not None:
+                    if accelerator.device.type == "cuda":
+                        torch.cuda.synchronize(accelerator.device)
+                    window_optimizer_step_seconds += time.perf_counter() - optimizer_step_start
+                    window_optimizer_steps += 1
                 if scheduler is not None and accelerator.sync_gradients:
                     scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
@@ -220,18 +234,27 @@ def train_causal_lm(
             )
             if should_log and accelerator.is_main_process:
                 window_loss = window_loss_sum / max(1.0, window_tokens)
-                print(f"[step {global_step:06d}] train_loss={window_loss:.4f}", flush=True)
-                history.append(
-                    {
-                        "type": "train",
-                        "epoch": epoch,
-                        "step": global_step,
-                        "loss": window_loss,
-                    }
-                )
+                record = {
+                    "type": "train",
+                    "epoch": epoch,
+                    "step": global_step,
+                    "loss": window_loss,
+                }
+                message = f"[step {global_step:06d}] train_loss={window_loss:.4f}"
+                if profile_optimizer_steps and window_optimizer_steps:
+                    optimizer_step_ms = (
+                        1000.0 * window_optimizer_step_seconds / window_optimizer_steps
+                    )
+                    record["optimizer_step_ms"] = optimizer_step_ms
+                    record["optimizer_steps_timed"] = window_optimizer_steps
+                    message += f" optimizer_step_ms={optimizer_step_ms:.2f}"
+                print(message, flush=True)
+                history.append(record)
                 save_json_atomic(history, metrics_path)
                 window_loss_sum = 0.0
                 window_tokens = 0.0
+                window_optimizer_step_seconds = 0.0
+                window_optimizer_steps = 0
 
             should_eval = (
                 val_loader is not None

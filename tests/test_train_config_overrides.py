@@ -83,3 +83,31 @@ def test_training_input_validation_catches_small_vocab() -> None:
         assert "model.vocab_size" in str(exc)
     else:
         raise AssertionError("Expected too-small model vocab to fail.")
+
+
+def test_training_script_builds_llama_model_config() -> None:
+    train_script = load_train_script_module()
+    tokenizer = SimpleNamespace(
+        bos_token_id=1,
+        eos_token_id=2,
+        pad_token_id=0,
+    )
+    config = {
+        "model": {
+            "architecture": "llama",
+            "vocab_size": 128,
+            "context_length": 32,
+            "n_layer": 1,
+            "n_head": 4,
+            "n_embd": 32,
+            "llama_intermediate_size": 64,
+            "llama_num_key_value_heads": 2,
+        }
+    }
+
+    hf_config = train_script.build_model_config(config, tokenizer)
+
+    assert hf_config.model_type == "llama"
+    assert hf_config.hidden_size == 32
+    assert hf_config.intermediate_size == 64
+    assert hf_config.num_key_value_heads == 2

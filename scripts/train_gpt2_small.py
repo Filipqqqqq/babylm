@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train a GPT-2 small causal LM from token-chunk pickle files."""
+"""Train a GPT-2 or LLaMA-style causal LM from token-chunk pickle files."""
 
 from __future__ import annotations
 
@@ -18,16 +18,22 @@ if str(SRC) not in sys.path:
 import torch
 import yaml
 from accelerate import Accelerator
-from torch.optim import AdamW
-from transformers import AutoTokenizer, GPT2Config, GPT2LMHeadModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers import get_cosine_schedule_with_warmup
 
 from babysteps.data.token_chunks import build_token_chunk_loader
+from babysteps.models import (
+    build_causal_lm_config_from_dict,
+    normalize_model_arch,
+    resolve_model_vocab_size,
+)
 from babysteps.training.causal_lm_loop import (
     save_json_atomic,
     set_all_seeds,
     train_causal_lm,
 )
+from babysteps.training.liger import apply_liger_kernel_if_requested
+from babysteps.training.optimizers import build_optimizer
 
 
 def expand_env_vars(value: Any) -> Any:
@@ -118,28 +124,16 @@ def resolve_output_dir(config: dict[str, Any]) -> Path:
     return path
 
 
-def build_gpt2_config(config: dict[str, Any], tokenizer) -> GPT2Config:
-    model_config = config["model"]
-    context_length = int(model_config.get("context_length", 1024))
-    vocab_size = model_config.get("vocab_size")
-    if vocab_size is None:
-        vocab_size = len(tokenizer)
-    vocab_size = int(vocab_size)
+def build_model_config(config: dict[str, Any], tokenizer):
+    """Build the selected causal-LM config from a loaded training config."""
 
-    return GPT2Config(
-        vocab_size=vocab_size,
-        bos_token_id=tokenizer.bos_token_id or tokenizer.eos_token_id,
-        eos_token_id=tokenizer.eos_token_id,
-        pad_token_id=tokenizer.pad_token_id,
-        n_ctx=context_length,
-        n_positions=context_length,
-        n_embd=int(model_config.get("n_embd", 768)),
-        n_head=int(model_config.get("n_head", 12)),
-        n_layer=int(model_config.get("n_layer", 12)),
-        resid_pdrop=float(model_config.get("resid_pdrop", 0.1)),
-        embd_pdrop=float(model_config.get("embd_pdrop", 0.1)),
-        attn_pdrop=float(model_config.get("attn_pdrop", 0.1)),
-    )
+    return build_causal_lm_config_from_dict(config, tokenizer)
+
+
+def build_gpt2_config(config: dict[str, Any], tokenizer):
+    """Backward-compatible alias for older tests/imports."""
+
+    return build_model_config(config, tokenizer)
 
 
 def token_chunk_summary(dataset) -> dict[str, int]:
@@ -164,11 +158,8 @@ def validate_training_inputs(
     """Fail early for config/data mismatches that otherwise crash on GPU."""
 
     model_config = config["model"]
-    context_length = int(model_config.get("context_length", 1024))
-    vocab_size = model_config.get("vocab_size")
-    if vocab_size is None:
-        vocab_size = len(tokenizer)
-    vocab_size = int(vocab_size)
+    context_length = int(model_config.get("context_length", model_config.get("seq_len", 1024)))
+    vocab_size = resolve_model_vocab_size(model_config, tokenizer)
 
     for split_name, dataset in (("train", train_dataset), ("val", val_dataset)):
         summary = token_chunk_summary(dataset)
@@ -280,18 +271,45 @@ def main() -> None:
 
     validate_training_inputs(config, tokenizer, train_dataset, val_dataset)
 
-    model = GPT2LMHeadModel(build_gpt2_config(config, tokenizer))
+    architecture = normalize_model_arch(
+        config["model"].get("architecture", config["model"].get("model_arch", "gpt2"))
+    )
+    liger_applied = apply_liger_kernel_if_requested(
+        use_liger_kernel=bool(config["model"].get("use_liger_kernel", False)),
+        model_arch=architecture,
+    )
+    hf_model_config = build_model_config(config, tokenizer)
+    model_kwargs: dict[str, Any] = {}
+    attn_implementation = config["model"].get("attn_implementation")
+    if attn_implementation:
+        model_kwargs["attn_implementation"] = str(attn_implementation)
+    model = AutoModelForCausalLM.from_config(hf_model_config, **model_kwargs)
     if accelerator.is_main_process:
+        print(f"Model architecture: {architecture}", flush=True)
+        print(f"Liger kernel applied: {liger_applied}", flush=True)
         params = sum(p.numel() for p in model.parameters())
         print(f"Model parameters: {params:,}", flush=True)
 
-    optimizer = AdamW(
-        model.parameters(),
-        lr=float(training_config.get("learning_rate", 5e-5)),
-        betas=tuple(training_config.get("betas", [0.9, 0.999])),
-        eps=float(training_config.get("eps", 1e-8)),
-        weight_decay=float(training_config.get("weight_decay", 0.0)),
+    optimizer, optimizer_info = build_optimizer(
+        model,
+        training_config,
+        device=accelerator.device,
     )
+    if accelerator.is_main_process:
+        print(f"Optimizer: {optimizer_info.name}", flush=True)
+        if optimizer_info.name == "muon_pe":
+            print(f"Muon hidden matrix tensors: {optimizer_info.primary_tensors}", flush=True)
+            print(f"Auxiliary AdamW tensors: {optimizer_info.auxiliary_tensors}", flush=True)
+            print(f"Muon split-QKV tensors: {optimizer_info.qkv_split_tensors}", flush=True)
+            print(
+                "Muon batch same-shape updates: "
+                f"{bool(training_config.get('muon_batch_updates', True))}",
+                flush=True,
+            )
+        else:
+            print(f"AdamW decayed tensors: {optimizer_info.primary_tensors}", flush=True)
+            print(f"AdamW non-decayed tensors: {optimizer_info.auxiliary_tensors}", flush=True)
+            print(f"Using fused AdamW: {optimizer_info.use_fused}", flush=True)
 
     epochs = int(training_config.get("epochs", 1))
     grad_accum = int(training_config.get("gradient_accumulation_steps", 1))
@@ -331,6 +349,7 @@ def main() -> None:
         gradient_clip_norm=training_config.get("gradient_clip_norm"),
         save_every_epochs=checkpoint_config.get("save_every_epochs", 1),
         save_final=bool(checkpoint_config.get("save_final", True)),
+        profile_optimizer_steps=bool(logging_config.get("profile_optimizer_steps", False)),
     )
 
 

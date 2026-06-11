@@ -1,0 +1,52 @@
+run:
+  name: llama_tiny_bpe16384_10m_smoke
+  seed: 42
+  deterministic: false
+  output_root: /SSD2/babylm-baby-steps-runs/training
+  append_timestamp: true
+
+data:
+  train_chunks: /SSD2/babylm-baby-steps-cache/token_chunks/babylm10m_byte_bpe_16384_block512_eos/train.pkl
+  val_chunks: /SSD2/babylm-baby-steps-cache/token_chunks/babylm10m_byte_bpe_16384_block512_eos/dev.pkl
+  max_train_chunks: 512
+  max_val_chunks: 128
+  num_workers: 0
+
+tokenizer:
+  name: /SSD2/babylm-baby-steps-cache/tokenizers/babylm10m_byte_bpe_16384
+
+model:
+  architecture: llama
+  size: tiny
+  vocab_size: 16384
+  context_length: 1024
+  n_layer: 4
+  n_head: 4
+  n_embd: 256
+  llama_intermediate_size: 1024
+  llama_num_key_value_heads: 4
+  llama_tie_word_embeddings: true
+  rope_theta: 10000.0
+  attention_dropout: 0.0
+
+training:
+  epochs: 1
+  batch_size: 8
+  optimizer: adamw
+  learning_rate: 0.00005
+  betas: [0.9, 0.999]
+  eps: 0.00000001
+  weight_decay: 0.0
+  warmup_ratio: 0.1
+  gradient_accumulation_steps: 1
+  gradient_clip_norm:
+  mixed_precision: "no"
+
+logging:
+  log_every_steps: 10
+  eval_every_steps: 25
+  eval_max_batches: 10
+
+checkpointing:
+  save_every_epochs: 1
+  save_final: true
