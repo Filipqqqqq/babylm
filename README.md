@@ -39,7 +39,7 @@ tokenizer, batch size 32, and Muon LR 0.01:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
-  python -u scripts/train_causal_lm.py \
+  python -u scripts/train/train_causal_lm.py \
   --config configs/train/gpt2_8l512_bpe16384_10m_muon.yaml
 ```
 
@@ -69,7 +69,7 @@ optimizer, bf16, and Liger kernels enabled:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
-  python -u scripts/train_causal_lm.py \
+  python -u scripts/train/train_causal_lm.py \
   --config configs/train/llama_8l512_bpe16384_10m_muon_liger.yaml
 ```
 
@@ -128,7 +128,7 @@ gradient accumulation steps:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
-  python -u scripts/train_causal_lm.py \
+  python -u scripts/train/train_causal_lm.py \
   --config configs/train/llama_12l896_bpe16384_babylm2026_strict_muon_liger.yaml
 ```
 
@@ -143,7 +143,7 @@ BABYSTEPS_GPUS="0" BABYSTEPS_SEEDS="42" \
 If the BabyLM 2026 Strict token shards are missing, build them first:
 
 ```bash
-conda run --no-capture-output -n babylm python scripts/build_token_shards.py \
+conda run --no-capture-output -n babylm python scripts/data/build_token_shards.py \
   --config configs/tokenization/babylm2026_strict_byte_bpe_16384_shards.yaml
 ```
 
@@ -175,14 +175,14 @@ Set `dataset.name`, optional `dataset.config`, `dataset.split`, and
 `dataset.text_field`, then build the tokenizer and shards:
 
 ```bash
-python scripts/build_token_shards.py \
+python scripts/data/build_token_shards.py \
   --config configs/tokenization/my_dataset_byte_bpe_16384_shards.yaml
 ```
 
 For a quick smoke build, cap the amount of data:
 
 ```bash
-python scripts/build_token_shards.py \
+python scripts/data/build_token_shards.py \
   --config configs/tokenization/my_dataset_byte_bpe_16384_shards.yaml \
   --max-docs 1000 --max-shards 2 --shard-tokens 100000
 ```
@@ -242,7 +242,7 @@ tokenizer and shard directory:
 cp configs/train/template_llama_token_shards.yaml \
   configs/train/my_dataset_llama_token_shards.yaml
 
-python scripts/train_causal_lm.py \
+python scripts/train/train_causal_lm.py \
   --config configs/train/my_dataset_llama_token_shards.yaml
 ```
 
@@ -279,7 +279,7 @@ python scripts/build_token_chunks.py \
 Train GPT-2 small from those generated chunks:
 
 ```bash
-python scripts/train_gpt2_small.py --config configs/train/gpt2_small_10m_plain_gpt2_chunks.yaml
+python scripts/train/train_causal_lm.py --config configs/train/gpt2_small_10m_plain_gpt2_chunks.yaml
 ```
 
 That config points `data.train_chunks` and `data.val_chunks` at the generated
@@ -300,6 +300,11 @@ babylm-baby-steps/
   runs/           Generated outputs; gitignored.
   cache/          Generated local caches; gitignored.
 ```
+
+Preferred command-line entrypoints are grouped under `scripts/data/`,
+`scripts/train/`, and `scripts/material_world/`. Some root-level Python scripts
+remain as compatibility shims for older commands; new docs and launchers should
+prefer the grouped paths.
 
 ## Data And Outputs
 

@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""Train a causal LM from token-chunk pickle files."""
+"""Compatibility shim; prefer scripts/train/train_causal_lm.py."""
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
 
-from train_gpt2_small import main, release_cuda_memory
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from babysteps.cli.train_causal_lm import *  # noqa: F403
+from babysteps.cli.train_causal_lm import main, release_cuda_memory
 
 
 if __name__ == "__main__":

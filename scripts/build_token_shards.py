@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generic entrypoint for building byte-BPE tokenizers and token shards."""
+"""Compatibility shim; prefer scripts/data/build_token_shards.py."""
 
 from __future__ import annotations
 
@@ -7,11 +7,13 @@ import sys
 from pathlib import Path
 
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
-from build_hf_token_shards import main
+from babysteps.cli.build_token_shards import *  # noqa: F403
+from babysteps.cli.build_token_shards import main
 
 
 if __name__ == "__main__":
