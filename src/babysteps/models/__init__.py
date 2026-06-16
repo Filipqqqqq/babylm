@@ -2,6 +2,7 @@
 
 from babysteps.models.causal_lm import (
     SUPPORTED_MODEL_ARCHES,
+    apply_llama_training_dropout,
     build_causal_lm_config,
     build_causal_lm_config_from_dict,
     build_causal_lm_model,
@@ -12,6 +13,7 @@ from babysteps.models.causal_lm import (
 
 __all__ = [
     "SUPPORTED_MODEL_ARCHES",
+    "apply_llama_training_dropout",
     "build_causal_lm_config",
     "build_causal_lm_config_from_dict",
     "build_causal_lm_model",

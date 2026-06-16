@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from torch import nn
 from transformers import AutoModelForCausalLM, GPT2Config, LlamaConfig, PretrainedConfig
 
 
@@ -46,6 +47,13 @@ def _first_present(mapping: dict[str, Any], keys: tuple[str, ...], default: Any 
     return default
 
 
+def _dropout_probability(value: Any, *, name: str) -> float:
+    probability = float(value)
+    if probability < 0.0 or probability >= 1.0:
+        raise ValueError(f"{name} must be in [0.0, 1.0), got {probability}.")
+    return probability
+
+
 def _token_id(tokenizer: Any, primary: str, fallback: str | None = None) -> int | None:
     value = getattr(tokenizer, primary, None)
     if value is None and fallback is not None:
@@ -81,6 +89,8 @@ def build_causal_lm_config(
     llama_tie_word_embeddings: bool = True,
     rope_theta: float = 10000.0,
     attention_dropout: float = 0.0,
+    llama_embd_pdrop: float = 0.0,
+    llama_resid_pdrop: float = 0.0,
 ) -> PretrainedConfig:
     """Build a from-scratch causal-LM config for a supported architecture."""
 
@@ -140,9 +150,20 @@ def build_causal_lm_config(
             bos_token_id=bos_token_id,
             eos_token_id=eos_token_id,
             pad_token_id=pad_token_id,
-            attention_dropout=float(attention_dropout),
+            attention_dropout=_dropout_probability(
+                attention_dropout,
+                name="model.attention_dropout",
+            ),
             tie_word_embeddings=bool(llama_tie_word_embeddings),
             rope_theta=float(rope_theta),
+        )
+        config.babysteps_llama_embd_pdrop = _dropout_probability(
+            llama_embd_pdrop,
+            name="model.llama_embd_pdrop",
+        )
+        config.babysteps_llama_resid_pdrop = _dropout_probability(
+            llama_resid_pdrop,
+            name="model.llama_resid_pdrop",
         )
 
     config.use_cache = False
@@ -163,6 +184,7 @@ def build_causal_lm_config_from_dict(
     n_embd = int(_first_present(model_config, ("n_embd", "hidden_size"), 768))
     n_head = int(_first_present(model_config, ("n_head", "num_attention_heads"), 12))
     n_layer = int(_first_present(model_config, ("n_layer", "num_hidden_layers"), 12))
+    llama_dropout = _first_present(model_config, ("llama_dropout",), 0.0)
 
     return build_causal_lm_config(
         architecture=architecture,
@@ -193,8 +215,68 @@ def build_causal_lm_config_from_dict(
             )
         ),
         rope_theta=float(model_config.get("rope_theta", 10000.0)),
-        attention_dropout=float(model_config.get("attention_dropout", 0.0)),
+        attention_dropout=_first_present(
+            model_config,
+            ("llama_attention_dropout", "attention_dropout"),
+            llama_dropout,
+        ),
+        llama_embd_pdrop=_first_present(
+            model_config,
+            ("llama_embd_pdrop", "llama_embedding_dropout"),
+            llama_dropout,
+        ),
+        llama_resid_pdrop=_first_present(
+            model_config,
+            ("llama_resid_pdrop", "llama_hidden_dropout", "hidden_dropout"),
+            llama_dropout,
+        ),
     )
+
+
+def apply_llama_training_dropout(model, hf_config: PretrainedConfig):
+    """Attach optional BabySteps dropout hooks to a LLaMA model.
+
+    Hugging Face LLaMA exposes attention dropout, but not GPT-2-style embedding
+    or decoder-output dropout. These hooks add train-mode-only dropout at those
+    two points without changing checkpoint evaluation behavior.
+    """
+
+    if getattr(hf_config, "model_type", None) != "llama":
+        return model
+
+    embed_dropout = float(getattr(hf_config, "babysteps_llama_embd_pdrop", 0.0))
+    resid_dropout = float(getattr(hf_config, "babysteps_llama_resid_pdrop", 0.0))
+
+    for handle in getattr(model, "_babysteps_dropout_hook_handles", ()):
+        handle.remove()
+
+    handles = []
+    model_core = getattr(model, "model", None)
+    if model_core is None:
+        raise ValueError("Expected a LLaMA causal LM with a .model backbone.")
+
+    if embed_dropout > 0.0:
+        model_core.babysteps_embed_dropout = nn.Dropout(embed_dropout)
+
+        def embed_hook(_module, _inputs, output):
+            return model_core.babysteps_embed_dropout(output)
+
+        handles.append(model_core.embed_tokens.register_forward_hook(embed_hook))
+
+    if resid_dropout > 0.0:
+        for layer in model_core.layers:
+            layer.babysteps_resid_dropout = nn.Dropout(resid_dropout)
+
+            def layer_hook(module, _inputs, output):
+                dropout = module.babysteps_resid_dropout
+                if isinstance(output, tuple):
+                    return (dropout(output[0]),) + output[1:]
+                return dropout(output)
+
+            handles.append(layer.register_forward_hook(layer_hook))
+
+    model._babysteps_dropout_hook_handles = handles
+    return model
 
 
 def build_causal_lm_model(config: dict[str, Any], tokenizer: Any):
@@ -205,4 +287,5 @@ def build_causal_lm_model(config: dict[str, Any], tokenizer: Any):
     attn_implementation = config["model"].get("attn_implementation")
     if attn_implementation:
         model_kwargs["attn_implementation"] = str(attn_implementation)
-    return AutoModelForCausalLM.from_config(hf_config, **model_kwargs)
+    model = AutoModelForCausalLM.from_config(hf_config, **model_kwargs)
+    return apply_llama_training_dropout(model, hf_config)

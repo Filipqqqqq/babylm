@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Train a GPT-2 or LLaMA-style causal LM from token-chunk pickle files."""
+"""Train a GPT-2 or LLaMA-style causal LM from token chunks or token shards."""
 
 from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -18,11 +19,13 @@ if str(SRC) not in sys.path:
 import torch
 import yaml
 from accelerate import Accelerator
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoTokenizer
 from transformers import get_cosine_schedule_with_warmup
 
 from babysteps.data.token_chunks import build_token_chunk_loader
+from babysteps.data.token_shards import build_token_shard_loader
 from babysteps.models import (
+    build_causal_lm_model,
     build_causal_lm_config_from_dict,
     normalize_model_arch,
     resolve_model_vocab_size,
@@ -35,16 +38,88 @@ from babysteps.training.causal_lm_loop import (
 from babysteps.training.liger import apply_liger_kernel_if_requested
 from babysteps.training.optimizers import build_optimizer
 
+_ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _find_shell_expression_end(text: str, start: int) -> int:
+    depth = 0
+    index = start + 2
+    while index < len(text):
+        if text.startswith("${", index):
+            depth += 1
+            index += 2
+            continue
+        if text[index] == "}":
+            if depth == 0:
+                return index
+            depth -= 1
+        index += 1
+    return -1
+
+
+def _split_shell_default(inner: str) -> tuple[str, str] | None:
+    depth = 0
+    index = 0
+    while index < len(inner):
+        if inner.startswith("${", index):
+            depth += 1
+            index += 2
+            continue
+        if inner[index] == "}" and depth > 0:
+            depth -= 1
+            index += 1
+            continue
+        if inner.startswith(":-", index) and depth == 0:
+            return inner[:index], inner[index + 2 :]
+        index += 1
+    return None
+
+
+def _expand_shell_default_expressions(text: str) -> str:
+    result: list[str] = []
+    index = 0
+    while index < len(text):
+        if text.startswith("${", index):
+            end = _find_shell_expression_end(text, index)
+            if end >= 0:
+                inner = text[index + 2 : end]
+                split = _split_shell_default(inner)
+                if split is not None:
+                    name, default = split
+                    if _ENV_NAME_RE.match(name):
+                        env_value = os.environ.get(name)
+                        replacement = env_value if env_value else expand_env_string(default)
+                        result.append(replacement)
+                        index = end + 1
+                        continue
+
+        result.append(text[index])
+        index += 1
+
+    return "".join(result)
+
+
+def expand_env_string(value: str) -> str:
+    """Expand ${VAR:-default}, then ordinary $VAR/${VAR} references."""
+
+    expanded = value
+    for _ in range(20):
+        next_value = _expand_shell_default_expressions(expanded)
+        if next_value == expanded:
+            break
+        expanded = next_value
+    return os.path.expandvars(expanded)
+
 
 def expand_env_vars(value: Any) -> Any:
-    """Recursively expand ${VAR} references in loaded YAML values."""
+    """Recursively expand env-variable references in loaded YAML values."""
 
     if isinstance(value, dict):
         return {key: expand_env_vars(item) for key, item in value.items()}
     if isinstance(value, list):
         return [expand_env_vars(item) for item in value]
     if isinstance(value, str):
-        return os.path.expandvars(value)
+        return expand_env_string(value)
     return value
 
 
@@ -62,6 +137,29 @@ def parse_override_value(raw_value: str) -> Any:
         value = yaml.safe_load(raw_value)
     except yaml.YAMLError as exc:
         raise ValueError(f"Could not parse override value {raw_value!r}: {exc}") from exc
+
+    # PyYAML follows YAML 1.1 boolean aliases, so unquoted values like "no" and
+    # "off" become False. Preserve those as strings for CLI ergonomics; callers
+    # can still use true/false for booleans.
+    if isinstance(value, bool) and raw_value.strip() in {
+        "y",
+        "Y",
+        "yes",
+        "Yes",
+        "YES",
+        "n",
+        "N",
+        "no",
+        "No",
+        "NO",
+        "on",
+        "On",
+        "ON",
+        "off",
+        "Off",
+        "OFF",
+    }:
+        value = raw_value.strip()
 
     # PyYAML keeps values like "1e-4" as strings, but those are convenient for
     # learning-rate sweeps. Convert only when Python can clearly parse a number.
@@ -149,6 +247,14 @@ def token_chunk_summary(dataset) -> dict[str, int]:
     return {"max_length": max_length, "max_token_id": max_token_id}
 
 
+def token_shard_summary(dataset) -> dict[str, int]:
+    """Return small compatibility stats for a token-shard dataset."""
+
+    vocab_size = dataset.meta.get("vocab_size")
+    max_token_id = int(vocab_size) - 1 if vocab_size is not None else -1
+    return {"max_input_length": int(dataset.seq_len), "max_token_id": max_token_id}
+
+
 def validate_training_inputs(
     config: dict[str, Any],
     tokenizer,
@@ -162,15 +268,19 @@ def validate_training_inputs(
     vocab_size = resolve_model_vocab_size(model_config, tokenizer)
 
     for split_name, dataset in (("train", train_dataset), ("val", val_dataset)):
-        summary = token_chunk_summary(dataset)
-        max_input_length = max(0, summary["max_length"] - 1)
+        if hasattr(dataset, "chunks"):
+            summary = token_chunk_summary(dataset)
+            max_input_length = max(0, summary["max_length"] - 1)
+        else:
+            summary = token_shard_summary(dataset)
+            max_input_length = summary["max_input_length"]
         if max_input_length > context_length:
             raise ValueError(
                 f"{split_name} chunks produce {max_input_length} input positions, "
                 f"but model.context_length is {context_length}. Increase "
                 "model.context_length or rebuild chunks with a smaller chunk_size."
             )
-        if summary["max_token_id"] >= vocab_size:
+        if summary["max_token_id"] >= 0 and summary["max_token_id"] >= vocab_size:
             raise ValueError(
                 f"{split_name} chunks contain token id {summary['max_token_id']}, "
                 f"but model.vocab_size is {vocab_size}. Increase model.vocab_size "
@@ -244,30 +354,76 @@ def main() -> None:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    train_loader, train_dataset = build_token_chunk_loader(
-        data_config["train_chunks"],
-        batch_size=int(training_config.get("batch_size", 16)),
-        pad_id=int(tokenizer.pad_token_id),
-        shuffle=True,
-        max_chunks=data_config.get("max_train_chunks"),
-        num_workers=int(data_config.get("num_workers", 0)),
-        seed=seed,
-        pin_memory=torch.cuda.is_available(),
-    )
-    val_loader, val_dataset = build_token_chunk_loader(
-        data_config["val_chunks"],
-        batch_size=int(training_config.get("batch_size", 16)),
-        pad_id=int(tokenizer.pad_token_id),
-        shuffle=False,
-        max_chunks=data_config.get("max_val_chunks"),
-        num_workers=int(data_config.get("num_workers", 0)),
-        seed=seed,
-        pin_memory=torch.cuda.is_available(),
-    )
+    data_format = str(data_config.get("format", "token_chunks")).strip().lower()
+    batch_size = int(training_config.get("batch_size", 16))
+    num_workers = int(data_config.get("num_workers", 0))
+    if data_format in {"token_chunks", "chunks", "pickle"}:
+        train_loader, train_dataset = build_token_chunk_loader(
+            data_config["train_chunks"],
+            batch_size=batch_size,
+            pad_id=int(tokenizer.pad_token_id),
+            shuffle=True,
+            max_chunks=data_config.get("max_train_chunks"),
+            num_workers=num_workers,
+            seed=seed,
+            pin_memory=torch.cuda.is_available(),
+        )
+        val_loader, val_dataset = build_token_chunk_loader(
+            data_config["val_chunks"],
+            batch_size=batch_size,
+            pad_id=int(tokenizer.pad_token_id),
+            shuffle=False,
+            max_chunks=data_config.get("max_val_chunks"),
+            num_workers=num_workers,
+            seed=seed,
+            pin_memory=torch.cuda.is_available(),
+        )
+    elif data_format in {"token_shards", "shards", "bin"}:
+        model_config = config["model"]
+        seq_len = int(
+            data_config.get(
+                "seq_len",
+                model_config.get("context_length", model_config.get("seq_len", 1024)),
+            )
+        )
+        data_dir = data_config["data_dir"]
+        train_loader, train_dataset = build_token_shard_loader(
+            data_dir,
+            split=str(data_config.get("train_split", "train")),
+            batch_size=batch_size,
+            seq_len=seq_len,
+            shuffle=True,
+            max_blocks=data_config.get("max_train_blocks", data_config.get("max_train_chunks")),
+            max_shards=data_config.get("max_train_shards"),
+            num_workers=num_workers,
+            seed=seed,
+            pin_memory=torch.cuda.is_available(),
+        )
+        val_loader, val_dataset = build_token_shard_loader(
+            data_dir,
+            split=str(data_config.get("val_split", "val")),
+            batch_size=batch_size,
+            seq_len=seq_len,
+            shuffle=False,
+            max_blocks=data_config.get("max_val_blocks", data_config.get("max_val_chunks")),
+            max_shards=data_config.get("max_val_shards"),
+            num_workers=num_workers,
+            seed=seed,
+            pin_memory=torch.cuda.is_available(),
+        )
+    else:
+        raise ValueError(
+            f"Unsupported data.format={data_format!r}; expected token_chunks or token_shards."
+        )
 
     if accelerator.is_main_process:
-        print(f"Train chunks: {len(train_dataset):,}", flush=True)
-        print(f"Val chunks: {len(val_dataset):,}", flush=True)
+        print(f"Data format: {data_format}", flush=True)
+        if data_format in {"token_chunks", "chunks", "pickle"}:
+            print(f"Train chunks: {len(train_dataset):,}", flush=True)
+            print(f"Val chunks: {len(val_dataset):,}", flush=True)
+        else:
+            print(f"Train shard blocks: {len(train_dataset):,}", flush=True)
+            print(f"Val shard blocks: {len(val_dataset):,}", flush=True)
 
     validate_training_inputs(config, tokenizer, train_dataset, val_dataset)
 
@@ -278,15 +434,18 @@ def main() -> None:
         use_liger_kernel=bool(config["model"].get("use_liger_kernel", False)),
         model_arch=architecture,
     )
-    hf_model_config = build_model_config(config, tokenizer)
-    model_kwargs: dict[str, Any] = {}
-    attn_implementation = config["model"].get("attn_implementation")
-    if attn_implementation:
-        model_kwargs["attn_implementation"] = str(attn_implementation)
-    model = AutoModelForCausalLM.from_config(hf_model_config, **model_kwargs)
+    model = build_causal_lm_model(config, tokenizer)
     if accelerator.is_main_process:
         print(f"Model architecture: {architecture}", flush=True)
         print(f"Liger kernel applied: {liger_applied}", flush=True)
+        if architecture == "llama":
+            print(
+                "LLaMA dropout: "
+                f"attention={float(getattr(model.config, 'attention_dropout', 0.0))} "
+                f"embd={float(getattr(model.config, 'babysteps_llama_embd_pdrop', 0.0))} "
+                f"resid={float(getattr(model.config, 'babysteps_llama_resid_pdrop', 0.0))}",
+                flush=True,
+            )
         params = sum(p.numel() for p in model.parameters())
         print(f"Model parameters: {params:,}", flush=True)
 

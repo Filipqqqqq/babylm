@@ -5,12 +5,20 @@ description = "Clean team workspace for BabyLM Challenge data, training, evaluat
 requires-python = ">=3.10"
 dependencies = [
     "accelerate",
+    "datasets",
+    "huggingface_hub",
+    "matplotlib",
     "numpy",
     "pytest",
     "pyyaml",
     "torch",
     "tqdm",
     "transformers",
+]
+
+[project.optional-dependencies]
+liger = [
+    "liger-kernel",
 ]
 
 [tool.pytest.ini_options]

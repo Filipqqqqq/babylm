@@ -1,40 +1,13 @@
 # BabyLM Baby Steps
 
-Clean workspace for BabyLM Challenge experiments.
+Team workspace for BabyLM Challenge experiments: reusable training code,
+configs, evaluation wrappers, and experiment notes. The current main recipes
+are 10M GPT-2 + Muon and 100M LLaMA + Muon + Liger.
 
-This repo is meant to be the team-facing place for reusable training code,
-configs, smoke tests, evaluation wrappers, and experiment notes. Raw corpora,
-large token caches, checkpoints, and run outputs should live outside git and be
-referenced through configs or manifests.
-
-The first supported workflow is a minimal GPT-2 small causal-LM training path
-for existing BabyLM 10M token chunks. It is intentionally small so the repo can
-grow toward BabyLM 100M, LLaMA-style models, tokenizer experiments, Muon, and
-other objectives without inheriting the clutter of older prototype folders.
+Raw corpora, generated token caches, checkpoints, logs, and evaluation outputs
+should stay outside git and be referenced through configs or manifests.
 
 ## Quick Start
-
-From the repo root:
-
-```bash
-python scripts/train_gpt2_small.py --config configs/train/gpt2_small_10m_smoke.yaml
-```
-
-This reads pre-tokenized BabyLM 10M chunk pickles from the older local workspace
-and writes checkpoints/metrics under:
-
-```text
-/SSD2/babylm-baby-steps-runs/training/
-```
-
-The current training path is:
-
-```text
-configs/train/gpt2_small_10m_smoke.yaml  # run recipe
-scripts/train_gpt2_small.py              # command wrapper
-src/babysteps/data/token_chunks.py       # token-chunk Dataset/DataLoader helpers
-src/babysteps/training/causal_lm_loop.py # causal LM train/eval loop
-```
 
 If you cloned the repo without submodules, initialize the BabyLM evaluation
 pipeline with:
@@ -43,21 +16,151 @@ pipeline with:
 git submodule update --init --recursive
 ```
 
-## Tokenize Then Train GPT-2 Small
+Install Liger kernels only for the LLaMA + Liger recipes:
 
-Use this path when you want plain GPT-2 tokenization for the BabyLM 10M text,
-rather than training from the older prebuilt pickle files.
+```bash
+pip install -e ".[liger]"
+```
 
-First, optionally regenerate cleaned BabyLM text into the shared cache folder:
+By default, configs write run outputs under:
+
+```text
+/SSD2/babylm-baby-steps-runs/training/
+```
+
+Set `BABYSTEPS_RUNS_DIR` and `BABYSTEPS_CACHE_DIR` to move runs and generated
+caches on another machine.
+
+## Train 10M GPT-2 + Muon
+
+Use this path for the current strongest BabyLM 10M recipe from the local Muon
+sweeps. It trains the 8-layer, 512-hidden GPT-2 shape with the 16k byte-BPE
+tokenizer, batch size 32, and Muon LR 0.01:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
+  python -u scripts/train_causal_lm.py \
+  --config configs/train/gpt2_8l512_bpe16384_10m_muon.yaml
+```
+
+The launcher defaults to the same observed recipe:
+
+```bash
+BABYSTEPS_GPUS="0" bash scripts/run_muon_lr_sweep.sh
+```
+
+For a broader sweep, override the env vars explicitly:
+
+```bash
+BABYSTEPS_BPES="8192 16384" BABYSTEPS_BATCH_SIZE=32 \
+  BABYSTEPS_MUON_LRS="0.0025 0.005 0.01" BABYSTEPS_SEEDS="42 43 44" \
+  BABYSTEPS_GPUS="0 1" bash scripts/run_muon_lr_sweep.sh
+```
+
+Current 10M defaults reflect the local GPT-2 fast-eval sweep: with the tested
+8l512 architecture and batch size 32, `muon_lr=0.01` was best across seeds
+42-45 on the mean of the four fast zero-shot task averages.
+
+## Train 10M LLaMA + Muon + Liger
+
+Use this path for the current non-smoke BabyLM 10M LLaMA recipe. It trains an
+8-layer, 512-hidden LLaMA-style causal LM with the 16k byte-BPE tokenizer, Muon
+optimizer, bf16, and Liger kernels enabled:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
+  python -u scripts/train_causal_lm.py \
+  --config configs/train/llama_8l512_bpe16384_10m_muon_liger.yaml
+```
+
+That config intentionally has no `max_train_chunks` or `max_val_chunks`; the
+older `llama_tiny_*_smoke.yaml` configs are only for quick capped checks.
+Outputs go under `/SSD2/babylm-baby-steps-runs/training/` unless
+`BABYSTEPS_RUNS_DIR` is set.
+
+If the tokenizer or chunk pickles are missing, build the 16k byte-BPE assets:
+
+```bash
+python scripts/train_tokenizer.py \
+  --config configs/tokenization/byte_bpe_16384_10m_block512.yaml
+
+python scripts/build_token_chunks.py \
+  --config configs/tokenization/byte_bpe_16384_10m_block512.yaml
+```
+
+The expected generated inputs are:
+
+```text
+/SSD2/babylm-baby-steps-cache/tokenizers/babylm10m_byte_bpe_16384/
+/SSD2/babylm-baby-steps-cache/token_chunks/babylm10m_byte_bpe_16384_block512_eos/train.pkl
+/SSD2/babylm-baby-steps-cache/token_chunks/babylm10m_byte_bpe_16384_block512_eos/dev.pkl
+```
+
+For a seed or LR sweep, use the launcher. It now defaults to the full 10M
+config rather than a capped smoke config:
+
+```bash
+BABYSTEPS_GPUS="0 1" bash scripts/run_llama_muon_lr_seed_sweep.sh
+```
+
+For the recommended single run through the launcher:
+
+```bash
+BABYSTEPS_GPUS="0" BABYSTEPS_MUON_LRS="0.01" BABYSTEPS_SEEDS="42" \
+  bash scripts/run_llama_muon_lr_seed_sweep.sh
+```
+
+Current 10M defaults reflect the local LLaMA fast-eval sweep: `muon_lr=0.01`
+beat `0.005` across seeds 42-44 on the mean of the four fast zero-shot task
+averages, with the tested 8l512 architecture and effective batch size 32.
+
+Local note: the 10M LLaMA model has not been as useful as the 10M GPT-2 + Muon
+recipe above, but it is still useful for checking the LLaMA, Muon, and Liger
+training path before scaling up.
+
+## Train 100M LLaMA + Muon + Liger
+
+Use this path for the current BabyLM 2026 Strict 100M-track LLaMA default. It
+uses the so-far best local LLaMA shape: 12 layers, hidden size 896, 14 attention
+heads, 14 key/value heads, MLP size 2304, 16k byte-BPE, Muon LR 0.01, bf16,
+Liger kernels, and effective batch size 64 via micro-batch size 16 with 4
+gradient accumulation steps:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
+  python -u scripts/train_causal_lm.py \
+  --config configs/train/llama_12l896_bpe16384_babylm2026_strict_muon_liger.yaml
+```
+
+The 100M launcher points at the same default and keeps the run names consistent
+with the width/depth sweeps:
+
+```bash
+BABYSTEPS_GPUS="0" BABYSTEPS_SEEDS="42" \
+  bash scripts/run_llama_babylm2026_muon_lr_seed_sweep.sh
+```
+
+If the BabyLM 2026 Strict token shards are missing, build them first:
+
+```bash
+conda run --no-capture-output -n babylm python scripts/build_hf_token_shards.py \
+  --config configs/tokenization/babylm2026_strict_byte_bpe_16384_shards.yaml
+```
+
+Project note: LLaMA + Muon + Liger was chosen for the 100M track because it
+works well under memory and speed constraints. It may or may not beat a GPT-2
+small model at that scale, but it has been much better than the GPT-2 100M
+baseline in local comparisons.
+
+## Plain GPT-2 Tokenization Path
+
+Use this secondary path when you want Hugging Face GPT-2 tokenization for the
+BabyLM 10M text, separate from the byte-BPE recipes above.
+
+Optionally regenerate cleaned BabyLM text into the shared cache folder:
 
 ```bash
 python scripts/prepare_babylm_text.py --config configs/data/babylm_10m_paths.yaml
-```
-
-That writes cleaned train/dev files and a manifest under:
-
-```text
-/SSD2/babylm-baby-steps-cache/clean_text/babylm_10m/
 ```
 
 Build GPT-2 token chunks:
@@ -66,9 +169,8 @@ Build GPT-2 token chunks:
 python scripts/build_token_chunks.py --config configs/tokenization/gpt2_pretrained_10m_block512.yaml
 ```
 
-By default, this chunking config reads the existing CustomLlama-cleaned text
-that was used for parity with the old `gpt_chunked.pkl`. To tokenize the clean
-text regenerated by this repo instead, pass the clean-text directories:
+To tokenize text regenerated by this repo instead of the default cleaned text
+source, pass the clean-text directories:
 
 ```bash
 python scripts/build_token_chunks.py \
@@ -77,22 +179,14 @@ python scripts/build_token_chunks.py \
   --clean-dev-dir /SSD2/babylm-baby-steps-cache/clean_text/babylm_10m/dev
 ```
 
-The generated chunk files are:
-
-```text
-/SSD2/babylm-baby-steps-cache/token_chunks/babylm10m_gpt2_pretrained_block512_eos/train.pkl
-/SSD2/babylm-baby-steps-cache/token_chunks/babylm10m_gpt2_pretrained_block512_eos/dev.pkl
-```
-
 Train GPT-2 small from those generated chunks:
 
 ```bash
 python scripts/train_gpt2_small.py --config configs/train/gpt2_small_10m_plain_gpt2_chunks.yaml
 ```
 
-That config keeps the same simple GPT-2 small training loop, but points
-`data.train_chunks` and `data.val_chunks` at the generated GPT-2 chunk pickles.
-Run outputs go under `/SSD2/babylm-baby-steps-runs/training/`.
+That config points `data.train_chunks` and `data.val_chunks` at the generated
+GPT-2 chunk pickles.
 
 ## Layout
 
@@ -163,7 +257,6 @@ training run:
 conda run -n babylm python scripts/eval_babylm_checkpoints.py \
   --config configs/eval/fast_eval.yaml \
   --run-dir /SSD2/babylm-baby-steps-runs/training/YOUR_RUN \
-  --eval-data-dir /SSD/tokenPred/babylm_10m/evaluation-pipeline-2025/evaluation_data/fast_eval \
   --output-dir /SSD2/babylm-baby-steps-runs/evaluation/YOUR_RUN_fast_eval \
   --device 1
 ```
@@ -205,8 +298,7 @@ Run the 10-batch smoke on one GPU:
 CUDA_VISIBLE_DEVICES=0 python scripts/smoke_10_batch_deterministic.py --device cuda
 ```
 
-Recent local checks passed with full GPT-2 small parity and CUDA 10-batch smoke
-runs. See `docs/runbook.md` for the current check sequence.
+See `docs/runbook.md` for workflow-specific dry-runs and launch checks.
 
 ## Team Rules
 
@@ -216,26 +308,3 @@ runs. See `docs/runbook.md` for the current check sequence.
 - Keep scripts thin: they should wire configs into package code.
 - Do not commit secrets such as Hugging Face tokens, GitHub PATs, API keys, or
   local credentials.
-
-## Roadmap
-
-Near-term:
-
-- Run a 100-500 batch GPT-2 small training smoke.
-- Confirm checkpoint saving and metrics output.
-- Add a cleaner BabyLM evaluation pipeline wrapper.
-- Add BabyLM 100M data and training configs.
-
-Likely future modules:
-
-```text
-src/babysteps/models/        # GPT-2, LLaMA, registries
-src/babysteps/tokenization/  # GPT-2 BPE, SentencePiece, Morfessor, custom BPE
-src/babysteps/objectives/    # causal LM, masked LM, diffusion/hybrid objectives
-src/babysteps/training/      # optimizers, schedules, checkpointing, fused paths
-src/babysteps/evaluation/    # BabyLM pipeline wrappers and result summaries
-```
-
-Longer-term experiments may include LLaMA-style BabyLM models, Muon optimizer
-comparisons, tokenizer ablations, BabyLM 100M baselines, and diffusion or
-diffusion/causal-LM hybrid pretraining ideas.

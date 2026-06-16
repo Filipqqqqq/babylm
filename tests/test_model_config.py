@@ -105,6 +105,44 @@ def test_build_llama_config_from_dict_uses_babysteps_shape_keys() -> None:
     assert hf_config.use_cache is False
 
 
+def test_build_llama_config_from_dict_supports_optional_dropout() -> None:
+    config = {
+        "model": {
+            "architecture": "llama",
+            "context_length": 32,
+            "n_layer": 1,
+            "n_head": 4,
+            "n_embd": 32,
+            "llama_dropout": 0.1,
+            "llama_resid_pdrop": 0.2,
+            "llama_attention_dropout": 0.3,
+        }
+    }
+
+    hf_config = build_causal_lm_config_from_dict(config, _tokenizer(vocab_size=128))
+
+    assert hf_config.model_type == "llama"
+    assert hf_config.attention_dropout == pytest.approx(0.3)
+    assert hf_config.babysteps_llama_embd_pdrop == pytest.approx(0.1)
+    assert hf_config.babysteps_llama_resid_pdrop == pytest.approx(0.2)
+
+
+def test_llama_dropout_rejects_invalid_probabilities() -> None:
+    with pytest.raises(ValueError, match="llama_embd_pdrop"):
+        build_causal_lm_config(
+            architecture="llama",
+            vocab_size=64,
+            bos_token_id=1,
+            eos_token_id=2,
+            pad_token_id=0,
+            context_length=16,
+            n_embd=32,
+            n_head=4,
+            n_layer=1,
+            llama_embd_pdrop=1.0,
+        )
+
+
 def test_tiny_llama_model_instantiates_and_runs_forward() -> None:
     hf_config = build_causal_lm_config(
         architecture="llama",
@@ -127,6 +165,47 @@ def test_tiny_llama_model_instantiates_and_runs_forward() -> None:
 
     assert outputs.logits.shape == (1, 4, 64)
     assert model.config.model_type == "llama"
+
+
+def test_tiny_llama_model_applies_optional_training_dropout() -> None:
+    config = {
+        "model": {
+            "architecture": "llama",
+            "context_length": 16,
+            "n_layer": 1,
+            "n_head": 4,
+            "n_embd": 32,
+            "vocab_size": 64,
+            "llama_intermediate_size": 64,
+            "llama_embd_pdrop": 0.8,
+            "llama_resid_pdrop": 0.8,
+            "llama_attention_dropout": 0.0,
+        }
+    }
+
+    model = build_causal_lm_model(config, _tokenizer())
+    input_ids = torch.tensor([[1, 3, 4, 2]])
+    attention_mask = torch.ones_like(input_ids)
+
+    assert hasattr(model.model, "babysteps_embed_dropout")
+    assert hasattr(model.model.layers[0], "babysteps_resid_dropout")
+    assert len(model._babysteps_dropout_hook_handles) == 2
+
+    model.eval()
+    with torch.no_grad():
+        torch.manual_seed(0)
+        eval_logits_1 = model(input_ids=input_ids, attention_mask=attention_mask).logits
+        torch.manual_seed(1)
+        eval_logits_2 = model(input_ids=input_ids, attention_mask=attention_mask).logits
+    assert torch.allclose(eval_logits_1, eval_logits_2)
+
+    model.train()
+    with torch.no_grad():
+        torch.manual_seed(0)
+        train_logits_1 = model(input_ids=input_ids, attention_mask=attention_mask).logits
+        torch.manual_seed(1)
+        train_logits_2 = model(input_ids=input_ids, attention_mask=attention_mask).logits
+    assert not torch.allclose(train_logits_1, train_logits_2)
 
 
 def test_tiny_gpt2_model_helper_instantiates_and_runs_forward() -> None:
@@ -249,3 +328,92 @@ def test_llama_tiny_muon_liger_smoke_config_enables_liger_only() -> None:
     assert config["model"]["use_liger_kernel"] is True
     assert config["training"]["optimizer"] == "muon_pe"
     assert config["logging"]["profile_optimizer_steps"] is True
+
+
+def test_llama_10m_muon_liger_config_is_full_observed_default() -> None:
+    config_path = (
+        Path(__file__).resolve().parents[1]
+        / "configs"
+        / "train"
+        / "llama_8l512_bpe16384_10m_muon_liger.yaml"
+    )
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    hf_config = build_causal_lm_config_from_dict(config, _tokenizer(vocab_size=16384))
+    training_config = config["training"]
+
+    assert config["data"].get("max_train_chunks") is None
+    assert config["data"].get("max_val_chunks") is None
+    assert hf_config.model_type == "llama"
+    assert hf_config.hidden_size == 512
+    assert hf_config.intermediate_size == 1280
+    assert hf_config.num_hidden_layers == 8
+    assert hf_config.num_attention_heads == 8
+    assert hf_config.num_key_value_heads == 8
+    assert config["model"]["use_liger_kernel"] is True
+    assert training_config["optimizer"] == "muon_pe"
+    assert training_config["muon_lr"] == 0.01
+    assert training_config["batch_size"] == 32
+    assert training_config["warmup_ratio"] == 0.03
+    assert training_config["mixed_precision"] == "bf16"
+
+
+def test_gpt2_10m_muon_config_is_full_observed_default() -> None:
+    config_path = (
+        Path(__file__).resolve().parents[1]
+        / "configs"
+        / "train"
+        / "gpt2_8l512_bpe16384_10m_muon.yaml"
+    )
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    hf_config = build_causal_lm_config_from_dict(config, _tokenizer(vocab_size=16384))
+    training_config = config["training"]
+
+    assert config["data"].get("max_train_chunks") is None
+    assert config["data"].get("max_val_chunks") is None
+    assert hf_config.model_type == "gpt2"
+    assert hf_config.vocab_size == 16384
+    assert hf_config.n_ctx == 1024
+    assert hf_config.n_layer == 8
+    assert hf_config.n_head == 8
+    assert hf_config.n_embd == 512
+    assert training_config["optimizer"] == "muon_pe"
+    assert training_config["betas"] == [0.9, 0.999]
+    assert training_config["weight_decay"] == 0.0
+    assert training_config["muon_lr"] == 0.01
+    assert training_config["batch_size"] == 32
+    assert training_config["warmup_ratio"] == 0.03
+    assert training_config["muon_weight_decay"] == 0.1
+    assert training_config["mixed_precision"] == "no"
+
+
+def test_llama_100m_muon_liger_config_is_current_default() -> None:
+    config_path = (
+        Path(__file__).resolve().parents[1]
+        / "configs"
+        / "train"
+        / "llama_12l896_bpe16384_babylm2026_strict_muon_liger.yaml"
+    )
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    hf_config = build_causal_lm_config_from_dict(config, _tokenizer(vocab_size=16384))
+    training_config = config["training"]
+
+    assert config["data"]["format"] == "token_shards"
+    assert config["data"].get("max_train_blocks") is None
+    assert config["data"].get("max_val_blocks") is None
+    assert hf_config.model_type == "llama"
+    assert hf_config.hidden_size == 896
+    assert hf_config.intermediate_size == 2304
+    assert hf_config.num_hidden_layers == 12
+    assert hf_config.num_attention_heads == 14
+    assert hf_config.num_key_value_heads == 14
+    assert hf_config.babysteps_llama_embd_pdrop == pytest.approx(0.1)
+    assert config["model"]["use_liger_kernel"] is True
+    assert training_config["optimizer"] == "muon_pe"
+    assert training_config["muon_lr"] == 0.01
+    assert training_config["batch_size"] == 16
+    assert training_config["gradient_accumulation_steps"] == 4
+    assert training_config["warmup_ratio"] == 0.03
+    assert training_config["mixed_precision"] == "bf16"

@@ -1,0 +1,64 @@
+run:
+  name: llama_12l896_bpe16384_babylm2026_strict_muon_liger_bs64
+  seed: 42
+  deterministic: false
+  output_root: ${BABYSTEPS_RUNS_DIR:-/SSD2/babylm-baby-steps-runs}/training
+  append_timestamp: true
+
+data:
+  format: token_shards
+  data_dir: ${BABYSTEPS_BABYLM2026_SHARDS_DIR:-${BABYSTEPS_CACHE_DIR:-/SSD2/babylm-baby-steps-cache}/token_shards/babylm2026_strict_byte_bpe_16384_bos_eos}
+  train_split: train
+  val_split: val
+  seq_len: 1024
+  max_train_blocks:
+  max_val_blocks:
+  num_workers: 0
+
+tokenizer:
+  name: ${BABYSTEPS_BABYLM2026_TOKENIZER_DIR:-${BABYSTEPS_CACHE_DIR:-/SSD2/babylm-baby-steps-cache}/tokenizers/babylm2026_strict_byte_bpe_16384}
+
+model:
+  architecture: llama
+  size: 12l896
+  vocab_size: 16384
+  context_length: 1024
+  n_layer: 12
+  n_head: 14
+  n_embd: 896
+  llama_intermediate_size: 2304
+  llama_num_key_value_heads: 14
+  llama_tie_word_embeddings: true
+  rope_theta: 10000.0
+  llama_dropout: 0.1
+  use_liger_kernel: true
+
+training:
+  epochs: 10
+  batch_size: 16
+  optimizer: muon_pe
+  learning_rate: 0.00005
+  betas: [0.9, 0.95]
+  eps: 0.00000001
+  weight_decay: 0.1
+  muon_lr: 0.01
+  muon_weight_decay: 0.1
+  muon_momentum: 0.95
+  muon_ns_steps: 5
+  muon_nesterov: true
+  muon_split_qkv: true
+  muon_batch_updates: true
+  warmup_ratio: 0.03
+  gradient_accumulation_steps: 4
+  gradient_clip_norm: 1.0
+  mixed_precision: bf16
+
+logging:
+  log_every_steps: 50
+  eval_every_steps: 500
+  eval_max_batches: 20
+  profile_optimizer_steps: true
+
+checkpointing:
+  save_every_epochs: 1
+  save_final: true
