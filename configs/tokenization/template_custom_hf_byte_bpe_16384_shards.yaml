@@ -1,0 +1,34 @@
+# Copy this file and fill in dataset.name/config/split for a Hugging Face text dataset.
+name: custom_hf_byte_bpe_16384_shards
+
+dataset:
+  kind: hf
+  name: ${BABYSTEPS_CUSTOM_HF_DATASET}
+  config:
+  split: train
+  text_field: text
+  streaming: true
+
+tokenizer:
+  kind: byte_bpe
+  vocab_size: 16384
+  min_frequency: 2
+  special_tokens:
+    - <unk>
+    - <s>
+    - </s>
+    - <pad>
+  unk_token: <unk>
+  bos_token: <s>
+  eos_token: </s>
+  pad_token: <pad>
+  model_max_length: 1024
+  train_batch_docs: 1000
+  output_dir: ${BABYSTEPS_CUSTOM_TOKENIZER_DIR:-${BABYSTEPS_CACHE_DIR:-/SSD2/babylm-baby-steps-cache}/tokenizers/custom_byte_bpe_16384}
+
+shards:
+  output_dir: ${BABYSTEPS_CUSTOM_SHARDS_DIR:-${BABYSTEPS_CACHE_DIR:-/SSD2/babylm-baby-steps-cache}/token_shards/custom_byte_bpe_16384_bos_eos}
+  shard_tokens: 1000000
+  val_shards: 1
+  batch_docs: 512
+  max_shards:

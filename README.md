@@ -143,7 +143,7 @@ BABYSTEPS_GPUS="0" BABYSTEPS_SEEDS="42" \
 If the BabyLM 2026 Strict token shards are missing, build them first:
 
 ```bash
-conda run --no-capture-output -n babylm python scripts/build_hf_token_shards.py \
+conda run --no-capture-output -n babylm python scripts/build_token_shards.py \
   --config configs/tokenization/babylm2026_strict_byte_bpe_16384_shards.yaml
 ```
 
@@ -151,6 +151,103 @@ Project note: LLaMA + Muon + Liger was chosen for the 100M track because it
 works well under memory and speed constraints. It may or may not beat a GPT-2
 small model at that scale, but it has been much better than the GPT-2 100M
 baseline in local comparisons.
+
+## Custom Datasets And Tokenizers
+
+The trainer is intentionally dataset-agnostic: it consumes prebuilt
+`token_chunks` pickles or `token_shards` binary files. For new datasets, the
+recommended path is to build a byte-BPE tokenizer plus packed `token_shards`,
+then point a normal training config at those generated paths.
+
+Notebook option: open `notebooks/custom_dataset_tokenization.ipynb` for a
+guided version of the same workflow. It starts with runnable demo text files,
+then lets you switch to a Hugging Face dataset, local JSONL file, explicit text
+files, or a folder of text files.
+
+For a Hugging Face dataset, copy and edit the template:
+
+```bash
+cp configs/tokenization/template_custom_hf_byte_bpe_16384_shards.yaml \
+  configs/tokenization/my_dataset_byte_bpe_16384_shards.yaml
+```
+
+Set `dataset.name`, optional `dataset.config`, `dataset.split`, and
+`dataset.text_field`, then build the tokenizer and shards:
+
+```bash
+python scripts/build_token_shards.py \
+  --config configs/tokenization/my_dataset_byte_bpe_16384_shards.yaml
+```
+
+For a quick smoke build, cap the amount of data:
+
+```bash
+python scripts/build_token_shards.py \
+  --config configs/tokenization/my_dataset_byte_bpe_16384_shards.yaml \
+  --max-docs 1000 --max-shards 2 --shard-tokens 100000
+```
+
+For local data, copy the local template instead:
+
+```bash
+cp configs/tokenization/template_custom_local_byte_bpe_16384_shards.yaml \
+  configs/tokenization/my_local_byte_bpe_16384_shards.yaml
+```
+
+The default local template expects JSONL rows with a `text` field:
+
+```yaml
+dataset:
+  kind: local_jsonl
+  files:
+    train: /path/to/train.jsonl
+  split: train
+  text_field: text
+```
+
+Plain text files are also supported by switching the dataset block:
+
+```yaml
+dataset:
+  kind: local_text
+  files:
+    - /path/to/corpus.txt
+  text_field: text
+  document_mode: file
+```
+
+For a folder of text files, use `dir` plus an optional `glob`:
+
+```yaml
+dataset:
+  kind: local_text
+  dir: /path/to/text_folder
+  glob: "*.txt"
+  recursive: false
+  text_field: text
+  document_mode: file
+```
+
+Use `recursive: true` to match files in nested folders. Use
+`document_mode: line` when each non-empty line should be one training document.
+Local and Hugging Face configs share the same `tokenizer` and `shards`
+sections, so `BABYSTEPS_CUSTOM_TOKENIZER_DIR`, `BABYSTEPS_CUSTOM_SHARDS_DIR`,
+and `BABYSTEPS_CACHE_DIR` can move generated outputs without editing every
+config.
+
+After building shards, copy the training template and point it at the generated
+tokenizer and shard directory:
+
+```bash
+cp configs/train/template_llama_token_shards.yaml \
+  configs/train/my_dataset_llama_token_shards.yaml
+
+python scripts/train_causal_lm.py \
+  --config configs/train/my_dataset_llama_token_shards.yaml
+```
+
+Token shards are stored as `uint16`, so byte-BPE vocab sizes must stay below
+65,536 tokens. The provided templates use 16,384.
 
 ## Plain GPT-2 Tokenization Path
 

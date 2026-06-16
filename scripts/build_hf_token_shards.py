@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Train a byte-BPE tokenizer and build packed token shards from a HF dataset."""
+"""Train a byte-BPE tokenizer and build packed token shards from text datasets.
+
+The default source is a Hugging Face dataset, matching the original BabyLM
+2026 workflow. Local text and JSONL files are also supported for custom
+datasets.
+"""
 
 from __future__ import annotations
 
@@ -134,12 +139,22 @@ def atomic_write_bin(path: str | Path, arr: np.ndarray) -> None:
     os.replace(tmp, path)
 
 
-def load_dataset_split(dataset_config: dict[str, Any]):
+def dataset_kind(dataset_config: dict[str, Any]) -> str:
+    """Return the configured dataset source kind.
+
+    Existing configs did not specify a kind, so Hugging Face remains the
+    default for backward compatibility.
+    """
+
+    return str(dataset_config.get("kind", "hf")).strip().lower()
+
+
+def load_hf_dataset_split(dataset_config: dict[str, Any]):
     try:
         from datasets import load_dataset
     except ImportError as exc:
         raise ImportError(
-            "build_hf_token_shards.py requires the 'datasets' package. "
+            "Hugging Face dataset sources require the 'datasets' package. "
             "Install project dependencies after pulling the updated pyproject."
         ) from exc
 
@@ -152,6 +167,159 @@ def load_dataset_split(dataset_config: dict[str, Any]):
     if dataset_config_name:
         dataset_kwargs["name"] = dataset_config_name
     return load_dataset(dataset_name, **dataset_kwargs)
+
+
+def _as_path_list(value: Any) -> list[Path]:
+    if isinstance(value, (str, os.PathLike)):
+        return [Path(value)]
+    if isinstance(value, list):
+        return [Path(item) for item in value]
+    raise TypeError(
+        f"Expected a path string or list of paths, got {type(value).__name__}."
+    )
+
+
+def _as_str_list(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    raise TypeError(f"Expected a string or list of strings, got {type(value).__name__}.")
+
+
+def _split_value(value: Any, dataset_config: dict[str, Any], field_name: str) -> Any:
+    if not isinstance(value, dict):
+        return value
+
+    split = str(dataset_config.get("split", "train"))
+    if split not in value:
+        available = ", ".join(sorted(str(key) for key in value))
+        raise KeyError(
+            f"{field_name} has no entry for split {split!r}; available: {available}"
+        )
+    return value[split]
+
+
+def _default_local_glob(dataset_config: dict[str, Any]) -> str:
+    kind = dataset_kind(dataset_config)
+    if kind in {"local_jsonl", "jsonl"}:
+        return "*.jsonl"
+    if kind in {"local_text", "text", "txt"}:
+        return "*.txt"
+    return "*"
+
+
+def _expand_directory_files(dataset_config: dict[str, Any]) -> list[Path]:
+    raw_dirs = dataset_config.get(
+        "dirs",
+        dataset_config.get("dir", dataset_config.get("directory")),
+    )
+    if raw_dirs is None:
+        return []
+
+    raw_dirs = _split_value(raw_dirs, dataset_config, "dataset.dir")
+    raw_globs = _split_value(
+        dataset_config.get("glob", _default_local_glob(dataset_config)),
+        dataset_config,
+        "dataset.glob",
+    )
+    patterns = _as_str_list(raw_globs)
+    if bool(dataset_config.get("recursive", False)):
+        patterns = [
+            pattern if "**" in pattern else f"**/{pattern}"
+            for pattern in patterns
+        ]
+
+    files: list[Path] = []
+    for directory in _as_path_list(raw_dirs):
+        if not directory.exists():
+            raise FileNotFoundError(f"Missing local dataset directory: {directory}")
+        if not directory.is_dir():
+            raise ValueError(
+                f"Local dataset directory path is not a directory: {directory}"
+            )
+
+        matches: list[Path] = []
+        for pattern in patterns:
+            matches.extend(path for path in directory.glob(pattern) if path.is_file())
+        if not matches:
+            joined = ", ".join(patterns)
+            raise FileNotFoundError(f"No local dataset files matched {joined} under {directory}")
+        files.extend(sorted(set(matches)))
+
+    return files
+
+
+def local_dataset_files(dataset_config: dict[str, Any]) -> list[Path]:
+    """Resolve local files from explicit file paths or directory globs."""
+
+    files: list[Path] = []
+    raw_files = dataset_config.get("files", dataset_config.get("path"))
+    if raw_files is not None:
+        raw_files = _split_value(raw_files, dataset_config, "dataset.files")
+        for path in _as_path_list(raw_files):
+            if not path.exists():
+                raise FileNotFoundError(f"Missing local dataset file: {path}")
+            if not path.is_file():
+                raise ValueError(f"Local dataset path is not a file: {path}")
+            files.append(path)
+
+    files.extend(_expand_directory_files(dataset_config))
+    if not files:
+        raise KeyError("Local dataset sources require dataset.files/path or dataset.dir/dirs.")
+
+    return list(dict.fromkeys(files))
+
+
+def iter_local_jsonl_rows(dataset_config: dict[str, Any]) -> Iterator[dict[str, Any]]:
+    encoding = str(dataset_config.get("encoding", "utf-8"))
+    for path in local_dataset_files(dataset_config):
+        with path.open("r", encoding=encoding) as f:
+            for line_number, line in enumerate(f, start=1):
+                line = line.strip()
+                if not line:
+                    continue
+                row = json.loads(line)
+                if not isinstance(row, dict):
+                    raise TypeError(f"Expected JSON object at {path}:{line_number}.")
+                yield row
+
+
+def iter_local_text_rows(dataset_config: dict[str, Any]) -> Iterator[dict[str, str]]:
+    text_field = str(dataset_config.get("text_field", "text"))
+    encoding = str(dataset_config.get("encoding", "utf-8"))
+    document_mode = str(dataset_config.get("document_mode", "file")).strip().lower()
+    skip_empty = bool(dataset_config.get("skip_empty", True))
+
+    if document_mode not in {"file", "line"}:
+        raise ValueError("local_text dataset.document_mode must be 'file' or 'line'.")
+
+    for path in local_dataset_files(dataset_config):
+        if document_mode == "file":
+            text = path.read_text(encoding=encoding)
+            if text or not skip_empty:
+                yield {text_field: text}
+            continue
+
+        with path.open("r", encoding=encoding) as f:
+            for line in f:
+                text = line.rstrip("\n")
+                if skip_empty and not text.strip():
+                    continue
+                yield {text_field: text}
+
+
+def iter_dataset_rows(dataset_config: dict[str, Any]) -> Iterable[dict[str, Any]]:
+    kind = dataset_kind(dataset_config)
+    if kind in {"hf", "huggingface", "hugging_face"}:
+        return load_hf_dataset_split(dataset_config)
+    if kind in {"local_jsonl", "jsonl"}:
+        return iter_local_jsonl_rows(dataset_config)
+    if kind in {"local_text", "text", "txt"}:
+        return iter_local_text_rows(dataset_config)
+    raise ValueError(
+        f"Unsupported dataset.kind={kind!r}; expected hf, local_jsonl, or local_text."
+    )
 
 
 def iter_text_batches(
@@ -241,9 +409,8 @@ def train_or_load_tokenizer(
         return AutoTokenizer.from_pretrained(output_dir)
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    dataset = load_dataset_split(dataset_config)
     text_batches = iter_text_batches(
-        dataset,
+        iter_dataset_rows(dataset_config),
         text_field=str(dataset_config.get("text_field", "text")),
         batch_docs=int(tokenizer_config.get("train_batch_docs", 1000)),
         max_docs=max_docs,
@@ -410,9 +577,8 @@ def build_token_shards(
 
     started = time.perf_counter()
     docs_processed = 0
-    dataset = load_dataset_split(dataset_config)
     text_batches = iter_text_batches(
-        dataset,
+        iter_dataset_rows(dataset_config),
         text_field=str(dataset_config.get("text_field", "text")),
         batch_docs=int(shard_config.get("batch_docs", 512)),
         max_docs=max_docs,
@@ -446,7 +612,12 @@ def build_token_shards(
     meta = {
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "name": config.get("name"),
-        "dataset": dataset_config["name"],
+        "dataset": dataset_config.get(
+            "name",
+            dataset_config.get("files", dataset_kind(dataset_config)),
+        ),
+        "dataset_kind": dataset_kind(dataset_config),
+        "dataset_config": dataset_config,
         "config": dataset_config.get("config"),
         "split": dataset_config.get("split", "train"),
         "text_field": dataset_config.get("text_field", "text"),
@@ -482,7 +653,7 @@ def main() -> None:
             / "tokenization"
             / "babylm2026_strict_byte_bpe_16384_shards.yaml"
         ),
-        help="Path to a HF token-shard build config.",
+        help="Path to a token-shard build config.",
     )
     parser.add_argument("--overwrite-tokenizer", action="store_true")
     parser.add_argument("--overwrite-shards", action="store_true")
