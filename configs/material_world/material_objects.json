@@ -367,6 +367,86 @@
 "mud shape dried -> hardens or cracks",
 "ice shape warmed -> melts into water"
 ]
+},
+{
+"object_id": "balloon",
+"object_name": "balloon",
+"everyday_function": "holds air or water for play, decoration, or simple demonstrations",
+"needed_properties": ["light", "flexible", "can expand", "safe to handle", "often partly elastic"],
+"candidate_materials": ["latex", "rubber", "plastic film", "foil", "fabric", "paper", "acrylic", "wool"],
+"coverage_tags": ["ewok_material_properties"],
+"useful_events": ["inflated", "squeezed", "dropped", "rubbed", "thrown against wall", "filled with water"],
+"good_material_contrasts": [
+"latex balloon inflated -> stretches and holds air",
+"rubber balloon dropped -> may bounce or flex",
+"plastic film balloon squeezed -> crinkles and may deform",
+"fabric balloon pretend example -> soft but does not seal air well",
+"paper balloon wet -> softens and tears"
+]
+},
+{
+"object_id": "bin",
+"object_name": "bin",
+"everyday_function": "holds waste, toys, laundry, or loose household items",
+"needed_properties": ["holds shape", "contains items", "can be carried or moved", "does not collapse under light loads"],
+"candidate_materials": ["plastic", "metal", "cardboard", "wood", "rubber", "glass", "beeswax", "ice", "jelly"],
+"coverage_tags": ["ewok_material_properties"],
+"useful_events": ["filled", "dropped", "squeezed", "left in sun", "washed", "dragged across floor"],
+"good_material_contrasts": [
+"plastic bin squeezed -> may flex and return shape",
+"metal bin dropped -> dents or rings",
+"cardboard bin wet -> softens and weakens",
+"glass bin dropped -> may crack or shatter",
+"jelly bin pretend example -> wobbles and cannot hold a stiff shape"
+]
+},
+{
+"object_id": "football",
+"object_name": "football",
+"everyday_function": "is thrown, caught, kicked, or bounced during play",
+"needed_properties": ["holds shape", "safe to handle", "durable under impact", "can rebound or roll"],
+"candidate_materials": ["rubber", "leather", "synthetic leather", "plastic", "foam", "satin", "granite", "sapphire"],
+"coverage_tags": ["ewok_material_properties"],
+"useful_events": ["dropped", "thrown against wall", "squeezed", "kicked", "rolled", "left outside"],
+"good_material_contrasts": [
+"rubber football dropped -> bounces or rebounds",
+"leather football squeezed -> gives slightly but holds shape",
+"foam football pressed -> compresses",
+"granite football pretend example -> stays hard and heavy",
+"satin football pretend example -> has a soft smooth surface but would not behave like a normal ball"
+]
+},
+{
+"object_id": "volleyball",
+"object_name": "volleyball",
+"everyday_function": "is hit, bounced, or thrown during play",
+"needed_properties": ["round shape", "safe surface", "light enough to hit", "durable enough for repeated impact"],
+"candidate_materials": ["rubber", "synthetic leather", "acrylic", "beeswax", "concrete", "diamond"],
+"coverage_tags": ["ewok_material_properties"],
+"useful_events": ["dropped", "thrown against wall", "squeezed", "hit by hand", "rolled", "left outside"],
+"good_material_contrasts": [
+"rubber volleyball dropped -> bounces",
+"synthetic leather volleyball hit -> rebounds while keeping shape",
+"beeswax volleyball pretend example -> surface can soften with warmth",
+"concrete volleyball pretend example -> stays hard and heavy",
+"diamond volleyball pretend example -> could be transparent and hard but unrealistic as sports equipment"
+]
+},
+{
+"object_id": "wheel",
+"object_name": "wheel",
+"everyday_function": "rolls under a cart, toy, bike, or small machine",
+"needed_properties": ["round", "holds shape", "rolls smoothly", "handles pressure at the edge"],
+"candidate_materials": ["rubber", "latex", "plastic", "wood", "metal", "bronze", "flannel", "granite"],
+"coverage_tags": ["ewok_material_properties"],
+"useful_events": ["rolled", "dropped", "squeezed", "scraped", "loaded with weight", "thrown against wall"],
+"good_material_contrasts": [
+"rubber wheel rolled -> grips and can bounce slightly",
+"metal wheel dropped -> rings and may dent",
+"wooden wheel wet -> may swell or warp",
+"flannel wheel pretend example -> soft surface would not roll like a hard wheel",
+"granite wheel pretend example -> hard and heavy, with a rough or polished surface"
+]
 }
 ]
 }

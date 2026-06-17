@@ -1,0 +1,130 @@
+{
+  "version": "material_world_coverage_sets_v0",
+  "description": "Optional named coverage targets for material-world generation. These sets are metadata for targeted probes and soft upweighting; default generation does not use them unless coverage_set_ids or coverage_mix is set in the pipeline config.",
+  "coverage_sets": [
+    {
+      "set_id": "ewok_material_properties",
+      "domain": "material-properties",
+      "description": "Materials, objects, and property contrasts from the EWoK material-properties domain, adapted for natural BabyLM material-world prose.",
+      "materials": [
+        "acrylic",
+        "aluminum",
+        "beeswax",
+        "bronze",
+        "ceramic",
+        "chalk",
+        "charcoal",
+        "clay",
+        "concrete",
+        "diamond",
+        "fabric",
+        "flannel",
+        "glass",
+        "granite",
+        "ice",
+        "jelly",
+        "latex",
+        "rubber",
+        "sapphire",
+        "satin",
+        "styrofoam",
+        "terracotta",
+        "wool"
+      ],
+      "object_ids": [
+        "balloon",
+        "bin",
+        "football",
+        "volleyball",
+        "wheel"
+      ],
+      "concept_pairs": [
+        ["bouncy", "not bouncy"],
+        ["cold", "warm"],
+        ["fragile", "sturdy"],
+        ["heavy", "light"],
+        ["smooth", "rough"],
+        ["soft", "hard"],
+        ["transparent", "opaque"]
+      ],
+      "generation_guidance": [
+        "Use the coverage materials and objects as anchors, but render ordinary prose rather than benchmark-style minimal pairs.",
+        "Prefer plausible everyday object-material pairings when possible.",
+        "When an EWoK pairing is intentionally odd, make the text clearly hypothetical or pretend instead of claiming it is common.",
+        "Keep final training text natural; do not mention EWoK, coverage sets, concept labels, or test names in generated prose."
+      ]
+    },
+    {
+      "set_id": "ewok_material_dynamics",
+      "domain": "material-dynamics",
+      "description": "Action and behavior concepts from the EWoK material-dynamics domain, adapted for natural BabyLM material-world prose.",
+      "materials": [
+        "cardboard",
+        "cotton",
+        "denim",
+        "fabric",
+        "glass",
+        "gravel",
+        "ice",
+        "oil",
+        "paper",
+        "rice",
+        "rubber",
+        "sand",
+        "satin",
+        "sponge",
+        "syrup",
+        "water",
+        "wool"
+      ],
+      "object_ids": [
+        "bag",
+        "blanket",
+        "bottle",
+        "bowl",
+        "box",
+        "cup",
+        "plate",
+        "shirt_jacket",
+        "sidewalk_path",
+        "spoon",
+        "sponge_cushion",
+        "towel",
+        "window_pane"
+      ],
+      "dynamic_pairs": [
+        ["squeeze", "stir"],
+        ["hang", "stir"],
+        ["wrinkle", "stir"],
+        ["tap", "stir"],
+        ["squeeze", "pour"],
+        ["stir", "drape"],
+        ["drape", "stir"],
+        ["break", "drip"],
+        ["stir", "hang"],
+        ["rip", "drip"],
+        ["rip", "pour"],
+        ["rip", "stir"],
+        ["break", "ripple"],
+        ["wrinkle", "pour"],
+        ["wrinkle", "drip"],
+        ["stir", "wrinkle"],
+        ["pile", "stir"],
+        ["fold", "stir"],
+        ["break", "splash"],
+        ["drape", "pour"],
+        ["break", "flap"],
+        ["wrinkle", "splash"],
+        ["rip", "splash"],
+        ["break", "rip"],
+        ["flap", "drip"],
+        ["hang", "pour"]
+      ],
+      "generation_guidance": [
+        "Use these dynamic concepts as visible actions or material behaviors in natural prose.",
+        "Keep dynamics concrete: a person can tap, stir, squeeze, fold, rip, or drape something; a material can drip, ripple, splash, wrinkle, flap, pile, or break.",
+        "Do not mention EWoK, coverage sets, concept labels, or test names in generated prose."
+      ]
+    }
+  ]
+}

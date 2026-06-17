@@ -12,7 +12,7 @@
   {
   "class_id": "metals",
   "class_name": "Metals",
-  "examples": ["steel", "aluminum", "copper", "iron", "brass"],
+  "examples": ["steel", "aluminum", "copper", "iron", "brass", "bronze"],
   "core_properties": ["hard", "strong", "usually rigid", "conducts heat", "often heavier than plastic or wood"],
   "core_dynamics": ["dents", "bends under strong force", "heats and cools quickly", "rings when struck", "rusts or tarnishes depending on type"],
   "contrast_notes": [
@@ -23,14 +23,15 @@
   "caveats": [
   "thin metal foil bends and tears more easily than thick metal",
   "aluminum does not rust red like iron or steel",
-  "different metals vary in weight, hardness, and corrosion"
+  "different metals vary in weight, hardness, and corrosion",
+  "bronze behaves like a hard metal in most everyday examples, but it tarnishes and patinates differently from steel or aluminum"
   ],
   "scenario_hooks": ["spoon heating in soup", "bike frame hitting a curb", "aluminum can denting", "metal tray clanging", "nail attracted to a magnet"]
   },
   {
   "class_id": "brittle_hard_solids",
   "class_name": "Brittle hard solids",
-  "examples": ["glass", "ceramic", "porcelain", "pottery", "mirror glass"],
+  "examples": ["glass", "ceramic", "porcelain", "pottery", "mirror glass", "terracotta"],
   "core_properties": ["hard", "smooth", "brittle", "rigid", "sometimes transparent"],
   "core_dynamics": ["cracks", "shatters", "chips", "breaks into sharp pieces"],
   "contrast_notes": [
@@ -41,14 +42,15 @@
   "caveats": [
   "thick glass can be stronger than thin glass",
   "not all brittle hard solids are transparent",
-  "ceramic tile overlaps with both brittle solids and masonry-like surfaces"
+  "ceramic tile overlaps with both brittle solids and masonry-like surfaces",
+  "terracotta is porous fired clay, so it can overlap with pottery, masonry, and soft clay examples depending on context"
   ],
   "scenario_hooks": ["glass cup dropped on tile", "ceramic plate chipping", "mirror cracking", "porcelain mug breaking", "window glass reflecting light"]
   },
   {
   "class_id": "stone_masonry_mineral_solids",
   "class_name": "Stone/masonry/mineral solids",
-  "examples": ["rock", "brick", "concrete", "tile", "chalk", "asphalt"],
+  "examples": ["rock", "brick", "concrete", "tile", "chalk", "asphalt", "granite", "charcoal"],
   "core_properties": ["hard", "rigid", "often heavy", "not bendy", "rough or smooth depending on surface"],
   "core_dynamics": ["chips", "cracks", "crumbles", "scrapes", "scratches", "breaks under strong impact"],
   "contrast_notes": [
@@ -57,7 +59,8 @@
   "unlike cloth or rubber, these materials stay rigid under ordinary pressure"
   ],
   "caveats": [
-  "chalk is softer and more crumbly than rock or concrete",
+  "chalk and charcoal are softer and more crumbly than rock or concrete",
+  "granite is usually hard and heavy, but thin pieces can still chip or crack",
   "asphalt can soften in strong heat",
   "tile may overlap with ceramic depending on the scenario"
   ],
@@ -102,7 +105,7 @@
   {
   "class_id": "textiles_fibers",
   "class_name": "Textiles/fibers",
-  "examples": ["cotton", "wool", "denim", "canvas", "felt", "rope"],
+  "examples": ["cotton", "wool", "denim", "canvas", "felt", "rope", "fabric", "flannel", "satin"],
   "core_properties": ["soft", "flexible", "woven or fibrous", "foldable", "often absorbent"],
   "core_dynamics": ["folds", "drapes", "wrinkles", "absorbs", "tears", "frays"],
   "contrast_notes": [
@@ -112,6 +115,7 @@
   ],
   "caveats": [
   "canvas and denim are stiffer than thin cotton",
+  "flannel and satin are surface/texture-specific fabric words; use them when softness, smoothness, or drape is visible",
   "some synthetic fabrics absorb little water",
   "rope can be strong in tension even though it is flexible"
   ],
@@ -174,7 +178,7 @@
   {
   "class_id": "soft_moldable_solids",
   "class_name": "Soft/moldable solids",
-  "examples": ["clay", "play dough", "wax", "dough", "putty", "mud"],
+  "examples": ["clay", "play dough", "wax", "beeswax", "dough", "putty", "mud", "jelly"],
   "core_properties": ["soft", "shapeable", "squishy", "sometimes sticky", "can keep a new shape"],
   "core_dynamics": ["squishes", "molds", "smears", "dents", "flattens", "dries and hardens", "softens with heat"],
   "contrast_notes": [
@@ -183,11 +187,30 @@
   "unlike stone or metal, they deform easily under hand pressure"
   ],
   "caveats": [
-  "wax softens with warmth more than clay does",
+  "wax and beeswax soften with warmth more than clay does",
+  "jelly is soft and wobbly, but it does not hold a crisp sculpted shape the way clay or putty can",
   "mud changes as it dries",
   "dough can stretch and sag differently from putty"
   ],
-  "scenario_hooks": ["thumbprint in clay", "play dough flattening", "mud sticking to a shoe", "wax softening near warmth", "bread dough sagging"]
+  "scenario_hooks": ["thumbprint in clay", "play dough flattening", "mud sticking to a shoe", "wax softening near warmth", "beeswax softening in a warm hand", "jelly wobbling in a bowl", "bread dough sagging"]
+  },
+  {
+  "class_id": "transparent_crystalline_solids",
+  "class_name": "Transparent/crystalline solids",
+  "examples": ["diamond", "sapphire", "ice"],
+  "core_properties": ["hard", "rigid", "smooth", "often transparent or translucent", "can look shiny or glassy"],
+  "core_dynamics": ["lets light through", "scratches or chips depending on hardness", "cracks under sharp impact", "feels cold depending on material", "melts if it is ice"],
+  "contrast_notes": [
+  "unlike cloth, these solids hold a fixed shape and can transmit light",
+  "unlike ordinary glass, gem-like examples are often treated as very hard but still can chip in thin pieces",
+  "ice overlaps with transparent solids but changes state when warmed"
+  ],
+  "caveats": [
+  "diamond and sapphire are not ordinary bulk materials for everyday containers, so prefer small decorative objects, toy gems, panes, or explicitly pretend examples",
+  "ice is hard only while frozen and becomes water when warmed",
+  "transparent does not always mean colorless; sapphire can be colored while still transmitting light"
+  ],
+  "scenario_hooks": ["toy gem catching light", "ice cube melting in a hand", "clear stone scratching a softer surface", "thin crystal chip cracking", "sapphire-like marble glinting"]
   },
   {
   "class_id": "liquids",
