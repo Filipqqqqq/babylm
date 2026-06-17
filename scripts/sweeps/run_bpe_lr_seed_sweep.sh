@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+cd "$ROOT"
+
 # Launch one single-GPU training run per listed GPU. After a batch of jobs
 # fills every GPU, the script waits before launching the next batch.
 
@@ -9,9 +13,11 @@ LOG_DIR="${BABYSTEPS_LOG_DIR:-/SSD2/babylm-baby-steps-runs/logs}"
 SHOW_PROGRESS="${BABYSTEPS_SHOW_PROGRESS:-1}"
 
 BPES=(${BABYSTEPS_BPES:-8192 16384})
-LRS=(${BABYSTEPS_LRS:-0.0001 0.00005 0.000025})
-SEEDS=(${BABYSTEPS_SEEDS:-42 43})
+LRS=(${BABYSTEPS_LRS:-0.0001 0.00005})
+SEEDS=(${BABYSTEPS_SEEDS:-44 45})
 GPUS=(${BABYSTEPS_GPUS:-1 2})
+SAVE_EVERY_EPOCHS="${BABYSTEPS_SAVE_EVERY_EPOCHS:-0}"
+SAVE_FINAL="${BABYSTEPS_SAVE_FINAL:-true}"
 
 mkdir -p "$LOG_DIR"
 
@@ -93,12 +99,16 @@ launch_run() {
   local progress_pid
 
   echo "Launching ${name} on GPU ${gpu}"
+  echo "  save every epochs: ${SAVE_EVERY_EPOCHS}"
+  echo "  save final: ${SAVE_FINAL}"
   echo "  log: ${log_path}"
-  CUDA_VISIBLE_DEVICES="$gpu" setsid conda run --no-capture-output -n "$CONDA_ENV" python -u scripts/train_gpt2_small.py \
+  CUDA_VISIBLE_DEVICES="$gpu" setsid conda run --no-capture-output -n "$CONDA_ENV" python -u scripts/train/train_causal_lm.py \
     --config "$config" \
     --set "run.name=${name}" \
     --set "run.seed=${seed}" \
     --set "training.learning_rate=${lr}" \
+    --set "checkpointing.save_every_epochs=${SAVE_EVERY_EPOCHS}" \
+    --set "checkpointing.save_final=${SAVE_FINAL}" \
     >"$log_path" 2>&1 &
   train_pid="$!"
   pids+=("$train_pid")

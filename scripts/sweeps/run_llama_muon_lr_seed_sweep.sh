@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+cd "$ROOT"
+
 # LLaMA + Muon LR/seed sweep for the 16k BPE BabyLM 10M setup.
 #
 # Defaults:
@@ -13,38 +17,38 @@ set -euo pipefail
 #   Liger:        enabled
 #
 # Dry-run the exact commands:
-#   BABYSTEPS_DRY_RUN=1 bash scripts/run_llama_muon_lr_seed_sweep.sh
+#   BABYSTEPS_DRY_RUN=1 bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 #
 # Example launch on GPUs 0 and 1:
-#   BABYSTEPS_GPUS="0 1" bash scripts/run_llama_muon_lr_seed_sweep.sh
+#   BABYSTEPS_GPUS="0 1" bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 #
 # Recommended single full 10M LLaMA + Liger run:
 #   BABYSTEPS_GPUS="0" BABYSTEPS_MUON_LRS="0.01" BABYSTEPS_SEEDS="42" \
-#   bash scripts/run_llama_muon_lr_seed_sweep.sh
+#   bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 #
 # For a shorter smoke before the full run:
 #   BABYSTEPS_MAX_TRAIN_CHUNKS=1024 BABYSTEPS_MAX_VAL_CHUNKS=128 \
 #   BABYSTEPS_EPOCHS=1 BABYSTEPS_SAVE_FINAL=false \
-#   bash scripts/run_llama_muon_lr_seed_sweep.sh
+#   bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 #
 # Token-shard configs can use block limits instead:
 #   BABYSTEPS_MAX_TRAIN_BLOCKS=1024 BABYSTEPS_MAX_VAL_BLOCKS=128 \
-#   bash scripts/run_llama_muon_lr_seed_sweep.sh
+#   bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 #
 # Override precision when needed:
-#   BABYSTEPS_MIXED_PRECISION=no bash scripts/run_llama_muon_lr_seed_sweep.sh
+#   BABYSTEPS_MIXED_PRECISION=no bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 #
 # Disable Liger for ablations:
-#   BABYSTEPS_USE_LIGER_KERNEL=false bash scripts/run_llama_muon_lr_seed_sweep.sh
+#   BABYSTEPS_USE_LIGER_KERNEL=false bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 #
 # Add LLaMA dropout:
-#   BABYSTEPS_LLAMA_DROPOUT=0.1 BABYSTEPS_RUN_SUFFIX=_drop0p1 bash scripts/run_llama_muon_lr_seed_sweep.sh
+#   BABYSTEPS_LLAMA_DROPOUT=0.1 BABYSTEPS_RUN_SUFFIX=_drop0p1 bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 #
 # Sweep batch sizes:
-#   BABYSTEPS_BATCH_SIZES="32 64" bash scripts/run_llama_muon_lr_seed_sweep.sh
+#   BABYSTEPS_BATCH_SIZES="32 64" bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 #
 # Split effective batch sizes into smaller per-step micro-batches:
-#   BABYSTEPS_BATCH_SIZES="32 64" BABYSTEPS_MICRO_BATCH_SIZE=32 bash scripts/run_llama_muon_lr_seed_sweep.sh
+#   BABYSTEPS_BATCH_SIZES="32 64" BABYSTEPS_MICRO_BATCH_SIZE=32 bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 
 CONDA_ENV="${BABYSTEPS_CONDA_ENV:-babylm}"
 LOG_DIR="${BABYSTEPS_LOG_DIR:-/SSD2/babylm-baby-steps-runs/logs/llama_muon}"
@@ -222,7 +226,7 @@ launch_run() {
   command=(
     env "CUDA_VISIBLE_DEVICES=${gpu}"
     setsid conda run --no-capture-output -n "$CONDA_ENV"
-    python -u scripts/train_causal_lm.py
+    python -u scripts/train/train_causal_lm.py
     --config "$CONFIG"
     --set "run.name=${name}"
     --set "run.seed=${seed}"

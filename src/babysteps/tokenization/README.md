@@ -17,15 +17,15 @@ locally, so it is gated behind the environment variable.
 Train a custom byte-BPE tokenizer:
 
 ```bash
-python scripts/train_tokenizer.py --config configs/tokenization/byte_bpe_8192_10m_block512.yaml
-python scripts/train_tokenizer.py --config configs/tokenization/byte_bpe_16384_10m_block512.yaml
+python scripts/data/train_tokenizer.py --config configs/tokenization/byte_bpe_8192_10m_block512.yaml
+python scripts/data/train_tokenizer.py --config configs/tokenization/byte_bpe_16384_10m_block512.yaml
 ```
 
 Build token chunks from a tokenizer:
 
 ```bash
-python scripts/build_token_chunks.py --config configs/tokenization/gpt2_pretrained_10m_block512.yaml
-python scripts/build_token_chunks.py --config configs/tokenization/byte_bpe_8192_10m_block512.yaml
+python scripts/data/build_token_chunks.py --config configs/tokenization/gpt2_pretrained_10m_block512.yaml
+python scripts/data/build_token_chunks.py --config configs/tokenization/byte_bpe_8192_10m_block512.yaml
 ```
 
 Smoke-train tiny GPT-2 models from the custom BPE chunks:

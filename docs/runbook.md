@@ -55,7 +55,7 @@ recipe:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
-  python -u scripts/train_causal_lm.py \
+  python -u scripts/train/train_causal_lm.py \
   --config configs/train/gpt2_8l512_bpe16384_10m_muon.yaml
 ```
 
@@ -66,13 +66,13 @@ GPT-2 8 layers, 512 hidden size, 8 heads, 16k byte-BPE, batch size 32, Muon LR
 Dry-run the launcher default before launching:
 
 ```bash
-BABYSTEPS_DRY_RUN=1 BABYSTEPS_GPUS="0" bash scripts/run_muon_lr_sweep.sh
+BABYSTEPS_DRY_RUN=1 BABYSTEPS_GPUS="0" bash scripts/sweeps/run_muon_lr_sweep.sh
 ```
 
 Then launch the same single recommended run:
 
 ```bash
-BABYSTEPS_GPUS="0" bash scripts/run_muon_lr_sweep.sh
+BABYSTEPS_GPUS="0" bash scripts/sweeps/run_muon_lr_sweep.sh
 ```
 
 For a broader sweep, override the recipe explicitly:
@@ -80,7 +80,7 @@ For a broader sweep, override the recipe explicitly:
 ```bash
 BABYSTEPS_BPES="8192 16384" BABYSTEPS_BATCH_SIZE=32 \
   BABYSTEPS_MUON_LRS="0.0025 0.005 0.01" BABYSTEPS_SEEDS="42 43 44" \
-  BABYSTEPS_GPUS="0 1" bash scripts/run_muon_lr_sweep.sh
+  BABYSTEPS_GPUS="0 1" bash scripts/sweeps/run_muon_lr_sweep.sh
 ```
 
 ## LLaMA + Liger 10M Runs
@@ -89,7 +89,7 @@ Use the full non-smoke config for the current 10M LLaMA + Muon + Liger recipe:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
-  python -u scripts/train_causal_lm.py \
+  python -u scripts/train/train_causal_lm.py \
   --config configs/train/llama_8l512_bpe16384_10m_muon_liger.yaml
 ```
 
@@ -102,14 +102,14 @@ For the launcher path, dry-run the exact command first:
 
 ```bash
 BABYSTEPS_DRY_RUN=1 BABYSTEPS_GPUS="0" BABYSTEPS_MUON_LRS="0.01" \
-  BABYSTEPS_SEEDS="42" bash scripts/run_llama_muon_lr_seed_sweep.sh
+  BABYSTEPS_SEEDS="42" bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 ```
 
 Then launch the same single recommended run:
 
 ```bash
 BABYSTEPS_GPUS="0" BABYSTEPS_MUON_LRS="0.01" BABYSTEPS_SEEDS="42" \
-  bash scripts/run_llama_muon_lr_seed_sweep.sh
+  bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 ```
 
 For a capped smoke, keep using the tiny smoke configs or set temporary caps:
@@ -117,7 +117,7 @@ For a capped smoke, keep using the tiny smoke configs or set temporary caps:
 ```bash
 BABYSTEPS_MAX_TRAIN_CHUNKS=1024 BABYSTEPS_MAX_VAL_CHUNKS=128 \
   BABYSTEPS_EPOCHS=1 BABYSTEPS_SAVE_FINAL=false \
-  bash scripts/run_llama_muon_lr_seed_sweep.sh
+  bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 ```
 
 Local note: the 10M LLaMA recipe has been less useful than the 10M GPT-2 +
@@ -131,7 +131,7 @@ Muon + Liger recipe:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
-  python -u scripts/train_causal_lm.py \
+  python -u scripts/train/train_causal_lm.py \
   --config configs/train/llama_12l896_bpe16384_babylm2026_strict_muon_liger.yaml
 ```
 
@@ -145,7 +145,7 @@ best local LLaMA full zero-shot aggregate so far among the completed BabyLM
 Build the token shards if they are missing:
 
 ```bash
-conda run --no-capture-output -n babylm python scripts/build_hf_token_shards.py \
+conda run --no-capture-output -n babylm python scripts/data/build_token_shards.py \
   --config configs/tokenization/babylm2026_strict_byte_bpe_16384_shards.yaml
 ```
 
@@ -153,14 +153,14 @@ Dry-run the launcher default:
 
 ```bash
 BABYSTEPS_DRY_RUN=1 BABYSTEPS_GPUS="0" BABYSTEPS_SEEDS="42" \
-  bash scripts/run_llama_babylm2026_muon_lr_seed_sweep.sh
+  bash scripts/sweeps/run_llama_babylm2026_muon_lr_seed_sweep.sh
 ```
 
 Then launch:
 
 ```bash
 BABYSTEPS_GPUS="0" BABYSTEPS_SEEDS="42" \
-  bash scripts/run_llama_babylm2026_muon_lr_seed_sweep.sh
+  bash scripts/sweeps/run_llama_babylm2026_muon_lr_seed_sweep.sh
 ```
 
 Project note: LLaMA + Muon + Liger is the 100M path mainly for memory and speed.

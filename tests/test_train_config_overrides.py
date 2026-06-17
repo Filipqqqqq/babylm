@@ -123,9 +123,9 @@ def test_gpt2_10m_muon_train_config_paths_can_use_env_roots(monkeypatch) -> None
 
 
 def test_llama_muon_sweep_defaults_to_full_10m_config() -> None:
-    script = (ROOT / "scripts" / "run_llama_muon_lr_seed_sweep.sh").read_text(
-        encoding="utf-8"
-    )
+    script = (
+        ROOT / "scripts" / "sweeps" / "run_llama_muon_lr_seed_sweep.sh"
+    ).read_text(encoding="utf-8")
 
     assert (
         'CONFIG="${BABYSTEPS_CONFIG:-configs/train/'
@@ -134,7 +134,7 @@ def test_llama_muon_sweep_defaults_to_full_10m_config() -> None:
 
 
 def test_gpt2_muon_sweep_defaults_to_observed_10m_recipe() -> None:
-    script = (ROOT / "scripts" / "run_muon_lr_sweep.sh").read_text(
+    script = (ROOT / "scripts" / "sweeps" / "run_muon_lr_sweep.sh").read_text(
         encoding="utf-8"
     )
 
@@ -145,7 +145,10 @@ def test_gpt2_muon_sweep_defaults_to_observed_10m_recipe() -> None:
 
 def test_babylm2026_llama_wrapper_defaults_to_current_liger_recipe() -> None:
     script = (
-        ROOT / "scripts" / "run_llama_babylm2026_muon_lr_seed_sweep.sh"
+        ROOT
+        / "scripts"
+        / "sweeps"
+        / "run_llama_babylm2026_muon_lr_seed_sweep.sh"
     ).read_text(encoding="utf-8")
 
     assert (

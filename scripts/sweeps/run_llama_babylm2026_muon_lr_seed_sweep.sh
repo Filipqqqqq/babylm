@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+cd "$ROOT"
+
 # Current default LLaMA + Muon + Liger sweep on BabyLM 2026 Strict 16k BPE shards.
 # This wraps run_llama_muon_lr_seed_sweep.sh with the model/data defaults that
 # match configs/train/llama_12l896_bpe16384_babylm2026_strict_muon_liger.yaml.
@@ -45,12 +49,12 @@ if [[ "${BABYSTEPS_DRY_RUN:-0}" != "1" ]]; then
 
 Build the BabyLM 2026 Strict 16k BPE tokenizer and token shards first:
 
-  conda run --no-capture-output -n babylm python scripts/build_hf_token_shards.py \
+  conda run --no-capture-output -n babylm python scripts/data/build_token_shards.py \
     --config configs/tokenization/babylm2026_strict_byte_bpe_16384_shards.yaml
 
 For a quick local smoke of the builder, use temporary output dirs and small shard limits:
 
-  conda run --no-capture-output -n babylm python scripts/build_hf_token_shards.py \
+  conda run --no-capture-output -n babylm python scripts/data/build_token_shards.py \
     --config configs/tokenization/babylm2026_strict_byte_bpe_16384_shards.yaml \
     --tokenizer-output-dir /tmp/babysteps_babylm2026_tok_smoke \
     --shards-output-dir /tmp/babysteps_babylm2026_shards_smoke \
@@ -64,4 +68,4 @@ EOF
   fi
 fi
 
-bash scripts/run_llama_muon_lr_seed_sweep.sh
+bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
