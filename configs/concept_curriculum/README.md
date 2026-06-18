@@ -85,6 +85,7 @@ Two material-affordance config variants are kept on purpose:
 
 - `material_affordance_ewok_20.json`: the current v4-style config. It adds the `inflection_anchor` style, broader rigid anchors, oxygen/generic gas anchors, and bounded soft `tap` cases.
 - `material_affordance_ewok_v3_snapshot.json`: a separate reconstructed v3 snapshot based on `data/concept_curriculum/material_affordance_ewok_1000_action_local_v3/scenario_plans.jsonl`. It keeps the older five-style design and avoids the later v4 expansions, so use this when comparing against the v3 synthetic-only smoke runs.
+- `material_affordance_ewok_v3_1_soft_tap.json`: a small v3.1 variant. It keeps the v3 five-style design and old rigid/gas inventories, but adds bounded soft `tap` carefully for soft foods/gels, moldable masses, flexible soft objects, and light flexible items. It keeps liquids, gases, vapors, and loose grains away from direct `tap` targets.
 
 The v3 snapshot is not a byte-for-byte recovered historical config; the original config file was not saved. It is the reusable reconstruction of the effective v3 ingredients: material classes, anchors, affordances, notes, document types, and discourse styles.
 
@@ -120,6 +121,18 @@ conda run --no-capture-output -n babylm \
   --focus-tag ewok_anchor \
   --document-count 2000 \
   --output-dir data/concept_curriculum/material_affordance_ewok_2000_action_local_v3_snapshot \
+  --api-key-file /home/jorge/babylm-baby-steps/fireworks_api.txt
+```
+
+Scale the v3.1 soft-tap variant to 4000 documents:
+
+```bash
+conda run --no-capture-output -n babylm \
+  python -u scripts/synthetic_data_generation/concept_curriculum/generate_fireworks.py \
+  --config configs/concept_curriculum/material_affordance_ewok_v3_1_soft_tap.json \
+  --focus-tag ewok_anchor \
+  --document-count 4000 \
+  --output-dir data/concept_curriculum/material_affordance_ewok_4000_action_local_v3_1_soft_tap \
   --api-key-file /home/jorge/babylm-baby-steps/fireworks_api.txt
 ```
 
