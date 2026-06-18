@@ -29,10 +29,15 @@ ASSIGNMENT_FIELDS = [
     "target_dynamic_concept",
     "target_object_id",
     "target_material",
+    "target_style_id",
+    "target_anchor",
     "target_concept_pair",
     "object_sampling_mode",
     "object_sampling_scope",
     "object_sampling_role",
+    "style_sampling_mode",
+    "style_sampling_scope",
+    "style_sampling_role",
 ]
 
 DEFAULT_SYSTEM_PROMPT = """You write ordinary, concrete English about everyday objects and materials.
@@ -112,6 +117,24 @@ ROW_LEVEL_AUDIT_EDIT_FLAGS = {
 }
 
 NO_THINK_SUFFIX = "/no_think"
+CHECK_CONTEXT_METADATA_FIELDS = [
+    "style_id",
+    "material",
+    "material_class",
+    "material_class_name",
+    "object",
+    "object_id",
+    "event",
+    "properties",
+    "dynamics",
+    "coverage_role",
+    "target_property_concept",
+    "target_dynamic_concept",
+    "target_object_id",
+    "target_material",
+    "target_style_id",
+    "target_anchor",
+]
 
 
 def utc_now_iso() -> str:
@@ -231,6 +254,7 @@ def coverage_mix_settings(
             "object_fraction": _fraction(raw.get("object_fraction")),
             "material_fraction": _fraction(raw.get("material_fraction")),
             "dynamic_fraction": _fraction(raw.get("dynamic_fraction")),
+            "anchor_fraction": _fraction(raw.get("anchor_fraction")),
         }
     return settings
 
@@ -251,6 +275,25 @@ def object_sampling_settings(config: dict[str, Any]) -> dict[str, str]:
         )
     if scope != "selected_objects":
         raise ValueError("object_sampling.scope currently only supports 'selected_objects'.")
+    return {"mode": mode, "scope": scope}
+
+
+def style_sampling_settings(config: dict[str, Any]) -> dict[str, str]:
+    """Return validated style sampling settings."""
+
+    raw = config.get("style_sampling") or {}
+    if isinstance(raw, str):
+        raw = {"mode": raw}
+    if not isinstance(raw, dict):
+        raise ValueError("style_sampling must be an object or mode string.")
+    mode = str(raw.get("mode", "model_choice"))
+    scope = str(raw.get("scope", "selected_styles"))
+    if mode not in {"model_choice", "balanced_round_robin"}:
+        raise ValueError(
+            "style_sampling.mode must be 'model_choice' or 'balanced_round_robin'."
+        )
+    if scope != "selected_styles":
+        raise ValueError("style_sampling.scope currently only supports 'selected_styles'.")
     return {"mode": mode, "scope": scope}
 
 
@@ -277,6 +320,15 @@ def _flatten_pair_items(coverage_set: dict[str, Any], key: str) -> list[dict[str
             seen.add(concept)
             items.append({"concept": concept, "pair": values})
     return items
+
+
+def _coverage_anchors(coverage_set: dict[str, Any]) -> list[str]:
+    """Return lexical anchors for row-level assignment."""
+
+    return _unique_in_order(
+        as_list(coverage_set.get("lexical_anchors"))
+        or as_list(coverage_set.get("anchors"))
+    )
 
 
 def _count_from_fraction(fraction: float, total: int) -> int:
@@ -364,6 +416,11 @@ def build_coverage_assignments(
         )
         property_items = _flatten_pair_items(coverage_set, "concept_pairs")
         dynamic_items = _flatten_pair_items(coverage_set, "dynamic_pairs")
+        lexical_anchors = _seeded_order(
+            _coverage_anchors(coverage_set),
+            seed=seed,
+            salt=f"{set_id}:anchors",
+        )
 
         specs: list[tuple[str, int]] = []
         if settings.get("row_fraction", 0.0):
@@ -379,6 +436,7 @@ def build_coverage_assignments(
         if domain == "material-dynamics" and dynamic_items:
             specs.append(("ewok_dynamic", _count_from_fraction(settings["dynamic_fraction"], scenario_limit)))
 
+        set_assignments: list[dict[str, Any]] = []
         role_offsets: dict[str, int] = {}
         for role, count in specs:
             for offset, row_index in enumerate(take_indices(count)):
@@ -396,7 +454,7 @@ def build_coverage_assignments(
                 if role == "ewok_property":
                     target_object_id = _cycle_value(coverage_object_ids, role_index)
                     target_material = _cycle_value(coverage_materials, role_index)
-                assignments.append(
+                set_assignments.append(
                     {
                         "scenario_id": f"mw_probe_{row_index:04d}",
                         "coverage_set_id": set_id,
@@ -406,10 +464,43 @@ def build_coverage_assignments(
                         "target_dynamic_concept": target_dynamic,
                         "target_object_id": target_object_id,
                         "target_material": target_material,
+                        "target_anchor": None,
                         "target_concept_pair": concept_item.get("pair"),
                     }
                 )
             role_offsets[role] = role_offsets.get(role, 0) + count
+
+        anchor_count = _count_from_fraction(settings.get("anchor_fraction", 0.0), scenario_limit)
+        if lexical_anchors and anchor_count:
+            by_row = {str(item["scenario_id"]): item for item in set_assignments}
+            for anchor_index, row_index in enumerate(available_indices[:anchor_count]):
+                scenario_id = f"mw_probe_{row_index:04d}"
+                anchor = _cycle_value(lexical_anchors, anchor_index)
+                existing = by_row.get(scenario_id)
+                if existing is not None:
+                    existing["target_anchor"] = anchor
+                    role = str(existing.get("coverage_role") or "")
+                    if "ewok_anchor" not in role:
+                        existing["coverage_role"] = (
+                            f"{role}+ewok_anchor" if role else "ewok_anchor"
+                        )
+                    continue
+                anchor_assignment = {
+                    "scenario_id": scenario_id,
+                    "coverage_set_id": set_id,
+                    "coverage_domain": domain,
+                    "coverage_role": "ewok_anchor",
+                    "target_property_concept": None,
+                    "target_dynamic_concept": None,
+                    "target_object_id": None,
+                    "target_material": None,
+                    "target_anchor": anchor,
+                    "target_concept_pair": None,
+                }
+                by_row[scenario_id] = anchor_assignment
+                set_assignments.append(anchor_assignment)
+
+        assignments.extend(set_assignments)
 
     return sorted(assignments, key=lambda item: item["scenario_id"])
 
@@ -477,6 +568,49 @@ def build_object_sampling_assignments(
                 "object_sampling_mode": "balanced_round_robin",
                 "object_sampling_scope": object_sampling.get("scope", "selected_objects"),
                 "object_sampling_role": role,
+            }
+        )
+    return assignments
+
+
+def _selected_style_ids(selected: dict[str, list[dict[str, Any]]]) -> list[str]:
+    return [
+        str(item.get("style_id"))
+        for item in selected["styles"]
+        if item.get("style_id") is not None
+    ]
+
+
+def build_style_sampling_assignments(
+    *,
+    style_sampling: dict[str, str],
+    selected: dict[str, list[dict[str, Any]]],
+    scenario_limit: int,
+    seed: str | None,
+) -> list[dict[str, Any]]:
+    """Create deterministic discourse-style targets across selected styles."""
+
+    if style_sampling.get("mode") != "balanced_round_robin" or scenario_limit <= 0:
+        return []
+
+    style_ids = _seeded_order(
+        _selected_style_ids(selected),
+        seed=seed,
+        salt="style_sampling:selected_styles",
+    )
+    if not style_ids:
+        return []
+
+    assignments = []
+    for row_index in range(int(scenario_limit)):
+        target_style_id = style_ids[row_index % len(style_ids)]
+        assignments.append(
+            {
+                "scenario_id": f"mw_probe_{row_index:04d}",
+                "target_style_id": target_style_id,
+                "style_sampling_mode": "balanced_round_robin",
+                "style_sampling_scope": style_sampling.get("scope", "selected_styles"),
+                "style_sampling_role": "balanced_target",
             }
         )
     return assignments
@@ -708,10 +842,15 @@ def metadata_from_plan(plan: dict[str, Any], rendered: dict[str, Any] | None = N
         "target_dynamic_concept": plan.get("target_dynamic_concept"),
         "target_object_id": plan.get("target_object_id"),
         "target_material": plan.get("target_material"),
+        "target_style_id": plan.get("target_style_id"),
+        "target_anchor": plan.get("target_anchor"),
         "target_concept_pair": plan.get("target_concept_pair"),
         "object_sampling_mode": plan.get("object_sampling_mode"),
         "object_sampling_scope": plan.get("object_sampling_scope"),
         "object_sampling_role": plan.get("object_sampling_role"),
+        "style_sampling_mode": plan.get("style_sampling_mode"),
+        "style_sampling_scope": plan.get("style_sampling_scope"),
+        "style_sampling_role": plan.get("style_sampling_role"),
     }
 
 
@@ -781,6 +920,21 @@ def apply_coverage_assignments_to_plans(
                 clean_plan["material_class_id"] = material_class.get("class_id")
                 clean_plan["material_class_name"] = material_class.get("class_name")
 
+        target_style_id = assignment.get("target_style_id")
+        if target_style_id:
+            clean_plan["discourse_style_id"] = target_style_id
+            clean_plan["style_id"] = target_style_id
+
+        target_anchor = assignment.get("target_anchor")
+        if target_anchor:
+            clean_plan["target_anchor"] = target_anchor
+            plan_notes = str(clean_plan.get("plan_notes") or "").strip()
+            anchor_note = (
+                f"Make the exact lexical anchor phrase '{target_anchor}' a central participant in the event, "
+                "not a nearby prop, absence statement, unaffected aside, or loose comparison."
+            )
+            clean_plan["plan_notes"] = f"{plan_notes} {anchor_note}".strip()
+
         clean_plan["properties"] = _append_unique(
             as_list(clean_plan.get("properties")),
             assignment.get("target_property_concept"),
@@ -819,9 +973,14 @@ Row assignments for this batch:
 For each listed scenario_id, preserve the assignment fields exactly in the returned plan.
 If target_object_id is set, use that object_id.
 If target_material is set, use that material as the object material.
+If target_style_id is set, use that value as discourse_style_id.
+If target_anchor is set, make that exact phrase a central participant in the event and make the rendered prose use the exact phrase.
+The anchor may be the object, material, contents, substance, fuel, liquid, fabric, food, gas, or surface involved in the visible behavior.
+Do not satisfy target_anchor by saying it is absent, unrelated, merely nearby, unaffected, or only a loose comparison or metaphor.
 If target_property_concept is set, include that exact concept in properties and make it visible in the plan.
 If target_dynamic_concept is set, include that exact concept in dynamics and make it visible in the plan.
 If object_sampling_mode is set, keep the row on its assigned object so object exposure stays balanced.
+If style_sampling_mode is set, keep the row on its assigned discourse style so style exposure stays balanced.
 For scenario_id values without an assignment, set all assignment fields to null and keep the row broad/general.
 """.rstrip()
     seed_guidance = ""
@@ -847,6 +1006,7 @@ When coverage assignments are listed for this batch, those rows are the exact qu
 Use this mix block as dataset-level guidance for the run as a whole.
 Count a row toward object_fraction when its object_id is in that coverage set.
 Count a row toward material_fraction when its material is in that coverage set.
+Count a row toward anchor_fraction when target_anchor is set and the final prose includes that exact phrase.
 Keep the remaining rows broad and ordinary; spread them across the selected material classes and objects.
 Do not make every example coverage-specific or reuse only the first few non-coverage objects.
 """.rstrip()
@@ -897,10 +1057,15 @@ Required schema:
       "target_dynamic_concept": null,
       "target_object_id": null,
       "target_material": null,
+      "target_style_id": null,
+      "target_anchor": null,
       "target_concept_pair": null,
       "object_sampling_mode": null,
       "object_sampling_scope": null,
       "object_sampling_role": null,
+      "style_sampling_mode": null,
+      "style_sampling_scope": null,
+      "style_sampling_role": null,
       "plan_notes": "short everyday note"
     }}
   ]
@@ -931,6 +1096,8 @@ Rules:
 - Avoid labels like C1/T1, benchmark wording, and repeated template openings.
 - Use cautious everyday wording such as often, usually, can, or may.
 - Prefer visible material behavior over rare facts or microscopic explanations.
+- If a scenario has target_anchor set, include that exact phrase at least once as a central participant in the event, naturally and without calling it an anchor.
+- Do not mention target_anchor only as absent, unrelated, nearby, unaffected, or as a loose comparison.
 - Target roughly 70-120 words per example unless the style naturally wants slightly shorter text.
 
 Return valid JSON only. Start with "{{" and end with "}}".
@@ -946,10 +1113,29 @@ Scenario plans:
 
 
 def build_check_prompt(examples: list[dict[str, Any]]) -> str:
+    compact_rows = []
+    for row in examples:
+        metadata = row.get("metadata", {})
+        compact_rows.append(
+            {
+                "id": row.get("id"),
+                "text": row.get("text", ""),
+                "context": {
+                    key: metadata.get(key)
+                    for key in CHECK_CONTEXT_METADATA_FIELDS
+                    if metadata.get(key) is not None
+                },
+            }
+        )
     return f"""
 Lightly check and edit these generated examples.
 
-Keep each id and metadata unchanged. Return all {len(examples)} rows.
+Return all {len(examples)} rows, in the same order.
+Each returned item must contain exactly two keys: "id" and "text".
+Do not return metadata, context, comments, explanations, Markdown, or extra keys.
+The context below is only for checking whether the text still fits the intended material, object, event, properties, dynamics, style, and anchor target.
+If context.target_anchor is set, the text must keep that exact phrase naturally as a central participant in the event.
+Do not leave context.target_anchor only as an absent, unrelated, nearby, unaffected, or comparison-only mention.
 Only revise text when it is too broad, too technical, factually dubious, impossible without being framed as pretend,
 too repetitive, or too template-like. Soften absolute claims with often, usually, can, or may.
 
@@ -961,7 +1147,7 @@ Return valid JSON only. Start with "{{" and end with "}}".
 }}
 
 Rows:
-{json.dumps(examples, indent=2)}
+{json.dumps(compact_rows, indent=2)}
 """.strip()
 
 
@@ -970,7 +1156,9 @@ def build_audit_edit_prompt(row: dict[str, Any]) -> str:
     return f"""
 Revise this one example to address only the row-level audit flags.
 
-Keep the same material, object, event, dynamics, and style. Do not add rare facts.
+Keep the same material, object, event, dynamics, style, and target_anchor if one is present.
+If target_anchor is present, keep it as a central participant in the event, not as a nearby, absent, unrelated, or comparison-only mention.
+Do not add rare facts.
 Use natural prose only. Avoid making the paragraph much longer.
 
 Return valid JSON only:
@@ -997,7 +1185,9 @@ def build_audit_edit_batch_prompt(rows: list[dict[str, Any]]) -> str:
     return f"""
 Revise these {len(rows)} examples to address only their row-level audit flags.
 
-Keep the same material, object, event, dynamics, and style. Do not add rare facts.
+Keep the same material, object, event, dynamics, style, and target_anchor if one is present.
+If target_anchor is present, keep it as a central participant in the event, not as a nearby, absent, unrelated, or comparison-only mention.
+Do not add rare facts.
 Use natural prose only. Avoid making any paragraph much longer.
 
 Return valid JSON only:
@@ -1092,7 +1282,24 @@ def _coverage_observed_for_set(rows: list[dict[str, Any]], coverage_set: dict[st
     materials = {material.lower() for material in as_list(coverage_set.get("materials"))}
     object_ids = set(as_list(coverage_set.get("object_ids")))
     metadata_rows = [row.get("metadata", {}) for row in rows]
-    assigned = [metadata for metadata in metadata_rows if metadata.get("coverage_set_id") == set_id]
+    assigned_rows = [
+        row
+        for row in rows
+        if row.get("metadata", {}).get("coverage_set_id") == set_id
+    ]
+    assigned = [row.get("metadata", {}) for row in assigned_rows]
+    anchor_hits = [
+        metadata.get("target_anchor")
+        for row, metadata in zip(assigned_rows, assigned)
+        if metadata.get("target_anchor")
+        and str(metadata.get("target_anchor")).lower() in str(row.get("text", "")).lower()
+    ]
+    anchor_misses = [
+        metadata.get("target_anchor")
+        for row, metadata in zip(assigned_rows, assigned)
+        if metadata.get("target_anchor")
+        and str(metadata.get("target_anchor")).lower() not in str(row.get("text", "")).lower()
+    ]
     return {
         "assigned_rows": len(assigned),
         "ewok_object_rows": sum(1 for metadata in metadata_rows if metadata.get("object_id") in object_ids),
@@ -1107,6 +1314,9 @@ def _coverage_observed_for_set(rows: list[dict[str, Any]], coverage_set: dict[st
         "target_dynamic_concepts": _counter_dict(
             [metadata.get("target_dynamic_concept") for metadata in assigned]
         ),
+        "target_anchors": _counter_dict([metadata.get("target_anchor") for metadata in assigned]),
+        "target_anchor_text_hits": _counter_dict(anchor_hits),
+        "target_anchor_text_misses": _counter_dict(anchor_misses),
         "coverage_roles": _counter_dict([metadata.get("coverage_role") for metadata in assigned]),
     }
 
@@ -1120,6 +1330,18 @@ def _object_counts_for_rows(rows: list[dict[str, Any]], selected_object_ids: lis
         object_id = metadata.get("object_id")
         if object_id in counts:
             counts[str(object_id)] += 1
+    return dict(sorted(counts.items()))
+
+
+def _style_counts_for_rows(rows: list[dict[str, Any]], selected_style_ids: list[str]) -> dict[str, int]:
+    counts = {style_id: 0 for style_id in selected_style_ids}
+    for row in rows:
+        metadata = row.get("metadata", row)
+        if not isinstance(metadata, dict):
+            continue
+        style_id = metadata.get("style_id") or metadata.get("discourse_style_id")
+        if style_id in counts:
+            counts[str(style_id)] += 1
     return dict(sorted(counts.items()))
 
 
@@ -1178,6 +1400,50 @@ def build_object_sampling_report(
     }
 
 
+def build_style_sampling_report(
+    *,
+    style_sampling: dict[str, str],
+    selected_styles: list[dict[str, Any]],
+    style_sampling_assignments: list[dict[str, Any]],
+    checked_rows: list[dict[str, Any]],
+    final_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    selected_style_ids = [
+        str(item.get("style_id"))
+        for item in selected_styles
+        if item.get("style_id") is not None
+    ]
+    assigned_counts = {style_id: 0 for style_id in selected_style_ids}
+    for assignment in style_sampling_assignments:
+        target_style_id = assignment.get("target_style_id")
+        if target_style_id in assigned_counts:
+            assigned_counts[str(target_style_id)] += 1
+    assigned_counts = dict(sorted(assigned_counts.items()))
+    checked_counts = _style_counts_for_rows(checked_rows, selected_style_ids)
+    final_counts = _style_counts_for_rows(final_rows, selected_style_ids)
+    return {
+        "requested": style_sampling,
+        "selected_style_count": len(selected_style_ids),
+        "selected_style_ids": selected_style_ids,
+        "assigned": {
+            "rows": len(style_sampling_assignments),
+            "target_style_ids": assigned_counts,
+            "style_sampling_roles": _counter_dict(
+                [item.get("style_sampling_role") for item in style_sampling_assignments]
+            ),
+            "spread": _count_spread(assigned_counts),
+        },
+        "observed_checked": {
+            "style_ids": checked_counts,
+            "spread": _count_spread(checked_counts),
+        },
+        "observed_final": {
+            "style_ids": final_counts,
+            "spread": _count_spread(final_counts),
+        },
+    }
+
+
 def build_coverage_report(
     *,
     scenario_limit: int,
@@ -1206,6 +1472,7 @@ def build_coverage_report(
             ),
             "target_object_ids": _counter_dict([item.get("target_object_id") for item in assignments]),
             "target_materials": _counter_dict([item.get("target_material") for item in assignments]),
+            "target_anchors": _counter_dict([item.get("target_anchor") for item in assignments]),
         }
 
     return {
@@ -1265,6 +1532,157 @@ def _call_generator(
     )
 
 
+def _safe_file_label(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", value).strip("_") or "batch"
+
+
+def _save_invalid_model_output(
+    *,
+    raw_failure_dir: Path,
+    stage: str,
+    batch_label: str,
+    attempt: int,
+    raw_output: str,
+    error: Exception,
+) -> Path:
+    raw_failure_dir.mkdir(parents=True, exist_ok=True)
+    path = raw_failure_dir / (
+        f"{_safe_file_label(stage)}_{_safe_file_label(batch_label)}_"
+        f"attempt_{attempt:02d}.txt"
+    )
+    path.write_text(
+        f"Error: {error}\n\nRaw model output:\n{raw_output}",
+        encoding="utf-8",
+    )
+    return path
+
+
+def _expect_json_items(
+    raw_output: str,
+    *,
+    expected_count: int,
+    stage: str,
+    batch_label: str,
+) -> list[dict[str, Any]]:
+    items = json_items(extract_json(raw_output))
+    if len(items) != expected_count:
+        raise ValueError(
+            f"{stage} returned {len(items)} items for {batch_label}; expected {expected_count}."
+        )
+    return items
+
+
+def _request_json_items(
+    generator: Any,
+    *,
+    prompt: str,
+    system_prompt: str,
+    stage: str,
+    params: dict[str, Any],
+    response_format: dict[str, Any] | None,
+    expected_count: int,
+    batch_label: str,
+    raw_failure_dir: Path,
+    max_attempts: int = 2,
+) -> list[dict[str, Any]]:
+    last_error: Exception | None = None
+    last_saved_path: Path | None = None
+    for attempt in range(1, max(1, int(max_attempts)) + 1):
+        raw_output = _call_generator(
+            generator,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            stage=stage,
+            params=params,
+            response_format=response_format,
+        )
+        try:
+            return _expect_json_items(
+                raw_output,
+                expected_count=expected_count,
+                stage=stage,
+                batch_label=batch_label,
+            )
+        except ValueError as exc:
+            last_error = exc
+            last_saved_path = _save_invalid_model_output(
+                raw_failure_dir=raw_failure_dir,
+                stage=stage,
+                batch_label=batch_label,
+                attempt=attempt,
+                raw_output=raw_output,
+                error=exc,
+            )
+    detail = f" Last raw output saved to {last_saved_path}." if last_saved_path else ""
+    raise ValueError(
+        f"{stage} returned invalid JSON for {batch_label} after {max_attempts} attempt(s).{detail}"
+    ) from last_error
+
+
+def _request_check_edit_items(
+    generator: Any,
+    *,
+    row_chunk: list[dict[str, Any]],
+    chunk_index: int,
+    total_chunks: int,
+    params: dict[str, Any],
+    raw_failure_dir: Path,
+    progress: Any | None = None,
+) -> list[dict[str, Any]]:
+    batch_label = f"batch_{chunk_index:04d}_of_{total_chunks:04d}"
+    try:
+        return _request_json_items(
+            generator,
+            prompt=build_check_prompt(row_chunk),
+            system_prompt=EDITOR_SYSTEM_PROMPT,
+            stage="check_edit",
+            params=params,
+            response_format={"type": "json_object"},
+            expected_count=len(row_chunk),
+            batch_label=batch_label,
+            raw_failure_dir=raw_failure_dir,
+            max_attempts=2,
+        )
+    except ValueError:
+        if len(row_chunk) == 1:
+            row = row_chunk[0]
+            _emit_progress(
+                progress,
+                f"Check/edit {batch_label} failed JSON parsing; keeping original text for {row.get('id')}",
+            )
+            return [{"id": row.get("id"), "text": row.get("text", "")}]
+
+    _emit_progress(
+        progress,
+        f"Check/edit {batch_label} returned invalid JSON; retrying one row at a time",
+    )
+    checked_items: list[dict[str, Any]] = []
+    for row in row_chunk:
+        row_id = str(row.get("id") or "unknown")
+        try:
+            checked_items.extend(
+                _request_json_items(
+                    generator,
+                    prompt=build_check_prompt([row]),
+                    system_prompt=EDITOR_SYSTEM_PROMPT,
+                    stage="check_edit",
+                    params=params,
+                    response_format={"type": "json_object"},
+                    expected_count=1,
+                    batch_label=f"{batch_label}_{row_id}",
+                    raw_failure_dir=raw_failure_dir,
+                    max_attempts=2,
+                )
+            )
+        except ValueError:
+            _emit_progress(
+                progress,
+                f"Check/edit failed JSON parsing for {row_id}; keeping original text",
+            )
+            checked_items.append({"id": row_id, "text": row.get("text", "")})
+    return checked_items
+
+
 def _emit_progress(progress: Any | None, message: str, *, advance: bool = False) -> None:
     if progress is None:
         return
@@ -1308,6 +1726,7 @@ def run_fireworks_pipeline(
         coverage_sets = _coverage_sets_by_ids(coverage_config, coverage_set_ids)
     active_coverage_mix = coverage_mix_settings(config, coverage_sets)
     active_object_sampling = object_sampling_settings(config)
+    active_style_sampling = style_sampling_settings(config)
     coverage_overrides = coverage_selection_overrides(
         config,
         material_config,
@@ -1364,7 +1783,17 @@ def run_fireworks_pipeline(
         seed=active_selection_seed,
         existing_assignments=coverage_assignments,
     )
-    row_assignments = merge_row_assignments(coverage_assignments, object_sampling_assignments)
+    style_sampling_assignments = build_style_sampling_assignments(
+        style_sampling=active_style_sampling,
+        selected=selected,
+        scenario_limit=scenario_limit,
+        seed=active_selection_seed,
+    )
+    row_assignments = merge_row_assignments(
+        coverage_assignments,
+        object_sampling_assignments,
+        style_sampling_assignments,
+    )
     coverage_assignments_by_id = {
         item["scenario_id"]: item
         for item in coverage_assignments
@@ -1378,6 +1807,7 @@ def run_fireworks_pipeline(
     render_batch_size = batching_value(config, "render_examples_per_request", scenario_limit)
     check_batch_size = batching_value(config, "check_examples_per_request", scenario_limit)
     audit_edit_batch_size = batching_value(config, "audit_edit_examples_per_request", 1)
+    resume_existing = bool(config.get("resume_existing", False))
 
     if hasattr(generator, "configure_probe"):
         generator.configure_probe(
@@ -1404,148 +1834,197 @@ def run_fireworks_pipeline(
     train_path = out_dir / "train_audited.txt"
     coverage_report_path = out_dir / "coverage_report.json"
     object_sampling_report_path = out_dir / "object_sampling_report.json"
+    style_sampling_report_path = out_dir / "style_sampling_report.json"
     manifest_path = out_dir / "manifest.json"
+    raw_failure_dir = out_dir / "_raw_model_failures"
 
     scenario_plans: list[dict[str, Any]] = []
-    scenario_params = _stage_params(config, "scenario_plans")
-    for start_index in range(0, scenario_limit, scenario_batch_size):
-        batch_size = min(scenario_batch_size, scenario_limit - start_index)
-        batch_assignment_ids = {
-            f"mw_probe_{index:04d}"
-            for index in range(start_index, start_index + batch_size)
-        }
-        batch_row_assignments = [
-            assignment
-            for assignment in row_assignments
-            if assignment["scenario_id"] in batch_assignment_ids
-        ]
-        scenario_prompt = build_scenario_plan_prompt(
-            selected_material_classes=selected["material_classes"],
-            selected_objects=selected["objects"],
-            selected_styles=selected["styles"],
-            scenario_limit=batch_size,
-            scenario_start_index=start_index,
-            coverage_sets=coverage_sets,
-            coverage_mix=active_coverage_mix,
-            selection_seed_value=active_selection_seed,
-            coverage_assignments=batch_row_assignments,
-        )
-        started_at = time.perf_counter()
-        _emit_progress(
-            progress,
-            (
-                f"Requesting scenario plans {start_index + 1}-"
-                f"{start_index + batch_size}/{scenario_limit} from Fireworks"
-            ),
-        )
-        raw_plans = _call_generator(
-            generator,
-            prompt=scenario_prompt,
-            system_prompt=JSON_SYSTEM_PROMPT,
-            stage="scenario_plans",
-            params=scenario_params,
-            response_format={"type": "json_object"},
-        )
-        scenario_items = json_items(extract_json(raw_plans))
-        if len(scenario_items) != batch_size:
-            raise ValueError(
-                f"Scenario planning returned {len(scenario_items)} items for a requested batch of {batch_size}."
+    if resume_existing and scenario_path.exists():
+        existing_scenario_plans = read_jsonl(scenario_path)
+        if len(existing_scenario_plans) == scenario_limit:
+            scenario_plans = existing_scenario_plans
+            _emit_progress(
+                progress,
+                f"Reused {len(scenario_plans)} existing scenario plans",
+                advance=True,
             )
-        batch_plans = normalize_scenario_plans(scenario_items)
-        for offset, plan in enumerate(batch_plans):
-            plan["scenario_id"] = f"mw_probe_{start_index + offset:04d}"
-        batch_plans = apply_coverage_assignments_to_plans(
-            batch_plans,
-            batch_row_assignments,
-            material_config=material_config,
-            object_config=object_config,
-        )
-        scenario_plans.extend(batch_plans)
+        else:
+            _emit_progress(
+                progress,
+                (
+                    f"Ignoring existing scenario plans with {len(existing_scenario_plans)} rows; "
+                    f"expected {scenario_limit}"
+                ),
+            )
+    if not scenario_plans:
+        scenario_params = _stage_params(config, "scenario_plans")
+        for start_index in range(0, scenario_limit, scenario_batch_size):
+            batch_size = min(scenario_batch_size, scenario_limit - start_index)
+            batch_assignment_ids = {
+                f"mw_probe_{index:04d}"
+                for index in range(start_index, start_index + batch_size)
+            }
+            batch_row_assignments = [
+                assignment
+                for assignment in row_assignments
+                if assignment["scenario_id"] in batch_assignment_ids
+            ]
+            scenario_prompt = build_scenario_plan_prompt(
+                selected_material_classes=selected["material_classes"],
+                selected_objects=selected["objects"],
+                selected_styles=selected["styles"],
+                scenario_limit=batch_size,
+                scenario_start_index=start_index,
+                coverage_sets=coverage_sets,
+                coverage_mix=active_coverage_mix,
+                selection_seed_value=active_selection_seed,
+                coverage_assignments=batch_row_assignments,
+            )
+            started_at = time.perf_counter()
+            _emit_progress(
+                progress,
+                (
+                    f"Requesting scenario plans {start_index + 1}-"
+                    f"{start_index + batch_size}/{scenario_limit} from Fireworks"
+                ),
+            )
+            scenario_items = _request_json_items(
+                generator,
+                prompt=scenario_prompt,
+                system_prompt=JSON_SYSTEM_PROMPT,
+                stage="scenario_plans",
+                params=scenario_params,
+                response_format={"type": "json_object"},
+                expected_count=batch_size,
+                batch_label=f"{start_index + 1}-{start_index + batch_size}",
+                raw_failure_dir=raw_failure_dir,
+            )
+            batch_plans = normalize_scenario_plans(scenario_items)
+            for offset, plan in enumerate(batch_plans):
+                plan["scenario_id"] = f"mw_probe_{start_index + offset:04d}"
+            batch_plans = apply_coverage_assignments_to_plans(
+                batch_plans,
+                batch_row_assignments,
+                material_config=material_config,
+                object_config=object_config,
+            )
+            scenario_plans.extend(batch_plans)
+            _emit_progress(
+                progress,
+                (
+                    f"Received scenario plans {start_index + 1}-"
+                    f"{start_index + batch_size}/{scenario_limit} in {time.perf_counter() - started_at:.1f}s"
+                ),
+            )
+        write_jsonl(scenario_path, scenario_plans)
         _emit_progress(
             progress,
-            (
-                f"Received scenario plans {start_index + 1}-"
-                f"{start_index + batch_size}/{scenario_limit} in {time.perf_counter() - started_at:.1f}s"
-            ),
+            f"Wrote {len(scenario_plans)} scenario plans",
+            advance=True,
         )
-    write_jsonl(scenario_path, scenario_plans)
-    _emit_progress(
-        progress,
-        f"Wrote {len(scenario_plans)} scenario plans",
-        advance=True,
-    )
 
-    rendered_items: list[dict[str, Any]] = []
-    render_params = _stage_params(config, "prose_render")
-    scenario_chunks = chunked(scenario_plans, render_batch_size)
-    for chunk_index, plan_chunk in enumerate(scenario_chunks, start=1):
-        render_prompt = build_render_prompt(plan_chunk)
-        started_at = time.perf_counter()
-        _emit_progress(
-            progress,
-            f"Rendering prose batch {chunk_index}/{len(scenario_chunks)} ({len(plan_chunk)} examples)",
-        )
-        raw_rendered = _call_generator(
-            generator,
-            prompt=render_prompt,
-            system_prompt=JSON_SYSTEM_PROMPT,
-            stage="prose_render",
-            params=render_params,
-            response_format={"type": "json_object"},
-        )
-        rendered_batch = json_items(extract_json(raw_rendered))
-        if len(rendered_batch) != len(plan_chunk):
-            raise ValueError(
-                f"Prose rendering returned {len(rendered_batch)} items for a batch of {len(plan_chunk)} plans."
+    prose_draft_rows: list[dict[str, Any]] = []
+    if resume_existing and draft_path.exists():
+        existing_draft_rows = read_jsonl(draft_path)
+        if len(existing_draft_rows) == scenario_limit:
+            prose_draft_rows = existing_draft_rows
+            _emit_progress(
+                progress,
+                f"Reused {len(prose_draft_rows)} existing draft prose examples",
+                advance=True,
             )
-        rendered_items.extend(rendered_batch)
+        else:
+            _emit_progress(
+                progress,
+                (
+                    f"Ignoring existing draft prose with {len(existing_draft_rows)} rows; "
+                    f"expected {scenario_limit}"
+                ),
+            )
+    if not prose_draft_rows:
+        rendered_items: list[dict[str, Any]] = []
+        render_params = _stage_params(config, "prose_render")
+        scenario_chunks = chunked(scenario_plans, render_batch_size)
+        for chunk_index, plan_chunk in enumerate(scenario_chunks, start=1):
+            render_prompt = build_render_prompt(plan_chunk)
+            started_at = time.perf_counter()
+            _emit_progress(
+                progress,
+                f"Rendering prose batch {chunk_index}/{len(scenario_chunks)} ({len(plan_chunk)} examples)",
+            )
+            rendered_batch = _request_json_items(
+                generator,
+                prompt=render_prompt,
+                system_prompt=JSON_SYSTEM_PROMPT,
+                stage="prose_render",
+                params=render_params,
+                response_format={"type": "json_object"},
+                expected_count=len(plan_chunk),
+                batch_label=f"batch_{chunk_index:04d}_of_{len(scenario_chunks):04d}",
+                raw_failure_dir=raw_failure_dir,
+            )
+            rendered_items.extend(rendered_batch)
+            _emit_progress(
+                progress,
+                f"Finished prose batch {chunk_index}/{len(scenario_chunks)} in {time.perf_counter() - started_at:.1f}s",
+            )
+        prose_draft_rows = build_prose_rows(scenario_plans, rendered_items)
+        write_jsonl(draft_path, prose_draft_rows)
         _emit_progress(
             progress,
-            f"Finished prose batch {chunk_index}/{len(scenario_chunks)} in {time.perf_counter() - started_at:.1f}s",
+            f"Wrote {len(prose_draft_rows)} draft prose examples",
+            advance=True,
         )
-    prose_draft_rows = build_prose_rows(scenario_plans, rendered_items)
-    write_jsonl(draft_path, prose_draft_rows)
-    _emit_progress(
-        progress,
-        f"Wrote {len(prose_draft_rows)} draft prose examples",
-        advance=True,
-    )
 
-    checked_items: list[dict[str, Any]] = []
-    check_params = _stage_params(config, "check_edit")
-    draft_chunks = chunked(prose_draft_rows, check_batch_size)
-    for chunk_index, row_chunk in enumerate(draft_chunks, start=1):
-        check_prompt = build_check_prompt(row_chunk)
-        started_at = time.perf_counter()
-        _emit_progress(
-            progress,
-            f"Running lightweight Qwen check/edit batch {chunk_index}/{len(draft_chunks)} ({len(row_chunk)} rows)",
-        )
-        raw_checked = _call_generator(
-            generator,
-            prompt=check_prompt,
-            system_prompt=EDITOR_SYSTEM_PROMPT,
-            stage="check_edit",
-            params=check_params,
-            response_format={"type": "json_object"},
-        )
-        checked_batch = json_items(extract_json(raw_checked))
-        if len(checked_batch) != len(row_chunk):
-            raise ValueError(
-                f"Check/edit returned {len(checked_batch)} items for a batch of {len(row_chunk)} draft rows."
+    checked_rows: list[dict[str, Any]] = []
+    if resume_existing and checked_path.exists():
+        existing_checked_rows = read_jsonl(checked_path)
+        if len(existing_checked_rows) == scenario_limit:
+            checked_rows = existing_checked_rows
+            _emit_progress(
+                progress,
+                f"Reused {len(checked_rows)} existing checked examples",
+                advance=True,
             )
-        checked_items.extend(checked_batch)
+        else:
+            _emit_progress(
+                progress,
+                (
+                    f"Ignoring existing checked prose with {len(existing_checked_rows)} rows; "
+                    f"expected {scenario_limit}"
+                ),
+            )
+    if not checked_rows:
+        checked_items: list[dict[str, Any]] = []
+        check_params = _stage_params(config, "check_edit")
+        draft_chunks = chunked(prose_draft_rows, check_batch_size)
+        for chunk_index, row_chunk in enumerate(draft_chunks, start=1):
+            started_at = time.perf_counter()
+            _emit_progress(
+                progress,
+                f"Running lightweight Qwen check/edit batch {chunk_index}/{len(draft_chunks)} ({len(row_chunk)} rows)",
+            )
+            checked_batch = _request_check_edit_items(
+                generator,
+                row_chunk=row_chunk,
+                chunk_index=chunk_index,
+                total_chunks=len(draft_chunks),
+                params=check_params,
+                raw_failure_dir=raw_failure_dir,
+                progress=progress,
+            )
+            checked_items.extend(checked_batch)
+            _emit_progress(
+                progress,
+                f"Finished check/edit batch {chunk_index}/{len(draft_chunks)} in {time.perf_counter() - started_at:.1f}s",
+            )
+        checked_rows = merge_text_edits(prose_draft_rows, checked_items)
+        write_jsonl(checked_path, checked_rows)
         _emit_progress(
             progress,
-            f"Finished check/edit batch {chunk_index}/{len(draft_chunks)} in {time.perf_counter() - started_at:.1f}s",
+            f"Wrote {len(checked_rows)} checked examples",
+            advance=True,
         )
-    checked_rows = merge_text_edits(prose_draft_rows, checked_items)
-    write_jsonl(checked_path, checked_rows)
-    _emit_progress(
-        progress,
-        f"Wrote {len(checked_rows)} checked examples",
-        advance=True,
-    )
 
     started_at = time.perf_counter()
     _emit_progress(progress, "Running programmatic audit")
@@ -1673,6 +2152,14 @@ def run_fireworks_pipeline(
         final_rows=final_rows,
     )
     write_json(object_sampling_report_path, object_sampling_report)
+    style_sampling_report = build_style_sampling_report(
+        style_sampling=active_style_sampling,
+        selected_styles=selected["styles"],
+        style_sampling_assignments=style_sampling_assignments,
+        checked_rows=checked_rows,
+        final_rows=final_rows,
+    )
+    write_json(style_sampling_report_path, style_sampling_report)
 
     manifest = {
         "version": config.get("version", "material_world_fireworks_probe_v0"),
@@ -1680,6 +2167,7 @@ def run_fireworks_pipeline(
         "model_id": model_id,
         "config_path": str(config_path) if config_path else None,
         "output_dir": str(out_dir),
+        "resume_existing": resume_existing,
         "selected": {
             "material_classes": [item.get("class_id") for item in selected["material_classes"]],
             "objects": [item.get("object_id") for item in selected["objects"]],
@@ -1688,6 +2176,7 @@ def run_fireworks_pipeline(
             "coverage_mix": active_coverage_mix,
             "selection_seed": active_selection_seed,
             "object_sampling": active_object_sampling,
+            "style_sampling": active_style_sampling,
             "coverage_assignments": len(coverage_assignments_by_id),
             "row_assignments": len(row_assignments_by_id),
         },
@@ -1707,6 +2196,7 @@ def run_fireworks_pipeline(
             "final_train_examples": final_count,
             "coverage_assignments": len(coverage_assignments),
             "object_sampling_assignments": len(object_sampling_assignments),
+            "style_sampling_assignments": len(style_sampling_assignments),
             "row_assignments": len(row_assignments),
         },
         "paths": {
@@ -1723,6 +2213,7 @@ def run_fireworks_pipeline(
             "train_audited": str(train_path),
             "coverage_report": str(coverage_report_path),
             "object_sampling_report": str(object_sampling_report_path),
+            "style_sampling_report": str(style_sampling_report_path),
             "manifest": str(manifest_path),
         },
     }
@@ -1757,37 +2248,38 @@ class DeterministicMaterialWorldMockGenerator:
         if self._plans:
             return self._plans
         plans = []
-        for material_index, material_class in enumerate(self.selected_material_classes):
-            for object_index, object_card in enumerate(self.selected_objects):
-                index = len(plans)
-                if index >= self.scenario_limit:
-                    break
-                examples = as_list(material_class.get("examples"))
-                dynamics = as_list(material_class.get("core_dynamics"))
-                properties = as_list(material_class.get("core_properties"))
-                events = as_list(object_card.get("useful_events"))
-                style = self.selected_styles[index % max(1, len(self.selected_styles))]
-                material = examples[object_index % max(1, len(examples))] if examples else "material"
-                dynamic = dynamics[object_index % max(1, len(dynamics))] if dynamics else "changes"
-                event = events[material_index % max(1, len(events))] if events else "used"
-                plans.append(
-                    {
-                        "scenario_id": f"mw_probe_{index:04d}",
-                        "material_class_id": material_class.get("class_id"),
-                        "material_class_name": material_class.get("class_name"),
-                        "material": material,
-                        "object_id": object_card.get("object_id"),
-                        "object": object_card.get("object_name"),
-                        "event": event,
-                        "properties": properties[:2],
-                        "dynamics": [dynamic],
-                        "discourse_style_id": style.get("style_id"),
-                        "contains_negative_reporting": index % 4 == 1,
-                        "plan_notes": "Mock probe scenario for testing the script path.",
-                    }
-                )
-            if len(plans) >= self.scenario_limit:
-                break
+        material_classes = self.selected_material_classes or [{}]
+        objects = self.selected_objects or [{}]
+        styles = self.selected_styles or [{}]
+        for index in range(self.scenario_limit):
+            object_index = index % len(objects)
+            material_index = (index // len(objects)) % len(material_classes)
+            material_class = material_classes[material_index]
+            object_card = objects[object_index]
+            examples = as_list(material_class.get("examples"))
+            dynamics = as_list(material_class.get("core_dynamics"))
+            properties = as_list(material_class.get("core_properties"))
+            events = as_list(object_card.get("useful_events"))
+            style = styles[index % len(styles)]
+            material = examples[object_index % max(1, len(examples))] if examples else "material"
+            dynamic = dynamics[object_index % max(1, len(dynamics))] if dynamics else "changes"
+            event = events[material_index % max(1, len(events))] if events else "used"
+            plans.append(
+                {
+                    "scenario_id": f"mw_probe_{index:04d}",
+                    "material_class_id": material_class.get("class_id"),
+                    "material_class_name": material_class.get("class_name"),
+                    "material": material,
+                    "object_id": object_card.get("object_id"),
+                    "object": object_card.get("object_name"),
+                    "event": event,
+                    "properties": properties[:2],
+                    "dynamics": [dynamic],
+                    "discourse_style_id": style.get("style_id"),
+                    "contains_negative_reporting": index % 4 == 1,
+                    "plan_notes": "Mock probe scenario for testing the script path.",
+                }
+            )
         self._plans = plans
         return plans
 
@@ -1798,6 +2290,12 @@ class DeterministicMaterialWorldMockGenerator:
         dynamic = ", ".join(as_list(plan.get("dynamics"))) or "changes"
         prop = ", ".join(as_list(plan.get("properties"))[:2]) or "has useful properties"
         style = plan.get("discourse_style_id")
+        anchor = plan.get("target_anchor")
+        anchor_text = (
+            f" The {anchor} is part of the event itself, so its visible behavior helps show the material change."
+            if anchor
+            else ""
+        )
         contrast = (
             f" It is not described as doing every possible thing; the scene focuses on how {material} can {dynamic}."
             if plan.get("contains_negative_reporting")
@@ -1809,25 +2307,25 @@ class DeterministicMaterialWorldMockGenerator:
                 f"A {material} {obj} handles being {event} in a material-specific way. "
                 f"The useful point is not just the object name, but the material: {material} is often {prop}, "
                 f"so the {obj} may show behavior such as {dynamic} during the event. Another material could change the outcome, "
-                f"even when the same {obj} is involved.{contrast}"
+                f"even when the same {obj} is involved.{anchor_text}{contrast}"
             )
         if style == "child_science_explanation":
             return (
                 f"You can learn something from a {material} {obj} when it is {event}. "
                 f"The {material} is often {prop}, and that helps explain why the {obj} may show behavior such as {dynamic}. "
                 f"This is an everyday kind of change that can be seen without special tools. "
-                f"The object still matters, but the material helps decide what happens.{contrast}"
+                f"The object still matters, but the material helps decide what happens.{anchor_text}{contrast}"
             )
         if style == "repair_or_craft_note":
             return (
                 f"For a simple repair or craft choice, a {material} {obj} should be judged by what happens when it is {event}. "
                 f"Since {material} is often {prop}, the part may show behavior such as {dynamic} instead of behaving like a stiffer or softer material. "
-                f"That makes the material useful in some situations and less useful in others.{contrast}"
+                f"That makes the material useful in some situations and less useful in others.{anchor_text}{contrast}"
             )
         return (
             f"During an ordinary day, someone notices a {material} {obj} after it is {event}. "
             f"The {material} is often {prop}, so the {obj} may show behavior such as {dynamic} rather than act like every other version of the same object. "
-            f"The small event makes the material behavior easy to see in a familiar setting.{contrast}"
+            f"The small event makes the material behavior easy to see in a familiar setting.{anchor_text}{contrast}"
         )
 
     def _prompt_plan_ids(self, prompt: str) -> list[str]:
@@ -1851,12 +2349,38 @@ class DeterministicMaterialWorldMockGenerator:
         return ids
 
     def _plans_for_prompt(self, prompt: str) -> list[dict[str, Any]]:
+        marker = "Scenario plans:"
+        if marker in prompt:
+            raw_plans = prompt.rsplit(marker, 1)[1].strip()
+            if raw_plans.endswith(NO_THINK_SUFFIX):
+                raw_plans = raw_plans[: -len(NO_THINK_SUFFIX)].strip()
+            try:
+                parsed = json.loads(raw_plans)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, list) and all(isinstance(item, dict) for item in parsed):
+                return parsed
         plans = self._make_plans()
         by_id = {str(plan["scenario_id"]): plan for plan in plans}
         ids = [item_id for item_id in self._prompt_plan_ids(prompt) if item_id in by_id]
         if ids:
             return [by_id[item_id] for item_id in ids]
         return plans
+
+    def _check_rows_for_prompt(self, prompt: str) -> list[dict[str, Any]]:
+        marker = "Rows:"
+        if marker not in prompt:
+            return []
+        raw_rows = prompt.rsplit(marker, 1)[1].strip()
+        if raw_rows.endswith(NO_THINK_SUFFIX):
+            raw_rows = raw_rows[: -len(NO_THINK_SUFFIX)].strip()
+        try:
+            parsed = json.loads(raw_rows)
+        except json.JSONDecodeError:
+            return []
+        if isinstance(parsed, list) and all(isinstance(item, dict) for item in parsed):
+            return parsed
+        return []
 
     def __call__(
         self,
@@ -1876,7 +2400,35 @@ class DeterministicMaterialWorldMockGenerator:
             count = int(count_match.group(1)) if count_match else len(plans)
             start = int(start_match.group(1)) if start_match else 0
             return json.dumps({"items": plans[start : start + count]})
-        if stage in {"prose_render", "check_edit"}:
+        if stage == "prose_render":
+            prompt_plans = self._plans_for_prompt(prompt)
+            return json.dumps(
+                {
+                    "items": [
+                        {
+                            "scenario_id": plan["scenario_id"],
+                            "id": plan["scenario_id"],
+                            "discourse_style_id": plan["discourse_style_id"],
+                            "text": self._text_for_plan(plan),
+                        }
+                        for plan in prompt_plans
+                    ]
+                }
+            )
+        if stage == "check_edit":
+            prompt_rows = self._check_rows_for_prompt(prompt)
+            if prompt_rows:
+                items = []
+                for row in prompt_rows:
+                    text = str(row.get("text", ""))
+                    context = row.get("context", {})
+                    anchor = context.get("target_anchor") if isinstance(context, dict) else None
+                    if anchor and str(anchor).lower() not in text.lower():
+                        text = (
+                            f"{text} The {anchor} is part of the event itself, so its visible behavior helps show the material change."
+                        )
+                    items.append({"id": row.get("id"), "text": text})
+                return json.dumps({"items": items})
             prompt_plans = self._plans_for_prompt(prompt)
             return json.dumps(
                 {

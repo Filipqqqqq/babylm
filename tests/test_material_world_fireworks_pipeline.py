@@ -7,6 +7,9 @@ from babysteps.cli.generate_material_world_fireworks import main as generate_mai
 from babysteps.material_world.audit import read_jsonl
 from babysteps.material_world.fireworks_pipeline import (
     DeterministicMaterialWorldMockGenerator,
+    build_check_prompt,
+    build_render_prompt,
+    build_scenario_plan_prompt,
     load_json,
     load_pipeline_config,
     run_fireworks_pipeline,
@@ -15,6 +18,18 @@ from babysteps.material_world.fireworks_pipeline import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class MalformedFirstCheckGenerator(DeterministicMaterialWorldMockGenerator):
+    def __init__(self) -> None:
+        super().__init__()
+        self.return_malformed_check = True
+
+    def __call__(self, **kwargs):
+        if kwargs.get("stage") == "check_edit" and self.return_malformed_check:
+            self.return_malformed_check = False
+            return '{"items": [{"id": "mw_probe_0000", "text": "unterminated"}'
+        return super().__call__(**kwargs)
 
 
 def test_probe_selection_returns_expected_counts():
@@ -118,6 +133,25 @@ def test_mock_pipeline_respects_explicit_stage_batch_sizes(tmp_path):
     assert len(read_jsonl(manifest["paths"]["examples_reaudited"])) == 10
 
 
+def test_mock_pipeline_retries_malformed_check_json(tmp_path):
+    config = load_pipeline_config(ROOT / "configs" / "material_world" / "fireworks_probe.json")
+    config["output_dir"] = str(tmp_path / "retry_check_probe")
+    config["scenario_limit"] = 4
+    config["audit_edit_limit"] = 0
+
+    manifest = run_fireworks_pipeline(
+        config=config,
+        generator=MalformedFirstCheckGenerator(),
+        model_id="mock-fireworks",
+        output_dir=config["output_dir"],
+        config_path=ROOT / "configs" / "material_world" / "fireworks_probe.json",
+    )
+
+    assert manifest["counts"]["prose_checked"] == 4
+    raw_failures = list((Path(manifest["output_dir"]) / "_raw_model_failures").glob("check_edit_*.txt"))
+    assert raw_failures
+
+
 def test_mock_pipeline_can_target_coverage_set(tmp_path):
     config = load_pipeline_config(ROOT / "configs" / "material_world" / "fireworks_probe.json")
     config["output_dir"] = str(tmp_path / "ewok_coverage_probe")
@@ -177,6 +211,7 @@ def test_mock_pipeline_soft_coverage_mix_keeps_general_and_coverage_items(tmp_pa
             "object_fraction": 0.35,
             "material_fraction": 0.35,
             "dynamic_fraction": 0.0,
+            "anchor_fraction": 0.0,
         }
     }
     assert manifest["counts"]["coverage_assignments"] == 6
@@ -236,6 +271,90 @@ def test_mock_pipeline_assigns_material_dynamics_targets(tmp_path):
     assert all(row["target_dynamic_concept"] in row["dynamics"] for row in scenario_rows)
 
 
+def test_mock_pipeline_assigns_lexical_anchors_round_robin(tmp_path):
+    config = load_pipeline_config(
+        ROOT / "configs" / "material_world" / "fireworks_probe_ewok_dyn_anchor_v2.json"
+    )
+    config["output_dir"] = str(tmp_path / "ewok_dynamic_anchor_probe")
+    config["scenario_limit"] = 32
+    config["style_limit"] = 1
+    config["audit_edit_limit"] = 0
+
+    manifest = run_fireworks_pipeline(
+        config=config,
+        generator=DeterministicMaterialWorldMockGenerator(),
+        model_id="mock-fireworks",
+        output_dir=config["output_dir"],
+        config_path=ROOT / "configs" / "material_world" / "fireworks_probe_ewok_dyn_anchor_v2.json",
+    )
+
+    coverage_report = json.loads(Path(manifest["paths"]["coverage_report"]).read_text(encoding="utf-8"))
+    assigned = coverage_report["assigned"]["ewok_material_dynamics_anchor_v2"]
+    scenario_rows = read_jsonl(manifest["paths"]["scenario_plans"])
+    target_anchor_counts = assigned["target_anchors"]
+
+    assert manifest["selected"]["coverage_mix"] == {
+        "ewok_material_dynamics_anchor_v2": {
+            "row_fraction": 0.0,
+            "object_fraction": 0.0,
+            "material_fraction": 0.0,
+            "dynamic_fraction": 0.70,
+            "anchor_fraction": 1.0,
+        }
+    }
+    assert manifest["counts"]["coverage_assignments"] == 32
+    assert sum(target_anchor_counts.values()) == 32
+    assert max(target_anchor_counts.values()) - min(target_anchor_counts.values()) <= 1
+    assert all(row["target_anchor"] for row in scenario_rows)
+    assert all("central participant" in row.get("plan_notes", "") for row in scenario_rows)
+    assert sum(1 for row in scenario_rows if row["target_dynamic_concept"]) == 22
+
+
+def test_anchor_prompts_require_central_participant():
+    scenario_prompt = build_scenario_plan_prompt(
+        selected_material_classes=[
+            {
+                "class_id": "textiles_fibers",
+                "class_name": "Textiles and fibers",
+                "examples": ["twill"],
+            }
+        ],
+        selected_objects=[
+            {
+                "object_id": "shirt_jacket",
+                "object_name": "shirt",
+                "useful_events": ["folded"],
+            }
+        ],
+        selected_styles=[{"style_id": "everyday_narrative"}],
+        scenario_limit=1,
+        coverage_assignments=[{"scenario_id": "mw_probe_0000", "target_anchor": "twill"}],
+    )
+    render_prompt = build_render_prompt(
+        [
+            {
+                "scenario_id": "mw_probe_0000",
+                "discourse_style_id": "everyday_narrative",
+                "target_anchor": "twill",
+            }
+        ]
+    )
+    check_prompt = build_check_prompt(
+        [
+            {
+                "id": "mw_probe_0000",
+                "text": "The twill wrinkles when the shirt is folded.",
+                "metadata": {"target_anchor": "twill"},
+            }
+        ]
+    )
+
+    for prompt in [scenario_prompt, render_prompt, check_prompt]:
+        assert "central participant" in prompt
+        assert "absent" in prompt
+        assert "nearby" in prompt
+
+
 def test_mock_pipeline_balances_selected_object_exposure(tmp_path):
     config = load_pipeline_config(ROOT / "configs" / "material_world" / "fireworks_probe.json")
     config["output_dir"] = str(tmp_path / "balanced_object_probe")
@@ -274,6 +393,46 @@ def test_mock_pipeline_balances_selected_object_exposure(tmp_path):
     assert object_report["assigned"]["rows"] == 13
     assert object_report["assigned"]["spread"]["spread"] <= 1
     assert set(object_report["assigned"]["target_object_ids"]) == selected_object_ids
+
+
+def test_mock_pipeline_balances_selected_style_exposure(tmp_path):
+    config = load_pipeline_config(ROOT / "configs" / "material_world" / "fireworks_probe.json")
+    config["output_dir"] = str(tmp_path / "balanced_style_probe")
+    config["scenario_limit"] = 19
+    config["style_limit"] = 8
+    config["selection_seed"] = "style-balance"
+    config["style_sampling"] = {
+        "mode": "balanced_round_robin",
+        "scope": "selected_styles",
+    }
+
+    manifest = run_fireworks_pipeline(
+        config=config,
+        generator=DeterministicMaterialWorldMockGenerator(),
+        model_id="mock-fireworks",
+        output_dir=config["output_dir"],
+        config_path=ROOT / "configs" / "material_world" / "fireworks_probe.json",
+    )
+
+    scenario_rows = read_jsonl(manifest["paths"]["scenario_plans"])
+    selected_style_ids = set(manifest["selected"]["styles"])
+    style_counts = {
+        style_id: sum(1 for row in scenario_rows if row["discourse_style_id"] == style_id)
+        for style_id in selected_style_ids
+    }
+    assert manifest["selected"]["style_sampling"] == {
+        "mode": "balanced_round_robin",
+        "scope": "selected_styles",
+    }
+    assert manifest["counts"]["style_sampling_assignments"] == 19
+    assert all(row["style_sampling_mode"] == "balanced_round_robin" for row in scenario_rows)
+    assert all(row["target_style_id"] == row["discourse_style_id"] for row in scenario_rows)
+    assert max(style_counts.values()) - min(style_counts.values()) <= 1
+
+    style_report = json.loads(Path(manifest["paths"]["style_sampling_report"]).read_text(encoding="utf-8"))
+    assert style_report["assigned"]["rows"] == 19
+    assert style_report["assigned"]["spread"]["spread"] <= 1
+    assert set(style_report["assigned"]["target_style_ids"]) == selected_style_ids
 
 
 def test_mock_pipeline_selection_seed_reorders_soft_mix_reproducibly(tmp_path):
@@ -371,6 +530,8 @@ def test_cli_mock_fireworks_accepts_soft_coverage_mix(tmp_path):
             "softmix-demo",
             "--object-sampling-mode",
             "balanced_round_robin",
+            "--style-sampling-mode",
+            "balanced_round_robin",
             "--scenario-limit",
             "4",
             "--output-dir",
@@ -386,12 +547,17 @@ def test_cli_mock_fireworks_accepts_soft_coverage_mix(tmp_path):
             "object_fraction": 0.4,
             "material_fraction": 0.25,
             "dynamic_fraction": 0.0,
+            "anchor_fraction": 0.0,
         }
     }
     assert manifest["selected"]["selection_seed"] == "softmix-demo"
     assert manifest["selected"]["object_sampling"] == {
         "mode": "balanced_round_robin",
         "scope": "selected_objects",
+    }
+    assert manifest["selected"]["style_sampling"] == {
+        "mode": "balanced_round_robin",
+        "scope": "selected_styles",
     }
     assert len(manifest["selected"]["objects"]) == len(object_config["objects"])
     assert "cup" in manifest["selected"]["objects"]

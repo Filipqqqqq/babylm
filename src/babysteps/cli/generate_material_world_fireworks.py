@@ -59,6 +59,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="How scenario planning should assign objects. Use balanced_round_robin for equal selected-object exposure.",
     )
     parser.add_argument(
+        "--style-sampling-mode",
+        choices=["model_choice", "balanced_round_robin"],
+        help="How scenario planning should assign discourse styles. Use balanced_round_robin for equal selected-style exposure.",
+    )
+    parser.add_argument(
         "--coverage-object-fraction",
         type=float,
         help="Fraction of scenario plans assigned to use objects from each --coverage-set.",
@@ -78,6 +83,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=float,
         help="Fraction of scenario plans assigned to use dynamic concepts from each --coverage-set.",
     )
+    parser.add_argument(
+        "--coverage-anchor-fraction",
+        type=float,
+        help="Fraction of scenario plans assigned to lexical anchors from each --coverage-set.",
+    )
     parser.add_argument("--scenario-batch-size", type=int, help="Scenario plans to request per Fireworks call.")
     parser.add_argument("--render-batch-size", type=int, help="Scenario plans to render per Fireworks call.")
     parser.add_argument("--check-batch-size", type=int, help="Draft prose rows to check/edit per Fireworks call.")
@@ -86,6 +96,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--mock-fireworks",
         action="store_true",
         help="Use a deterministic local fake generator instead of making network/API calls.",
+    )
+    parser.add_argument(
+        "--resume-existing",
+        action="store_true",
+        help="Reuse complete existing scenario/draft/checked stage outputs in the output directory and continue later stages.",
     )
     parser.add_argument(
         "--quiet",
@@ -111,11 +126,18 @@ def _apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> di
         config["output_dir"] = args.output_dir
     if args.selection_seed is not None:
         config["selection_seed"] = args.selection_seed
+    if args.resume_existing:
+        config["resume_existing"] = True
     if args.object_sampling_mode is not None:
         object_sampling = dict(config.get("object_sampling", {}))
         object_sampling["mode"] = args.object_sampling_mode
         object_sampling.setdefault("scope", "selected_objects")
         config["object_sampling"] = object_sampling
+    if args.style_sampling_mode is not None:
+        style_sampling = dict(config.get("style_sampling", {}))
+        style_sampling["mode"] = args.style_sampling_mode
+        style_sampling.setdefault("scope", "selected_styles")
+        config["style_sampling"] = style_sampling
     if args.coverage_sets:
         config["coverage_set_ids"] = args.coverage_sets
     coverage_fraction_args = [
@@ -123,6 +145,7 @@ def _apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> di
         ("coverage_object_fraction", "object_fraction"),
         ("coverage_material_fraction", "material_fraction"),
         ("coverage_dynamic_fraction", "dynamic_fraction"),
+        ("coverage_anchor_fraction", "anchor_fraction"),
     ]
     if any(getattr(args, attr) is not None for attr, _ in coverage_fraction_args):
         if not args.coverage_sets:
