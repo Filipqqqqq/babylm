@@ -2,23 +2,36 @@
 name = "babylm-baby-steps"
 version = "0.1.0"
 description = "Clean team workspace for BabyLM Challenge data, training, evaluation, and analysis workflows."
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.13"
 dependencies = [
-    "accelerate",
-    "datasets",
-    "huggingface_hub",
-    "matplotlib",
-    "numpy",
-    "pytest",
-    "pyyaml",
-    "torch",
-    "tqdm",
-    "transformers",
+    "accelerate>=0.26,<2",
+    "datasets>=2.18,<4",
+    "huggingface_hub>=0.30,<1",
+    "numpy>=1.24,<3",
+    "pandas>=2.0,<3",
+    "pyyaml>=6,<7",
+    "tokenizers>=0.21,<0.23",
+    "torch>=2.0,<3",
+    "tqdm>=4.64,<5",
+    "transformers>=4.51,<5",
 ]
 
 [project.optional-dependencies]
+dev = [
+    "pytest>=8,<10",
+]
+analysis = [
+    "matplotlib>=3.7,<4",
+]
+eval = [
+    "lm-eval>=0.4,<0.5",
+    "statsmodels>=0.14,<0.15",
+    "scikit-learn>=1.3,<2",
+    "scipy>=1.10,<2",
+    "pillow>=10,<12",
+]
 liger = [
-    "liger-kernel",
+    "liger-kernel>=0.6,<0.7",
 ]
 
 [tool.pytest.ini_options]
