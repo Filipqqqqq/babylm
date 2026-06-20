@@ -1,35 +1,20 @@
 from __future__ import annotations
 
-import importlib.util
 from types import SimpleNamespace
 from pathlib import Path
 
+from babysteps.cli import build_token_shards as token_shard_builder
+from babysteps.cli import train_causal_lm as train_script
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def load_train_script_module():
-    spec = importlib.util.spec_from_file_location(
-        "train_gpt2_small_script",
-        ROOT / "scripts" / "train_gpt2_small.py",
-    )
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return train_script
 
 
 def load_token_shard_builder_module():
-    spec = importlib.util.spec_from_file_location(
-        "build_hf_token_shards_script",
-        ROOT / "scripts" / "build_hf_token_shards.py",
-    )
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return token_shard_builder
 
 
 def test_env_expansion_supports_shell_style_defaults(monkeypatch) -> None:

@@ -1,24 +1,14 @@
 from __future__ import annotations
 
-import importlib.util
 import json
-from pathlib import Path
 
 import numpy as np
 
-
-ROOT = Path(__file__).resolve().parents[1]
-SCRIPT_PATH = ROOT / "scripts" / "build_hf_token_shards.py"
-
-spec = importlib.util.spec_from_file_location("build_hf_token_shards", SCRIPT_PATH)
-assert spec is not None
-build_hf_token_shards = importlib.util.module_from_spec(spec)
-assert spec.loader is not None
-spec.loader.exec_module(build_hf_token_shards)
+from babysteps.cli import build_token_shards
 
 
 def test_dataset_kind_defaults_to_hf() -> None:
-    assert build_hf_token_shards.dataset_kind({}) == "hf"
+    assert build_token_shards.dataset_kind({}) == "hf"
 
 
 def test_iter_dataset_rows_supports_local_jsonl(tmp_path) -> None:
@@ -36,7 +26,7 @@ def test_iter_dataset_rows_supports_local_jsonl(tmp_path) -> None:
         "text_field": "text",
     }
 
-    assert list(build_hf_token_shards.iter_dataset_rows(dataset)) == rows
+    assert list(build_token_shards.iter_dataset_rows(dataset)) == rows
 
 
 def test_iter_dataset_rows_supports_local_text_file_mode(tmp_path) -> None:
@@ -50,7 +40,7 @@ def test_iter_dataset_rows_supports_local_text_file_mode(tmp_path) -> None:
         "document_mode": "file",
     }
 
-    assert list(build_hf_token_shards.iter_dataset_rows(dataset)) == [
+    assert list(build_token_shards.iter_dataset_rows(dataset)) == [
         {"text": "first document\nsecond line\n"}
     ]
 
@@ -66,7 +56,7 @@ def test_iter_dataset_rows_supports_local_text_line_mode(tmp_path) -> None:
         "document_mode": "line",
     }
 
-    assert list(build_hf_token_shards.iter_dataset_rows(dataset)) == [
+    assert list(build_token_shards.iter_dataset_rows(dataset)) == [
         {"text": "first"},
         {"text": "second"},
     ]
@@ -87,7 +77,7 @@ def test_iter_dataset_rows_supports_local_text_directory(tmp_path) -> None:
         "document_mode": "file",
     }
 
-    assert list(build_hf_token_shards.iter_dataset_rows(dataset)) == [
+    assert list(build_token_shards.iter_dataset_rows(dataset)) == [
         {"text": "first\n"},
         {"text": "second\n"},
     ]
@@ -108,7 +98,7 @@ def test_iter_dataset_rows_supports_recursive_local_text_directory(tmp_path) -> 
         "document_mode": "line",
     }
 
-    assert list(build_hf_token_shards.iter_dataset_rows(dataset)) == [
+    assert list(build_token_shards.iter_dataset_rows(dataset)) == [
         {"text": "nested"},
     ]
 
@@ -138,7 +128,7 @@ def test_build_token_shards_from_local_jsonl(tmp_path) -> None:
             }
 
     output_dir = tmp_path / "shards"
-    meta = build_hf_token_shards.build_token_shards(
+    meta = build_token_shards.build_token_shards(
         {
             "name": "toy",
             "dataset": {
