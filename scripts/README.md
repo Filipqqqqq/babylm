@@ -15,3 +15,10 @@ scripts/material_world/                            older material-world compatib
 
 The root-level Python scripts are compatibility shims for older commands. New
 docs and new automation should prefer the organized paths above.
+
+Removed deprecated aliases:
+
+```text
+scripts/build_hf_token_shards.py  -> scripts/data/build_token_shards.py
+scripts/train_gpt2_small.py       -> scripts/train/train_causal_lm.py
+```

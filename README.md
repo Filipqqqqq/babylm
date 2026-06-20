@@ -367,6 +367,11 @@ Preferred command-line entrypoints are grouped under `scripts/data/`,
 root-level Python scripts remain as compatibility shims for older commands; new
 docs and launchers should prefer the grouped paths.
 
+Deprecated root aliases that duplicated newer entrypoints have been removed:
+use `scripts/data/build_token_shards.py` instead of
+`scripts/build_hf_token_shards.py`, and use
+`scripts/train/train_causal_lm.py` instead of `scripts/train_gpt2_small.py`.
+
 ## Data And Outputs
 
 Do not commit raw datasets, large `.pkl` caches, checkpoints, or generated eval
