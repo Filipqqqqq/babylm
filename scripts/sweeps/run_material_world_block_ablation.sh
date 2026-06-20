@@ -33,10 +33,10 @@ SEEDS=(${BABYSTEPS_SEEDS:-42 43})
 CONDITIONS=(${BABYSTEPS_MW_CONDITIONS:-baseline dyn0p5 dynall0p85})
 
 BASE_CONFIG="${BABYSTEPS_CONFIG:-configs/train/gpt2_8l512_bpe16384_10m_muon.yaml}"
-BASE_CHUNKS_DIR="${BABYSTEPS_10M_BPE16384_CHUNKS_DIR:-${BABYSTEPS_CACHE_DIR:-/SSD2/babylm-baby-steps-cache}/token_chunks/babylm10m_byte_bpe_16384_block512_eos}"
-TOKENIZER_DIR="${BABYSTEPS_10M_BPE16384_TOKENIZER_DIR:-${BABYSTEPS_CACHE_DIR:-/SSD2/babylm-baby-steps-cache}/tokenizers/babylm10m_byte_bpe_16384}"
+BASE_CHUNKS_DIR="${BABYSTEPS_10M_BPE16384_CHUNKS_DIR:-${BABYSTEPS_CACHE_DIR:-$HOME/babylm-baby-steps-cache}/token_chunks/babylm10m_byte_bpe_16384_block512_eos}"
+TOKENIZER_DIR="${BABYSTEPS_10M_BPE16384_TOKENIZER_DIR:-${BABYSTEPS_CACHE_DIR:-$HOME/babylm-baby-steps-cache}/tokenizers/babylm10m_byte_bpe_16384}"
 MIX_CONFIG="${BABYSTEPS_MIX_CONFIG:-configs/data/material_world_token_mix_10m.yaml}"
-MIX_ROOT="${BABYSTEPS_MW_MIX_ROOT:-${BABYSTEPS_CACHE_DIR:-/SSD2/babylm-baby-steps-cache}/token_chunks}"
+MIX_ROOT="${BABYSTEPS_MW_MIX_ROOT:-${BABYSTEPS_CACHE_DIR:-$HOME/babylm-baby-steps-cache}/token_chunks}"
 MIX_SEED="${BABYSTEPS_MW_MIX_SEED:-1001}"
 
 DYN_TEXT="${BABYSTEPS_MW_DYN_TEXT:-data/material_world/fireworks_probe_ewok_softmix_1000_dyn/train_audited.txt}"
@@ -49,7 +49,7 @@ DYN_ALL_TOKENS="${BABYSTEPS_MW_DYN_ALL_TOKENS:-138543}"
 # True 1% of baseline content tokens: floor(16,246,784 * 0.01).
 DYN_PROPS_1P0_TOKENS="${BABYSTEPS_MW_DYN_PROPS_1P0_TOKENS:-162467}"
 
-LOG_DIR="${BABYSTEPS_LOG_DIR:-/SSD2/babylm-baby-steps-runs/logs/material_world_block_ablation}"
+LOG_DIR="${BABYSTEPS_LOG_DIR:-${BABYSTEPS_RUNS_DIR:-$HOME/babylm-baby-steps-runs}/logs/material_world_block_ablation}"
 
 if [[ "$SMOKE" == "1" ]]; then
   EPOCHS="${BABYSTEPS_EPOCHS:-1}"

@@ -51,7 +51,7 @@ cd "$ROOT"
 #   BABYSTEPS_BATCH_SIZES="32 64" BABYSTEPS_MICRO_BATCH_SIZE=32 bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 
 CONDA_ENV="${BABYSTEPS_CONDA_ENV:-babylm}"
-LOG_DIR="${BABYSTEPS_LOG_DIR:-/SSD2/babylm-baby-steps-runs/logs/llama_muon}"
+LOG_DIR="${BABYSTEPS_LOG_DIR:-${BABYSTEPS_RUNS_DIR:-$HOME/babylm-baby-steps-runs}/logs/llama_muon}"
 SHOW_PROGRESS="${BABYSTEPS_SHOW_PROGRESS:-1}"
 DRY_RUN="${BABYSTEPS_DRY_RUN:-0}"
 RUN_SUFFIX="${BABYSTEPS_RUN_SUFFIX:-}"

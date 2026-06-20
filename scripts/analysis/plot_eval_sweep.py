@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import re
 import statistics
 from collections import defaultdict
@@ -12,8 +13,9 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_EVAL_ROOT = Path("/SSD2/babylm-baby-steps-runs/evaluation")
-DEFAULT_OUTPUT_DIR = Path("/SSD2/babylm-baby-steps-runs/analysis/eval_sweep")
+DEFAULT_RUNS_DIR = Path(os.environ.get("BABYSTEPS_RUNS_DIR", "~/babylm-baby-steps-runs")).expanduser()
+DEFAULT_EVAL_ROOT = DEFAULT_RUNS_DIR / "evaluation"
+DEFAULT_OUTPUT_DIR = DEFAULT_RUNS_DIR / "analysis" / "eval_sweep"
 
 ADAMW_RUN_RE = re.compile(
     r"gpt2_(?P<layers>\d+)l(?P<hidden_size>\d+)_bpe(?P<bpe>\d+)_lr(?P<lr_slug>[^_]+)"

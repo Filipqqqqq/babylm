@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from babysteps.paths import expand_env_vars, resolve_path as _resolve_path
+
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_PIPELINE_DIR = ROOT / "external" / "babylm-eval" / "strict"
@@ -29,6 +31,12 @@ SENTENCE_TASKS = {
     "ewok_fast": ("ewok", "ewok_fast"),
     "entity_tracking_fast": ("entity_tracking", "entity_tracking_fast"),
 }
+
+
+def resolve_path(value: str | Path, *, base_dir: Path = ROOT) -> Path:
+    """Resolve a config path, treating relative paths as repo-relative."""
+
+    return _resolve_path(value, base_dir=base_dir)
 
 
 @dataclass(frozen=True)
@@ -50,27 +58,6 @@ class EvalSettings:
     revision_name: str | None = None
     skip_existing: bool = True
     dry_run: bool = False
-
-
-def expand_env_vars(value: Any) -> Any:
-    """Recursively expand environment variables in a loaded config."""
-
-    if isinstance(value, dict):
-        return {key: expand_env_vars(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [expand_env_vars(item) for item in value]
-    if isinstance(value, str):
-        return os.path.expandvars(value)
-    return value
-
-
-def resolve_path(value: str | Path, *, base_dir: Path = ROOT) -> Path:
-    """Resolve a config path, treating relative paths as repo-relative."""
-
-    path = Path(os.path.expanduser(os.path.expandvars(str(value))))
-    if not path.is_absolute():
-        path = base_dir / path
-    return path
 
 
 def is_hf_checkpoint(path: str | Path) -> bool:

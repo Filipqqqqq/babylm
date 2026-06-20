@@ -90,14 +90,14 @@ Two material-affordance config variants are kept on purpose:
 The v3 snapshot is not a byte-for-byte recovered historical config; the original config file was not saved. It is the reusable reconstruction of the effective v3 ingredients: material classes, anchors, affordances, notes, document types, and discourse styles.
 
 ```bash
-cd /home/jorge/babylm-baby-steps
+cd /path/to/babylm-baby-steps
 
 conda run --no-capture-output -n babylm \
   python -u scripts/synthetic_data_generation/concept_curriculum/generate_fireworks.py \
   --config configs/concept_curriculum/material_affordance_ewok_20.json \
   --focus-tag ewok_anchor \
   --output-dir data/concept_curriculum/material_affordance_ewok_20 \
-  --api-key-file /home/jorge/babylm-baby-steps/fireworks_api.txt
+  --api-key-file ${FIREWORKS_API_KEY_FILE:-./fireworks_api.txt}
 ```
 
 Scale it while preserving the configured document-type proportions:
@@ -109,7 +109,7 @@ conda run --no-capture-output -n babylm \
   --focus-tag ewok_anchor \
   --document-count 100 \
   --output-dir data/concept_curriculum/material_affordance_ewok_100 \
-  --api-key-file /home/jorge/babylm-baby-steps/fireworks_api.txt
+  --api-key-file ${FIREWORKS_API_KEY_FILE:-./fireworks_api.txt}
 ```
 
 Scale the v3 snapshot for an apples-to-apples 2000-document comparison:
@@ -121,7 +121,7 @@ conda run --no-capture-output -n babylm \
   --focus-tag ewok_anchor \
   --document-count 2000 \
   --output-dir data/concept_curriculum/material_affordance_ewok_2000_action_local_v3_snapshot \
-  --api-key-file /home/jorge/babylm-baby-steps/fireworks_api.txt
+  --api-key-file ${FIREWORKS_API_KEY_FILE:-./fireworks_api.txt}
 ```
 
 Scale the v3.1 soft-tap variant to 4000 documents:
@@ -133,7 +133,7 @@ conda run --no-capture-output -n babylm \
   --focus-tag ewok_anchor \
   --document-count 4000 \
   --output-dir data/concept_curriculum/material_affordance_ewok_4000_action_local_v3_1_soft_tap \
-  --api-key-file /home/jorge/babylm-baby-steps/fireworks_api.txt
+  --api-key-file ${FIREWORKS_API_KEY_FILE:-./fireworks_api.txt}
 ```
 
 Scale the current v4 config with exact six-style balance:
@@ -145,20 +145,20 @@ conda run --no-capture-output -n babylm \
   --focus-tag ewok_anchor \
   --document-count 2004 \
   --output-dir data/concept_curriculum/material_affordance_ewok_2004_action_local_v4 \
-  --api-key-file /home/jorge/babylm-baby-steps/fireworks_api.txt
+  --api-key-file ${FIREWORKS_API_KEY_FILE:-./fireworks_api.txt}
 ```
 
 ## Run An 80-Document Pilot
 
 ```bash
-cd /home/jorge/babylm-baby-steps
+cd /path/to/babylm-baby-steps
 
 conda run --no-capture-output -n babylm \
   python -u scripts/synthetic_data_generation/concept_curriculum/generate_fireworks.py \
   --config configs/concept_curriculum/stir_pilot_20.json \
   --document-count 80 \
   --output-dir data/concept_curriculum/stir_pilot_80 \
-  --api-key-file /home/jorge/babylm-baby-steps/fireworks_api.txt
+  --api-key-file ${FIREWORKS_API_KEY_FILE:-./fireworks_api.txt}
 ```
 
 Then inspect:
@@ -176,8 +176,8 @@ python scripts/data/build_synthetic_only_chunks.py \
   --source data/concept_curriculum/material_affordance_ewok_1000_action_local_v3/documents_audited.jsonl \
   --kind jsonl \
   --text-field text \
-  --tokenizer /SSD2/babylm-baby-steps-cache/tokenizers/babylm10m_byte_bpe_16384 \
-  --output-dir /SSD2/babylm-baby-steps-cache/token_chunks/material_affordance_ewok_1000_synth_only \
+  --tokenizer ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/tokenizers/babylm10m_byte_bpe_16384 \
+  --output-dir ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_chunks/material_affordance_ewok_1000_synth_only \
   --block-size 512 \
   --dev-fraction 0.05 \
   --seed 42
@@ -187,8 +187,8 @@ Then launch a tiny GPT-2 diagnostic run for roughly 1000 optimizer updates:
 
 ```bash
 python scripts/sweeps/run_synthetic_only_gpt2_smoke.py \
-  --train-chunks /SSD2/babylm-baby-steps-cache/token_chunks/material_affordance_ewok_1000_synth_only/train.pkl \
-  --val-chunks /SSD2/babylm-baby-steps-cache/token_chunks/material_affordance_ewok_1000_synth_only/dev.pkl \
+  --train-chunks ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_chunks/material_affordance_ewok_1000_synth_only/train.pkl \
+  --val-chunks ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_chunks/material_affordance_ewok_1000_synth_only/dev.pkl \
   --target-updates 1000 \
   --gpus 5
 ```
@@ -228,13 +228,13 @@ The pour pilot also includes two pour-specific styles. These are prose styles, n
 ## Run A 20-Document Pour Pilot
 
 ```bash
-cd /home/jorge/babylm-baby-steps
+cd /path/to/babylm-baby-steps
 
 conda run --no-capture-output -n babylm \
   python -u scripts/synthetic_data_generation/concept_curriculum/generate_fireworks.py \
   --config configs/concept_curriculum/pour_pilot_20.json \
   --output-dir data/concept_curriculum/pour_pilot_20 \
-  --api-key-file /home/jorge/babylm-baby-steps/fireworks_api.txt
+  --api-key-file ${FIREWORKS_API_KEY_FILE:-./fireworks_api.txt}
 ```
 
 Then inspect:
@@ -278,13 +278,13 @@ Each generated document should include at least one exact target lexical form: `
 ## Run A 20-Document Squeeze Pilot
 
 ```bash
-cd /home/jorge/babylm-baby-steps
+cd /path/to/babylm-baby-steps
 
 conda run --no-capture-output -n babylm \
   python -u scripts/synthetic_data_generation/concept_curriculum/generate_fireworks.py \
   --config configs/concept_curriculum/squeeze_pilot_20.json \
   --output-dir data/concept_curriculum/squeeze_pilot_20 \
-  --api-key-file /home/jorge/babylm-baby-steps/fireworks_api.txt
+  --api-key-file ${FIREWORKS_API_KEY_FILE:-./fireworks_api.txt}
 ```
 
 Then inspect:

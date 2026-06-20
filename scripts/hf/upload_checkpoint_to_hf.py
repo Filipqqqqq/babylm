@@ -14,17 +14,24 @@ import sys
 from pathlib import Path
 
 
+DEFAULT_RUNS_DIR = Path(os.environ.get("BABYSTEPS_RUNS_DIR", "~/babylm-baby-steps-runs")).expanduser()
 DEFAULT_CHECKPOINT_DIR = Path(
-    "/SSD2/babylm-baby-steps-runs/training/"
-    "gpt2_8l512_bpe16384_muon_lr0p01_wu0p03_mwd0p1_bs32_seed45/"
-    "20260610_042850/final"
-)
+    os.environ.get(
+        "BABYSTEPS_HF_CHECKPOINT_DIR",
+        str(DEFAULT_RUNS_DIR / "training" / "YOUR_RUN" / "final"),
+    )
+).expanduser()
 DEFAULT_RESULTS_JSON = Path(
-    "/SSD2/babylm-baby-steps-runs/collated/"
-    "gpt2_8l512_bpe16384_muon_lr0p01_wu0p03_mwd0p1_bs32_seed45/"
-    "final/all_full_preds_and_fast_scores_causal.json"
+    os.environ.get(
+        "BABYSTEPS_HF_RESULTS_JSON",
+        str(DEFAULT_RUNS_DIR / "collated" / "YOUR_RUN" / "all_full_preds_and_fast_scores_causal.json"),
+    )
+).expanduser()
+DEFAULT_TOKEN_FILE = (
+    Path(os.environ["HF_TOKEN_FILE"]).expanduser()
+    if os.environ.get("HF_TOKEN_FILE")
+    else None
 )
-DEFAULT_TOKEN_FILE = Path("/SSD/tokenPred/babylm_10m/train_files/CustomLlama/hf_token.txt")
 DEFAULT_REPO_NAME = "babysteps-gpt2-8l512-bpe16k-muon-seed45"
 
 

@@ -1,8 +1,8 @@
 name: babylm10m_byte_bpe_50257_block512_eos
 
 data:
-  clean_train_dir: /SSD/tokenPred/babylm_10m/train_files/CustomLlama/data/babylm_10M_clean
-  clean_dev_dir: /SSD/tokenPred/babylm_10m/train_files/CustomLlama/data/babylm_dev_clean
+  clean_train_dir: ${BABYSTEPS_10M_CLEAN_TRAIN_DIR:-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/clean_text/babylm_10m/train}
+  clean_dev_dir: ${BABYSTEPS_10M_CLEAN_DEV_DIR:-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/clean_text/babylm_10m/dev}
   sources:
     - childes
     - switchboard
@@ -17,11 +17,11 @@ tokenizer:
   min_frequency: 4
   special_tokens:
     - <|endoftext|>
-  output_dir: /SSD2/babylm-baby-steps-cache/tokenizers/babylm10m_byte_bpe_50257
+  output_dir: ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/tokenizers/babylm10m_byte_bpe_50257
 
 chunks:
   chunk_size: 512
   wrap_with_eos: true
   drop_remainder: true
   add_special_tokens: false
-  output_dir: /SSD2/babylm-baby-steps-cache/token_chunks/babylm10m_byte_bpe_50257_block512_eos
+  output_dir: ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_chunks/babylm10m_byte_bpe_50257_block512_eos

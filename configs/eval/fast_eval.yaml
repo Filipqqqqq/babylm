@@ -22,4 +22,4 @@ tasks:
   - reading
 
 outputs:
-  result_dir: /SSD2/babylm-baby-steps-runs/evaluation/babylm_fast_zero_shot
+  result_dir: ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/evaluation/babylm_fast_zero_shot

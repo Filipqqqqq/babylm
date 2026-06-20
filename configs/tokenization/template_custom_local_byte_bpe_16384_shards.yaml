@@ -43,10 +43,10 @@ tokenizer:
   pad_token: <pad>
   model_max_length: 1024
   train_batch_docs: 1000
-  output_dir: ${BABYSTEPS_CUSTOM_TOKENIZER_DIR:-${BABYSTEPS_CACHE_DIR:-/SSD2/babylm-baby-steps-cache}/tokenizers/custom_byte_bpe_16384}
+  output_dir: ${BABYSTEPS_CUSTOM_TOKENIZER_DIR:-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/tokenizers/custom_byte_bpe_16384}
 
 shards:
-  output_dir: ${BABYSTEPS_CUSTOM_SHARDS_DIR:-${BABYSTEPS_CACHE_DIR:-/SSD2/babylm-baby-steps-cache}/token_shards/custom_byte_bpe_16384_bos_eos}
+  output_dir: ${BABYSTEPS_CUSTOM_SHARDS_DIR:-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_shards/custom_byte_bpe_16384_bos_eos}
   shard_tokens: 1000000
   val_shards: 1
   batch_docs: 512

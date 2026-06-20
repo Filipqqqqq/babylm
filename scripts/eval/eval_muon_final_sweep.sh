@@ -8,9 +8,9 @@ cd "$ROOT"
 # Evaluate final checkpoints produced by scripts/sweeps/run_muon_lr_sweep.sh.
 
 CONDA_ENV="${BABYSTEPS_CONDA_ENV:-babylm}"
-TRAINING_ROOT="${BABYSTEPS_TRAINING_ROOT:-/SSD2/babylm-baby-steps-runs/training}"
-OUTPUT_ROOT="${BABYSTEPS_EVAL_OUTPUT_ROOT:-/SSD2/babylm-baby-steps-runs/evaluation}"
-LOG_DIR="${BABYSTEPS_EVAL_LOG_DIR:-/SSD2/babylm-baby-steps-runs/logs/eval_muon}"
+TRAINING_ROOT="${BABYSTEPS_TRAINING_ROOT:-${BABYSTEPS_RUNS_DIR:-$HOME/babylm-baby-steps-runs}/training}"
+OUTPUT_ROOT="${BABYSTEPS_EVAL_OUTPUT_ROOT:-${BABYSTEPS_RUNS_DIR:-$HOME/babylm-baby-steps-runs}/evaluation}"
+LOG_DIR="${BABYSTEPS_EVAL_LOG_DIR:-${BABYSTEPS_RUNS_DIR:-$HOME/babylm-baby-steps-runs}/logs/eval_muon}"
 PIPELINE_DIR="${BABYSTEPS_EVAL_PIPELINE_DIR:-external/babylm-eval/strict}"
 EVAL_DATA_DIR="${BABYSTEPS_EVAL_DATA_DIR:-external/babylm-eval/strict/evaluation_data/fast_eval}"
 BATCH_SIZE="${BABYSTEPS_EVAL_BATCH_SIZE:-64}"

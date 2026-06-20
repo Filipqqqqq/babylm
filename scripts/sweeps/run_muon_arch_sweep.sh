@@ -19,7 +19,7 @@ cd "$ROOT"
 # this launcher overrides model shape, optimizer settings, seed, and run name.
 
 CONDA_ENV="${BABYSTEPS_CONDA_ENV:-babylm}"
-LOG_DIR="${BABYSTEPS_LOG_DIR:-/SSD2/babylm-baby-steps-runs/logs/muon_arch}"
+LOG_DIR="${BABYSTEPS_LOG_DIR:-${BABYSTEPS_RUNS_DIR:-$HOME/babylm-baby-steps-runs}/logs/muon_arch}"
 SHOW_PROGRESS="${BABYSTEPS_SHOW_PROGRESS:-1}"
 DRY_RUN="${BABYSTEPS_DRY_RUN:-0}"
 

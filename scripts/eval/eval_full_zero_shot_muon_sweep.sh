@@ -22,9 +22,9 @@ cd "$ROOT"
 # evaluator adds final/main/zero_shot/...
 
 CONDA_ENV="${BABYSTEPS_CONDA_ENV:-babylm}"
-TRAINING_ROOT="${BABYSTEPS_TRAINING_ROOT:-/SSD2/babylm-baby-steps-runs/training}"
-OUTPUT_ROOT="${BABYSTEPS_FULL_EVAL_OUTPUT_ROOT:-/SSD2/babylm-baby-steps-runs/evaluation_full_zero_shot}"
-LOG_DIR="${BABYSTEPS_FULL_EVAL_LOG_DIR:-/SSD2/babylm-baby-steps-runs/logs/full_zero_shot_muon}"
+TRAINING_ROOT="${BABYSTEPS_TRAINING_ROOT:-${BABYSTEPS_RUNS_DIR:-$HOME/babylm-baby-steps-runs}/training}"
+OUTPUT_ROOT="${BABYSTEPS_FULL_EVAL_OUTPUT_ROOT:-${BABYSTEPS_RUNS_DIR:-$HOME/babylm-baby-steps-runs}/evaluation_full_zero_shot}"
+LOG_DIR="${BABYSTEPS_FULL_EVAL_LOG_DIR:-${BABYSTEPS_RUNS_DIR:-$HOME/babylm-baby-steps-runs}/logs/full_zero_shot_muon}"
 PIPELINE_DIR="${BABYSTEPS_EVAL_PIPELINE_DIR:-${ROOT}/external/babylm-eval/strict}"
 EVAL_DATA_DIR="${BABYSTEPS_FULL_EVAL_DATA_DIR:-${PIPELINE_DIR}/evaluation_data/full_eval}"
 

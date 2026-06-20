@@ -9,7 +9,7 @@ cd "$ROOT"
 # number of chunks so each run is a short test before launching full pretrains.
 
 CONDA_ENV="${BABYSTEPS_CONDA_ENV:-babylm}"
-LOG_DIR="${BABYSTEPS_LOG_DIR:-/SSD2/babylm-baby-steps-runs/logs/muon_smoke}"
+LOG_DIR="${BABYSTEPS_LOG_DIR:-${BABYSTEPS_RUNS_DIR:-$HOME/babylm-baby-steps-runs}/logs/muon_smoke}"
 SHOW_PROGRESS="${BABYSTEPS_SHOW_PROGRESS:-1}"
 DRY_RUN="${BABYSTEPS_DRY_RUN:-0}"
 

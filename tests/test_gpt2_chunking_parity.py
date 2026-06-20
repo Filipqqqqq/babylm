@@ -17,9 +17,17 @@ from transformers import AutoTokenizer
 
 
 CUSTOM_LLAMA_CLEAN_DIR = Path(
-    "/SSD/tokenPred/babylm_10m/train_files/CustomLlama/data/babylm_10M_clean"
-)
-CUSTOM_LLAMA_GPT_CHUNKS = CUSTOM_LLAMA_CLEAN_DIR / "gpt_chunked.pkl"
+    os.environ.get(
+        "BABYSTEPS_CUSTOM_LLAMA_CLEAN_DIR",
+        "~/babylm-data/babylm_10M_clean",
+    )
+).expanduser()
+CUSTOM_LLAMA_GPT_CHUNKS = Path(
+    os.environ.get(
+        "BABYSTEPS_CUSTOM_LLAMA_GPT_CHUNKS",
+        str(CUSTOM_LLAMA_CLEAN_DIR / "gpt_chunked.pkl"),
+    )
+).expanduser()
 CHUNK_SIZE = 512
 
 # This is the order printed by the original CustomLlama tokenization notebook.

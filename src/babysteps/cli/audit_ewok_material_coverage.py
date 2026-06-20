@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -20,10 +21,12 @@ from babysteps.material_world.ewok_coverage import (  # noqa: E402
 
 
 def _candidate_ewok_dirs() -> list[Path]:
-    return [
+    candidates = [
         ROOT / "external" / "babylm-eval" / "strict" / "evaluation_data" / "fast_eval" / "ewok_fast",
-        Path("/SSD/tokenPred/babylm_10m/evaluation-pipeline-2025/evaluation_data/fast_eval/ewok_fast"),
     ]
+    if env_dir := os.environ.get("BABYSTEPS_EWOK_FAST_DIR"):
+        candidates.append(Path(env_dir).expanduser())
+    return candidates
 
 
 def resolve_default_ewok_dir() -> Path:

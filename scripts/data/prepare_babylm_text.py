@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -19,16 +18,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from babysteps.data.text_cleaning import clean_text
-
-
-def expand_env_vars(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: expand_env_vars(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [expand_env_vars(item) for item in value]
-    if isinstance(value, str):
-        return os.path.expandvars(value)
-    return value
+from babysteps.paths import expand_env_vars, resolve_path
 
 
 def load_yaml_config(path: str | Path) -> dict[str, Any]:
@@ -110,12 +100,21 @@ def main() -> None:
     encoding = cleaning_config.get("encoding", "utf-8")
     overwrite = bool(cleaning_config.get("overwrite", True)) and not args.no_overwrite
 
-    clean_train_dir = Path(args.clean_train_dir or clean_config["train_dir"])
-    clean_dev_dir = Path(args.clean_dev_dir or clean_config["dev_dir"])
-    manifest_path = Path(args.manifest_path or clean_config["manifest_path"])
+    clean_train_dir = resolve_path(
+        args.clean_train_dir or clean_config["train_dir"],
+        base_dir=Path.cwd() if args.clean_train_dir else ROOT,
+    )
+    clean_dev_dir = resolve_path(
+        args.clean_dev_dir or clean_config["dev_dir"],
+        base_dir=Path.cwd() if args.clean_dev_dir else ROOT,
+    )
+    manifest_path = resolve_path(
+        args.manifest_path or clean_config["manifest_path"],
+        base_dir=Path.cwd() if args.manifest_path else ROOT,
+    )
 
     train_records = clean_split(
-        raw_dir=Path(raw_config["train_dir"]),
+        raw_dir=resolve_path(raw_config["train_dir"], base_dir=ROOT),
         output_dir=clean_train_dir,
         suffix="train",
         sources=sources,
@@ -124,7 +123,7 @@ def main() -> None:
         overwrite=overwrite,
     )
     dev_records = clean_split(
-        raw_dir=Path(raw_config["dev_dir"]),
+        raw_dir=resolve_path(raw_config["dev_dir"], base_dir=ROOT),
         output_dir=clean_dev_dir,
         suffix="dev",
         sources=sources,

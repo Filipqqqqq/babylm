@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -20,16 +19,11 @@ from transformers import AutoTokenizer, PreTrainedTokenizerFast
 
 
 ROOT = Path(__file__).resolve().parents[2]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
-
-def expand_env_vars(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: expand_env_vars(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [expand_env_vars(item) for item in value]
-    if isinstance(value, str):
-        return os.path.expandvars(value)
-    return value
+from babysteps.paths import expand_env_vars, resolve_path
 
 
 def load_yaml_config(path: str | Path) -> dict[str, Any]:
@@ -139,8 +133,14 @@ def main() -> None:
         raise ValueError(f"train_tokenizer.py only supports tokenizer.kind='byte_bpe', got {kind!r}.")
 
     sources = list(data_config["sources"])
-    clean_train_dir = Path(args.clean_train_dir or data_config["clean_train_dir"])
-    output_dir = Path(args.output_dir or tokenizer_config["output_dir"])
+    clean_train_dir = resolve_path(
+        args.clean_train_dir or data_config["clean_train_dir"],
+        base_dir=Path.cwd() if args.clean_train_dir else ROOT,
+    )
+    output_dir = resolve_path(
+        args.output_dir or tokenizer_config["output_dir"],
+        base_dir=Path.cwd() if args.output_dir else ROOT,
+    )
     vocab_size = int(args.vocab_size or tokenizer_config["vocab_size"])
     min_frequency = int(args.min_frequency or tokenizer_config.get("min_frequency", 2))
     special_tokens = list(tokenizer_config.get("special_tokens", ["<|endoftext|>"]))

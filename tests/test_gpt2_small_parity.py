@@ -23,10 +23,20 @@ from babysteps.data.token_chunks import collate_token_chunks, load_token_chunks
 from babysteps.training.causal_lm_loop import compute_causal_lm_loss, set_all_seeds
 
 
+DEFAULT_CACHE_DIR = Path(
+    os.environ.get("BABYSTEPS_CACHE_DIR", "~/babylm-baby-steps-cache")
+).expanduser()
 TRAIN_CHUNKS = Path(
-    "/SSD/tokenPred/babylm_10m/train_files/CustomLlama/data/"
-    "babylm_10M_clean/bbylm_agentic_mixed.pkl"
-)
+    os.environ.get(
+        "BABYSTEPS_PARITY_TRAIN_CHUNKS",
+        str(
+            DEFAULT_CACHE_DIR
+            / "token_chunks"
+            / "babylm10m_gpt2_pretrained_block512_eos"
+            / "train.pkl"
+        ),
+    )
+).expanduser()
 PAD_ID = 50256
 
 

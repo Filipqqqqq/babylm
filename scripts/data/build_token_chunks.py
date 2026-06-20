@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import pickle
 import sys
 from pathlib import Path
@@ -16,16 +15,11 @@ from transformers import AutoTokenizer
 
 
 ROOT = Path(__file__).resolve().parents[2]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
-
-def expand_env_vars(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: expand_env_vars(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [expand_env_vars(item) for item in value]
-    if isinstance(value, str):
-        return os.path.expandvars(value)
-    return value
+from babysteps.paths import expand_env_vars, resolve_path, validate_tokenizer_dir
 
 
 def load_yaml_config(path: str | Path) -> dict[str, Any]:
@@ -36,9 +30,12 @@ def load_yaml_config(path: str | Path) -> dict[str, Any]:
 def load_tokenizer(tokenizer_config: dict[str, Any]):
     kind = tokenizer_config.get("kind", "pretrained_hf")
     if kind == "pretrained_hf":
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer_config["name_or_path"])
+        tokenizer_source = tokenizer_config["name_or_path"]
+        tokenizer_path = validate_tokenizer_dir(tokenizer_source)
+        tokenizer = AutoTokenizer.from_pretrained(str(tokenizer_path or tokenizer_source))
     elif kind == "byte_bpe":
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer_config["output_dir"])
+        tokenizer_path = validate_tokenizer_dir(tokenizer_config["output_dir"])
+        tokenizer = AutoTokenizer.from_pretrained(str(tokenizer_path))
     else:
         raise ValueError(f"Unsupported tokenizer kind: {kind!r}")
 
@@ -138,9 +135,18 @@ def main() -> None:
     tokenizer = load_tokenizer(config["tokenizer"])
 
     sources = list(data_config["sources"])
-    output_dir = Path(args.output_dir or chunks_config["output_dir"])
-    clean_train_dir = Path(args.clean_train_dir or data_config["clean_train_dir"])
-    clean_dev_dir = Path(args.clean_dev_dir or data_config["clean_dev_dir"])
+    output_dir = resolve_path(
+        args.output_dir or chunks_config["output_dir"],
+        base_dir=Path.cwd() if args.output_dir else ROOT,
+    )
+    clean_train_dir = resolve_path(
+        args.clean_train_dir or data_config["clean_train_dir"],
+        base_dir=Path.cwd() if args.clean_train_dir else ROOT,
+    )
+    clean_dev_dir = resolve_path(
+        args.clean_dev_dir or data_config["clean_dev_dir"],
+        base_dir=Path.cwd() if args.clean_dev_dir else ROOT,
+    )
 
     chunk_size = int(chunks_config.get("chunk_size", 512))
     add_special_tokens = bool(chunks_config.get("add_special_tokens", False))

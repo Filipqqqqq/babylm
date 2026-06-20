@@ -9,7 +9,7 @@ cd "$ROOT"
 # fills every GPU, the script waits before launching the next batch.
 
 CONDA_ENV="${BABYSTEPS_CONDA_ENV:-babylm}"
-LOG_DIR="${BABYSTEPS_LOG_DIR:-/SSD2/babylm-baby-steps-runs/logs}"
+LOG_DIR="${BABYSTEPS_LOG_DIR:-${BABYSTEPS_RUNS_DIR:-$HOME/babylm-baby-steps-runs}/logs}"
 SHOW_PROGRESS="${BABYSTEPS_SHOW_PROGRESS:-1}"
 
 BPES=(${BABYSTEPS_BPES:-8192 16384})

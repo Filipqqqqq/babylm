@@ -15,6 +15,8 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Dataset
 
+from babysteps.paths import validate_token_chunk_file
+
 
 TokenChunk = Sequence[int]
 
@@ -35,7 +37,7 @@ class TokenChunkDataset(Dataset):
 def load_token_chunks(path: str | Path, max_chunks: int | None = None) -> list[TokenChunk]:
     """Load a pickle file containing token chunks."""
 
-    path = Path(path)
+    path = validate_token_chunk_file(path)
     with path.open("rb") as f:
         chunks = pickle.load(f)
 

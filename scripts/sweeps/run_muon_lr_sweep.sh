@@ -16,7 +16,7 @@ cd "$ROOT"
 #   BABYSTEPS_BPES="8192 16384" BABYSTEPS_SEEDS="42 43" bash scripts/sweeps/run_muon_lr_sweep.sh
 
 CONDA_ENV="${BABYSTEPS_CONDA_ENV:-babylm}"
-LOG_DIR="${BABYSTEPS_LOG_DIR:-/SSD2/babylm-baby-steps-runs/logs/muon}"
+LOG_DIR="${BABYSTEPS_LOG_DIR:-${BABYSTEPS_RUNS_DIR:-$HOME/babylm-baby-steps-runs}/logs/muon}"
 SHOW_PROGRESS="${BABYSTEPS_SHOW_PROGRESS:-1}"
 DRY_RUN="${BABYSTEPS_DRY_RUN:-0}"
 

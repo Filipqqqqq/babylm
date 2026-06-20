@@ -1,10 +1,10 @@
 name: babylm10m_bpe16384_material_world_k100000_seed42
 
 base:
-  train_chunks: /SSD2/babylm-baby-steps-cache/token_chunks/babylm10m_byte_bpe_16384_block512_eos/train.pkl
+  train_chunks: ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_chunks/babylm10m_byte_bpe_16384_block512_eos/train.pkl
 
 tokenizer:
-  path: /SSD2/babylm-baby-steps-cache/tokenizers/babylm10m_byte_bpe_16384
+  path: ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/tokenizers/babylm10m_byte_bpe_16384
 
 synthetic:
   requested_tokens: 100000
@@ -23,7 +23,7 @@ random:
   seed: 42
 
 output:
-  dir: /SSD2/babylm-baby-steps-cache/token_chunks/babylm10m_byte_bpe_16384_block512_eos_mw_k100000_seed42
+  dir: ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_chunks/babylm10m_byte_bpe_16384_block512_eos_mw_k100000_seed42
   train_filename: train.pkl
   manifest_filename: manifest.json
   overwrite: false

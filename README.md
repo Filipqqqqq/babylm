@@ -25,7 +25,7 @@ pip install -e ".[liger]"
 By default, configs write run outputs under:
 
 ```text
-/SSD2/babylm-baby-steps-runs/training/
+${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/training/
 ```
 
 Set `BABYSTEPS_RUNS_DIR` and `BABYSTEPS_CACHE_DIR` to move runs and generated
@@ -75,7 +75,7 @@ CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
 
 That config intentionally has no `max_train_chunks` or `max_val_chunks`; the
 older `llama_tiny_*_smoke.yaml` configs are only for quick capped checks.
-Outputs go under `/SSD2/babylm-baby-steps-runs/training/` unless
+Outputs go under `${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/training/` unless
 `BABYSTEPS_RUNS_DIR` is set.
 
 If the tokenizer or chunk pickles are missing, build the 16k byte-BPE assets:
@@ -91,9 +91,9 @@ python scripts/data/build_token_chunks.py \
 The expected generated inputs are:
 
 ```text
-/SSD2/babylm-baby-steps-cache/tokenizers/babylm10m_byte_bpe_16384/
-/SSD2/babylm-baby-steps-cache/token_chunks/babylm10m_byte_bpe_16384_block512_eos/train.pkl
-/SSD2/babylm-baby-steps-cache/token_chunks/babylm10m_byte_bpe_16384_block512_eos/dev.pkl
+${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/tokenizers/babylm10m_byte_bpe_16384/
+${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_chunks/babylm10m_byte_bpe_16384_block512_eos/train.pkl
+${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_chunks/babylm10m_byte_bpe_16384_block512_eos/dev.pkl
 ```
 
 For a seed or LR sweep, use the launcher. It now defaults to the full 10M
@@ -272,8 +272,8 @@ source, pass the clean-text directories:
 ```bash
 python scripts/data/build_token_chunks.py \
   --config configs/tokenization/gpt2_pretrained_10m_block512.yaml \
-  --clean-train-dir /SSD2/babylm-baby-steps-cache/clean_text/babylm_10m/train \
-  --clean-dev-dir /SSD2/babylm-baby-steps-cache/clean_text/babylm_10m/dev
+  --clean-train-dir ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/clean_text/babylm_10m/train \
+  --clean-dev-dir ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/clean_text/babylm_10m/dev
 ```
 
 Train GPT-2 small from those generated chunks:
@@ -358,9 +358,9 @@ Do not commit raw datasets, large `.pkl` caches, checkpoints, or generated eval
 results. Keep those on local storage, for example:
 
 ```text
-/SSD2/datasets/
-/SSD2/babylm-baby-steps-cache/
-/SSD2/babylm-baby-steps-runs/
+${BABYLM_DATA_ROOT:-~/babylm-data}/
+${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/
+${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/
 ```
 
 Use `babylm-baby-steps-cache` for reusable generated inputs such as cleaned
@@ -396,7 +396,7 @@ configs/eval/                  # configs for model paths, tasks, and outputs
 ```
 
 Evaluation outputs should stay outside git, for example under
-`/SSD2/babylm-baby-steps-runs/evaluation/`.
+`${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/evaluation/`.
 
 Run fast zero-shot evaluation over every Hugging Face checkpoint in a completed
 training run:
@@ -404,8 +404,8 @@ training run:
 ```bash
 conda run -n babylm python scripts/eval/eval_babylm_checkpoints.py \
   --config configs/eval/fast_eval.yaml \
-  --run-dir /SSD2/babylm-baby-steps-runs/training/YOUR_RUN \
-  --output-dir /SSD2/babylm-baby-steps-runs/evaluation/YOUR_RUN_fast_eval \
+  --run-dir ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/training/YOUR_RUN \
+  --output-dir ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/evaluation/YOUR_RUN_fast_eval \
   --device 1
 ```
 

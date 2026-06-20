@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -21,31 +20,15 @@ from babysteps.data.token_block_mixer import (
     mix_token_blocks,
     read_synthetic_documents,
 )
+from babysteps.paths import expand_env_vars, resolve_path, validate_tokenizer_dir
 
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def expand_env_vars(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: expand_env_vars(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [expand_env_vars(item) for item in value]
-    if isinstance(value, str):
-        return os.path.expandvars(value)
-    return value
-
-
 def load_yaml_config(path: str | Path) -> dict[str, Any]:
     with Path(path).open("r", encoding="utf-8") as f:
         return expand_env_vars(yaml.safe_load(f))
-
-
-def resolve_path(value: str | Path, *, base_dir: Path = ROOT) -> Path:
-    path = Path(value).expanduser()
-    if path.is_absolute():
-        return path
-    return base_dir / path
 
 
 def source_from_config(raw: dict[str, Any]) -> SyntheticSource:
@@ -130,6 +113,7 @@ def run_from_config_and_args(config: dict[str, Any], args: argparse.Namespace) -
     shuffle_documents = bool(synthetic_config.get("shuffle_documents", True))
     shuffle_synthetic_blocks = bool(synthetic_config.get("shuffle_synthetic_blocks", True))
 
+    validate_tokenizer_dir(tokenizer_path)
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
     if tokenizer.eos_token_id is None:
         raise ValueError(f"Tokenizer has no eos_token_id: {tokenizer_path}")

@@ -45,7 +45,7 @@ round-robin `target_anchor`, and about 70% of rows also receive a
 `target_dynamic_concept`.
 
 ```bash
-cd /home/jorge/babylm-baby-steps
+cd /path/to/babylm-baby-steps
 
 conda run --no-capture-output -n babylm \
   python -m babysteps.cli.generate_material_world_fireworks \
@@ -106,13 +106,13 @@ The block mixer can take multiple synthetic files, so the combined v2 mix can us
 both the old dynamics corpus and the new hard-anchor top-up directly:
 
 ```bash
-cd /home/jorge/babylm-baby-steps
+cd /path/to/babylm-baby-steps
 
-BASE_CHUNKS=/SSD2/babylm-baby-steps-cache/token_chunks/babylm10m_byte_bpe_16384_block512_eos/train.pkl
-TOKENIZER=/SSD2/babylm-baby-steps-cache/tokenizers/babylm10m_byte_bpe_16384
+BASE_CHUNKS=${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_chunks/babylm10m_byte_bpe_16384_block512_eos/train.pkl
+TOKENIZER=${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/tokenizers/babylm10m_byte_bpe_16384
 OLD_DYN=data/material_world/fireworks_probe_ewok_softmix_1000_dyn/train_audited.txt
 ANCHOR_DYN=data/material_world/fireworks_probe_ewok_dyn_anchor_v2/train_audited.txt
-MIX_ROOT=/SSD2/babylm-baby-steps-cache/token_chunks
+MIX_ROOT=${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_chunks
 
 # 1.0%: floor(16,246,784 * 0.01) requested tokens -> 317 full 512-token blocks.
 conda run --no-capture-output -n babylm \
