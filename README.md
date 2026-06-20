@@ -152,6 +152,20 @@ works well under memory and speed constraints. It may or may not beat a GPT-2
 small model at that scale, but it has been much better than the GPT-2 100M
 baseline in local comparisons.
 
+## Train 2026 Strict-Small GPT-2 + Muon
+
+Use this path for BabyLM 2026 Strict-Small without changing the older local 10M
+recipes. It trains the same 8-layer, 512-hidden GPT-2 + Muon shape from
+prebuilt token shards for `BabyLM-community/BabyLM-2026-Strict-Small`:
+
+```bash
+python scripts/data/build_token_shards.py \
+  --config configs/tokenization/babylm2026_strict_small_byte_bpe_16384_shards.yaml
+
+python scripts/train/train_causal_lm.py \
+  --config configs/train/gpt2_8l512_bpe16384_babylm2026_strict_small_muon.yaml
+```
+
 ## Custom Datasets And Tokenizers
 
 The trainer is intentionally dataset-agnostic: it consumes prebuilt

@@ -185,6 +185,56 @@ def test_babylm2026_build_config_paths_can_use_exact_env_overrides(monkeypatch) 
     assert config["shards"]["output_dir"] == "/exact/shards"
 
 
+def test_babylm2026_strict_small_build_config_paths_can_use_env_roots(monkeypatch) -> None:
+    builder = load_token_shard_builder_module()
+    monkeypatch.delenv("BABYSTEPS_BABYLM2026_STRICT_SMALL_TOKENIZER_DIR", raising=False)
+    monkeypatch.delenv("BABYSTEPS_BABYLM2026_STRICT_SMALL_SHARDS_DIR", raising=False)
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+
+    config = builder.load_yaml_config(
+        ROOT
+        / "configs"
+        / "tokenization"
+        / "babylm2026_strict_small_byte_bpe_16384_shards.yaml"
+    )
+
+    assert config["dataset"]["name"] == "BabyLM-community/BabyLM-2026-Strict-Small"
+    assert (
+        config["tokenizer"]["output_dir"]
+        == "/cache/tokenizers/babylm2026_strict_small_byte_bpe_16384"
+    )
+    assert (
+        config["shards"]["output_dir"]
+        == "/cache/token_shards/babylm2026_strict_small_byte_bpe_16384_bos_eos"
+    )
+
+
+def test_gpt2_strict_small_train_config_paths_can_use_env_roots(monkeypatch) -> None:
+    train_script = load_train_script_module()
+    monkeypatch.delenv("BABYSTEPS_BABYLM2026_STRICT_SMALL_TOKENIZER_DIR", raising=False)
+    monkeypatch.delenv("BABYSTEPS_BABYLM2026_STRICT_SMALL_SHARDS_DIR", raising=False)
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+    monkeypatch.setenv("BABYSTEPS_RUNS_DIR", "/runs")
+
+    config = train_script.load_yaml_config(
+        ROOT
+        / "configs"
+        / "train"
+        / "gpt2_8l512_bpe16384_babylm2026_strict_small_muon.yaml"
+    )
+
+    assert config["run"]["output_root"] == "/runs/training"
+    assert config["data"]["format"] == "token_shards"
+    assert (
+        config["data"]["data_dir"]
+        == "/cache/token_shards/babylm2026_strict_small_byte_bpe_16384_bos_eos"
+    )
+    assert (
+        config["tokenizer"]["name"]
+        == "/cache/tokenizers/babylm2026_strict_small_byte_bpe_16384"
+    )
+
+
 def test_cli_config_overrides_update_nested_values() -> None:
     train_script = load_train_script_module()
     config = {
