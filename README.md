@@ -156,7 +156,8 @@ baseline in local comparisons.
 
 Use this path for BabyLM 2026 Strict-Small without changing the older local 10M
 recipes. It trains the same 8-layer, 512-hidden GPT-2 + Muon shape from
-prebuilt token shards for `BabyLM-community/BabyLM-2026-Strict-Small`:
+prebuilt token shards for `BabyLM-community/BabyLM-2026-Strict-Small`, using
+bf16 mixed precision by default:
 
 ```bash
 python scripts/data/build_token_shards.py \

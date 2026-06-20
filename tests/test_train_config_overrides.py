@@ -225,6 +225,8 @@ def test_gpt2_strict_small_train_config_paths_can_use_env_roots(monkeypatch) -> 
 
     assert config["run"]["output_root"] == "/runs/training"
     assert config["data"]["format"] == "token_shards"
+    assert config["training"]["batch_size"] == 32
+    assert config["training"]["mixed_precision"] == "bf16"
     assert (
         config["data"]["data_dir"]
         == "/cache/token_shards/babylm2026_strict_small_byte_bpe_16384_bos_eos"

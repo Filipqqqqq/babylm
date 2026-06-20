@@ -48,7 +48,7 @@ training:
   warmup_ratio: 0.03
   gradient_accumulation_steps: 1
   gradient_clip_norm: 1.0
-  mixed_precision: "no"
+  mixed_precision: bf16
 
 logging:
   log_every_steps: 50
