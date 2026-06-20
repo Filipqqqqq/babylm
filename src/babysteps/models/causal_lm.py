@@ -6,6 +6,7 @@ configs switch between GPT-2 and LLaMA-style decoder architectures.
 
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 from torch import nn
@@ -59,6 +60,20 @@ def _token_id(tokenizer: Any, primary: str, fallback: str | None = None) -> int 
     if value is None and fallback is not None:
         value = getattr(tokenizer, fallback, None)
     return None if value is None else int(value)
+
+
+def _llama_rope_kwargs(rope_theta: float) -> dict[str, Any]:
+    """Return RoPE kwargs for the installed Transformers LLaMA config surface."""
+
+    llama_params = inspect.signature(LlamaConfig.__init__).parameters
+    if "rope_parameters" in llama_params:
+        return {
+            "rope_parameters": {
+                "rope_type": "default",
+                "rope_theta": float(rope_theta),
+            }
+        }
+    return {"rope_theta": float(rope_theta)}
 
 
 def resolve_model_vocab_size(model_config: dict[str, Any], tokenizer: Any) -> int:
@@ -155,7 +170,7 @@ def build_causal_lm_config(
                 name="model.attention_dropout",
             ),
             tie_word_embeddings=bool(llama_tie_word_embeddings),
-            rope_theta=float(rope_theta),
+            **_llama_rope_kwargs(float(rope_theta)),
         )
         config.babysteps_llama_embd_pdrop = _dropout_probability(
             llama_embd_pdrop,

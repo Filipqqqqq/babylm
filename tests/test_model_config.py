@@ -32,6 +32,16 @@ def _tokenizer(vocab_size: int = 128) -> _Tokenizer:
     )
 
 
+def _config_rope_theta(hf_config) -> float:
+    if hasattr(hf_config, "rope_theta"):
+        return float(hf_config.rope_theta)
+
+    rope_parameters = getattr(hf_config, "rope_parameters", None)
+    if rope_parameters is None:
+        rope_parameters = getattr(hf_config, "rope_scaling", None)
+    return float(rope_parameters["rope_theta"])
+
+
 def test_normalize_model_arch_accepts_expected_aliases() -> None:
     assert normalize_model_arch("gpt-2") == "gpt2"
     assert normalize_model_arch("llama_3") == "llama"
@@ -98,7 +108,7 @@ def test_build_llama_config_from_dict_uses_babysteps_shape_keys() -> None:
     assert hf_config.hidden_size == 128
     assert hf_config.intermediate_size == default_llama_intermediate_size(128)
     assert hf_config.tie_word_embeddings is True
-    assert hf_config.rope_theta == 500000.0
+    assert _config_rope_theta(hf_config) == 500000.0
     assert hf_config.bos_token_id == 1
     assert hf_config.eos_token_id == 2
     assert hf_config.pad_token_id == 0
