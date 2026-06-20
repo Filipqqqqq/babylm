@@ -21,6 +21,7 @@ hf_token.txt
 git_pat.txt
 *_pat.txt
 *token*.txt
+*TOKEN*.txt
 fireworks_api.txt
 *.key
 *.pem

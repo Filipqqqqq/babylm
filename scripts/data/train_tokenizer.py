@@ -23,7 +23,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from babysteps.paths import expand_env_vars, resolve_path
+from babysteps.paths import expand_env_vars, resolve_path, validate_tokenizer_dir
 
 
 def load_yaml_config(path: str | Path) -> dict[str, Any]:
@@ -179,6 +179,7 @@ def main() -> None:
         model_max_length=model_max_length,
     )
     hf_tokenizer.save_pretrained(output_dir)
+    validate_tokenizer_dir(output_dir)
 
     # Reload once through AutoTokenizer, because that is how build_token_chunks
     # and the BabyLM eval pipeline will see this tokenizer.

@@ -343,6 +343,7 @@ def train_or_load_tokenizer(
     )
     hf_tokenizer = wrap_as_hf_tokenizer(tokenizer, tokenizer_config)
     hf_tokenizer.save_pretrained(output_dir)
+    validate_tokenizer_dir(output_dir)
     hf_tokenizer = AutoTokenizer.from_pretrained(output_dir)
     manifest = {
         "created_utc": datetime.now(timezone.utc).isoformat(),

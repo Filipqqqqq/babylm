@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from pathlib import Path
@@ -16,6 +17,7 @@ _TOKENIZER_FILES = (
     "merges.txt",
     "tokenizer.model",
 )
+_INVALID_FAST_TOKENIZER_CLASSES = {"TokenizersBackend"}
 
 
 def _find_shell_expression_end(text: str, start: int) -> int:
@@ -123,6 +125,34 @@ def looks_like_local_path(value: str | Path) -> bool:
     )
 
 
+def repair_local_tokenizer_config(path: str | Path) -> bool:
+    """Repair known-invalid tokenizer metadata written by raw tokenizers backends."""
+
+    path = resolve_path(path)
+    config_path = path / "tokenizer_config.json"
+    if not config_path.is_file():
+        return False
+
+    with config_path.open("r", encoding="utf-8") as f:
+        config = json.load(f)
+    if not isinstance(config, dict):
+        return False
+
+    if config.get("tokenizer_class") not in _INVALID_FAST_TOKENIZER_CLASSES:
+        return False
+
+    config["tokenizer_class"] = "PreTrainedTokenizerFast"
+    if config.get("backend") == "tokenizers":
+        config.pop("backend")
+
+    tmp_path = config_path.with_suffix(config_path.suffix + ".tmp")
+    with tmp_path.open("w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
+        f.write("\n")
+    os.replace(tmp_path, config_path)
+    return True
+
+
 def validate_tokenizer_dir(
     value: str | Path,
     *,
@@ -141,6 +171,7 @@ def validate_tokenizer_dir(
     path = resolve_path(value)
     present = [name for name in _TOKENIZER_FILES if (path / name).exists()]
     if path.is_dir() and present:
+        repair_local_tokenizer_config(path)
         return path
 
     expected = ", ".join(_TOKENIZER_FILES[:2])
