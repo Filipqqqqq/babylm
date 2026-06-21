@@ -22,6 +22,7 @@ dev = [
 ]
 analysis = [
     "matplotlib>=3.7,<4",
+    "spacy>=3.7,<4",
 ]
 eval = [
     "lm-eval>=0.4,<0.5",

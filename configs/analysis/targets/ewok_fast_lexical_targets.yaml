@@ -1,0 +1,2021 @@
+version: 1
+targets:
+- id: ewok_agent_properties_believe
+  label: believe
+  domain: agent-properties
+  surfaces:
+  - believe
+  lemmas:
+  - believe
+  metadata:
+    source: ewok_fast
+    eval_count: 8
+    concept_fields:
+      ConceptA: 8
+    source_files:
+    - agent-properties.jsonl
+- id: ewok_agent_properties_choose
+  label: choose
+  domain: agent-properties
+  surfaces:
+  - choose
+  lemmas:
+  - choose
+  metadata:
+    source: ewok_fast
+    eval_count: 18
+    concept_fields:
+      ConceptA: 18
+    source_files:
+    - agent-properties.jsonl
+- id: ewok_agent_properties_doubt
+  label: doubt
+  domain: agent-properties
+  surfaces:
+  - doubt
+  lemmas:
+  - doubt
+  metadata:
+    source: ewok_fast
+    eval_count: 4
+    concept_fields:
+      ConceptB: 4
+    source_files:
+    - agent-properties.jsonl
+- id: ewok_agent_properties_feel
+  label: feel
+  domain: agent-properties
+  surfaces:
+  - feel
+  lemmas:
+  - feel
+  metadata:
+    source: ewok_fast
+    eval_count: 1
+    concept_fields:
+      ConceptA: 1
+    source_files:
+    - agent-properties.jsonl
+- id: ewok_agent_properties_hear
+  label: hear
+  domain: agent-properties
+  surfaces:
+  - hear
+  lemmas:
+  - hear
+  metadata:
+    source: ewok_fast
+    eval_count: 4
+    concept_fields:
+      ConceptA: 4
+    source_files:
+    - agent-properties.jsonl
+- id: ewok_agent_properties_imagine
+  label: imagine
+  domain: agent-properties
+  surfaces:
+  - imagine
+  lemmas:
+  - imagine
+  metadata:
+    source: ewok_fast
+    eval_count: 4
+    concept_fields:
+      ConceptB: 4
+    source_files:
+    - agent-properties.jsonl
+- id: ewok_agent_properties_intend
+  label: intend
+  domain: agent-properties
+  surfaces:
+  - intend
+  lemmas:
+  - intend
+  metadata:
+    source: ewok_fast
+    eval_count: 4
+    concept_fields:
+      ConceptA: 4
+    source_files:
+    - agent-properties.jsonl
+- id: ewok_agent_properties_prefer
+  label: prefer
+  domain: agent-properties
+  surfaces:
+  - prefer
+  lemmas:
+  - prefer
+  metadata:
+    source: ewok_fast
+    eval_count: 3
+    concept_fields:
+      ConceptA: 3
+    source_files:
+    - agent-properties.jsonl
+- id: ewok_agent_properties_see
+  label: see
+  domain: agent-properties
+  surfaces:
+  - see
+  lemmas:
+  - see
+  metadata:
+    source: ewok_fast
+    eval_count: 7
+    concept_fields:
+      ConceptA: 7
+    source_files:
+    - agent-properties.jsonl
+- id: ewok_agent_properties_taste
+  label: taste
+  domain: agent-properties
+  surfaces:
+  - taste
+  lemmas:
+  - taste
+  metadata:
+    source: ewok_fast
+    eval_count: 4
+    concept_fields:
+      ConceptA: 1
+      ConceptB: 3
+    source_files:
+    - agent-properties.jsonl
+- id: ewok_material_dynamics_break
+  label: break
+  domain: material-dynamics
+  surfaces:
+  - break
+  lemmas:
+  - break
+  metadata:
+    source: ewok_fast
+    eval_count: 14
+    concept_fields:
+      ConceptA: 14
+    source_files:
+    - material-dynamics.jsonl
+- id: ewok_material_dynamics_drape
+  label: drape
+  domain: material-dynamics
+  surfaces:
+  - drape
+  lemmas:
+  - drape
+  metadata:
+    source: ewok_fast
+    eval_count: 14
+    concept_fields:
+      ConceptA: 8
+      ConceptB: 6
+    source_files:
+    - material-dynamics.jsonl
+- id: ewok_material_dynamics_drip
+  label: drip
+  domain: material-dynamics
+  surfaces:
+  - drip
+  lemmas:
+  - drip
+  metadata:
+    source: ewok_fast
+    eval_count: 14
+    concept_fields:
+      ConceptB: 14
+    source_files:
+    - material-dynamics.jsonl
+- id: ewok_material_dynamics_flap
+  label: flap
+  domain: material-dynamics
+  surfaces:
+  - flap
+  lemmas:
+  - flap
+  metadata:
+    source: ewok_fast
+    eval_count: 3
+    concept_fields:
+      ConceptA: 1
+      ConceptB: 2
+    source_files:
+    - material-dynamics.jsonl
+- id: ewok_material_dynamics_fold
+  label: fold
+  domain: material-dynamics
+  surfaces:
+  - fold
+  lemmas:
+  - fold
+  metadata:
+    source: ewok_fast
+    eval_count: 2
+    concept_fields:
+      ConceptA: 2
+    source_files:
+    - material-dynamics.jsonl
+- id: ewok_material_dynamics_hang
+  label: hang
+  domain: material-dynamics
+  surfaces:
+  - hang
+  lemmas:
+  - hang
+  metadata:
+    source: ewok_fast
+    eval_count: 14
+    concept_fields:
+      ConceptA: 9
+      ConceptB: 5
+    source_files:
+    - material-dynamics.jsonl
+- id: ewok_material_dynamics_pile
+  label: pile
+  domain: material-dynamics
+  surfaces:
+  - pile
+  lemmas:
+  - pile
+  metadata:
+    source: ewok_fast
+    eval_count: 3
+    concept_fields:
+      ConceptA: 3
+    source_files:
+    - material-dynamics.jsonl
+- id: ewok_material_dynamics_pour
+  label: pour
+  domain: material-dynamics
+  surfaces:
+  - pour
+  lemmas:
+  - pour
+  metadata:
+    source: ewok_fast
+    eval_count: 15
+    concept_fields:
+      ConceptB: 15
+    source_files:
+    - material-dynamics.jsonl
+- id: ewok_material_dynamics_rip
+  label: rip
+  domain: material-dynamics
+  surfaces:
+  - rip
+  lemmas:
+  - rip
+  metadata:
+    source: ewok_fast
+    eval_count: 13
+    concept_fields:
+      ConceptA: 12
+      ConceptB: 1
+    source_files:
+    - material-dynamics.jsonl
+- id: ewok_material_dynamics_ripple
+  label: ripple
+  domain: material-dynamics
+  surfaces:
+  - ripple
+  lemmas:
+  - ripple
+  metadata:
+    source: ewok_fast
+    eval_count: 3
+    concept_fields:
+      ConceptB: 3
+    source_files:
+    - material-dynamics.jsonl
+- id: ewok_material_dynamics_splash
+  label: splash
+  domain: material-dynamics
+  surfaces:
+  - splash
+  lemmas:
+  - splash
+  metadata:
+    source: ewok_fast
+    eval_count: 6
+    concept_fields:
+      ConceptB: 6
+    source_files:
+    - material-dynamics.jsonl
+- id: ewok_material_dynamics_squeeze
+  label: squeeze
+  domain: material-dynamics
+  surfaces:
+  - squeeze
+  lemmas:
+  - squeeze
+  metadata:
+    source: ewok_fast
+    eval_count: 16
+    concept_fields:
+      ConceptA: 16
+    source_files:
+    - material-dynamics.jsonl
+- id: ewok_material_dynamics_stir
+  label: stir
+  domain: material-dynamics
+  surfaces:
+  - stir
+  lemmas:
+  - stir
+  metadata:
+    source: ewok_fast
+    eval_count: 59
+    concept_fields:
+      ConceptA: 14
+      ConceptB: 45
+    source_files:
+    - material-dynamics.jsonl
+- id: ewok_material_dynamics_tap
+  label: tap
+  domain: material-dynamics
+  surfaces:
+  - tap
+  lemmas:
+  - tap
+  metadata:
+    source: ewok_fast
+    eval_count: 6
+    concept_fields:
+      ConceptA: 6
+    source_files:
+    - material-dynamics.jsonl
+- id: ewok_material_dynamics_wrinkle
+  label: wrinkle
+  domain: material-dynamics
+  surfaces:
+  - wrinkle
+  lemmas:
+  - wrinkle
+  metadata:
+    source: ewok_fast
+    eval_count: 18
+    concept_fields:
+      ConceptA: 15
+      ConceptB: 3
+    source_files:
+    - material-dynamics.jsonl
+- id: ewok_material_properties_bouncy
+  label: bouncy
+  domain: material-properties
+  surfaces:
+  - bouncy
+  lemmas:
+  - bouncy
+  metadata:
+    source: ewok_fast
+    eval_count: 18
+    concept_fields:
+      ConceptA: 18
+    source_files:
+    - material-properties.jsonl
+- id: ewok_material_properties_cold
+  label: cold
+  domain: material-properties
+  surfaces:
+  - cold
+  lemmas:
+  - cold
+  metadata:
+    source: ewok_fast
+    eval_count: 13
+    concept_fields:
+      ConceptA: 13
+    source_files:
+    - material-properties.jsonl
+- id: ewok_material_properties_fragile
+  label: fragile
+  domain: material-properties
+  surfaces:
+  - fragile
+  lemmas:
+  - fragile
+  metadata:
+    source: ewok_fast
+    eval_count: 18
+    concept_fields:
+      ConceptA: 18
+    source_files:
+    - material-properties.jsonl
+- id: ewok_material_properties_hard
+  label: hard
+  domain: material-properties
+  surfaces:
+  - hard
+  lemmas:
+  - hard
+  metadata:
+    source: ewok_fast
+    eval_count: 21
+    concept_fields:
+      ConceptB: 21
+    source_files:
+    - material-properties.jsonl
+- id: ewok_material_properties_heavy
+  label: heavy
+  domain: material-properties
+  surfaces:
+  - heavy
+  lemmas:
+  - heavy
+  metadata:
+    source: ewok_fast
+    eval_count: 7
+    concept_fields:
+      ConceptA: 7
+    source_files:
+    - material-properties.jsonl
+- id: ewok_material_properties_light
+  label: light
+  domain: material-properties
+  surfaces:
+  - light
+  lemmas:
+  - light
+  metadata:
+    source: ewok_fast
+    eval_count: 7
+    concept_fields:
+      ConceptB: 7
+    source_files:
+    - material-properties.jsonl
+- id: ewok_material_properties_opaque
+  label: opaque
+  domain: material-properties
+  surfaces:
+  - opaque
+  lemmas:
+  - opaque
+  metadata:
+    source: ewok_fast
+    eval_count: 13
+    concept_fields:
+      ConceptB: 13
+    source_files:
+    - material-properties.jsonl
+- id: ewok_material_properties_rough
+  label: rough
+  domain: material-properties
+  surfaces:
+  - rough
+  lemmas:
+  - rough
+  metadata:
+    source: ewok_fast
+    eval_count: 10
+    concept_fields:
+      ConceptB: 10
+    source_files:
+    - material-properties.jsonl
+- id: ewok_material_properties_smooth
+  label: smooth
+  domain: material-properties
+  surfaces:
+  - smooth
+  lemmas:
+  - smooth
+  metadata:
+    source: ewok_fast
+    eval_count: 10
+    concept_fields:
+      ConceptA: 10
+    source_files:
+    - material-properties.jsonl
+- id: ewok_material_properties_soft
+  label: soft
+  domain: material-properties
+  surfaces:
+  - soft
+  lemmas:
+  - soft
+  metadata:
+    source: ewok_fast
+    eval_count: 21
+    concept_fields:
+      ConceptA: 21
+    source_files:
+    - material-properties.jsonl
+- id: ewok_material_properties_sturdy
+  label: sturdy
+  domain: material-properties
+  surfaces:
+  - sturdy
+  lemmas:
+  - sturdy
+  metadata:
+    source: ewok_fast
+    eval_count: 18
+    concept_fields:
+      ConceptB: 18
+    source_files:
+    - material-properties.jsonl
+- id: ewok_material_properties_transparent
+  label: transparent
+  domain: material-properties
+  surfaces:
+  - transparent
+  lemmas:
+  - transparent
+  metadata:
+    source: ewok_fast
+    eval_count: 13
+    concept_fields:
+      ConceptA: 13
+    source_files:
+    - material-properties.jsonl
+- id: ewok_material_properties_warm
+  label: warm
+  domain: material-properties
+  surfaces:
+  - warm
+  lemmas:
+  - warm
+  metadata:
+    source: ewok_fast
+    eval_count: 13
+    concept_fields:
+      ConceptB: 13
+    source_files:
+    - material-properties.jsonl
+- id: ewok_physical_dynamics_accelerate
+  label: accelerate
+  domain: physical-dynamics
+  surfaces:
+  - accelerate
+  lemmas:
+  - accelerate
+  metadata:
+    source: ewok_fast
+    eval_count: 17
+    concept_fields:
+      ConceptA: 17
+    source_files:
+    - physical-dynamics.jsonl
+- id: ewok_physical_dynamics_fall
+  label: fall
+  domain: physical-dynamics
+  surfaces:
+  - fall
+  lemmas:
+  - fall
+  metadata:
+    source: ewok_fast
+    eval_count: 18
+    concept_fields:
+      ConceptA: 18
+    source_files:
+    - physical-dynamics.jsonl
+- id: ewok_physical_dynamics_float
+  label: float
+  domain: physical-dynamics
+  surfaces:
+  - float
+  lemmas:
+  - float
+  metadata:
+    source: ewok_fast
+    eval_count: 32
+    concept_fields:
+      ConceptB: 32
+    source_files:
+    - physical-dynamics.jsonl
+- id: ewok_physical_dynamics_grow
+  label: grow
+  domain: physical-dynamics
+  surfaces:
+  - grow
+  lemmas:
+  - grow
+  metadata:
+    source: ewok_fast
+    eval_count: 7
+    concept_fields:
+      ConceptA: 7
+    source_files:
+    - physical-dynamics.jsonl
+- id: ewok_physical_dynamics_rise
+  label: rise
+  domain: physical-dynamics
+  surfaces:
+  - rise
+  lemmas:
+  - rise
+  metadata:
+    source: ewok_fast
+    eval_count: 18
+    concept_fields:
+      ConceptB: 18
+    source_files:
+    - physical-dynamics.jsonl
+- id: ewok_physical_dynamics_roll
+  label: roll
+  domain: physical-dynamics
+  surfaces:
+  - roll
+  lemmas:
+  - roll
+  metadata:
+    source: ewok_fast
+    eval_count: 26
+    concept_fields:
+      ConceptA: 26
+    source_files:
+    - physical-dynamics.jsonl
+- id: ewok_physical_dynamics_shrink
+  label: shrink
+  domain: physical-dynamics
+  surfaces:
+  - shrink
+  lemmas:
+  - shrink
+  metadata:
+    source: ewok_fast
+    eval_count: 7
+    concept_fields:
+      ConceptB: 7
+    source_files:
+    - physical-dynamics.jsonl
+- id: ewok_physical_dynamics_sink
+  label: sink
+  domain: physical-dynamics
+  surfaces:
+  - sink
+  lemmas:
+  - sink
+  metadata:
+    source: ewok_fast
+    eval_count: 32
+    concept_fields:
+      ConceptA: 32
+    source_files:
+    - physical-dynamics.jsonl
+- id: ewok_physical_dynamics_slide
+  label: slide
+  domain: physical-dynamics
+  surfaces:
+  - slide
+  lemmas:
+  - slide
+  metadata:
+    source: ewok_fast
+    eval_count: 26
+    concept_fields:
+      ConceptB: 26
+    source_files:
+    - physical-dynamics.jsonl
+- id: ewok_physical_interactions_approach
+  label: approach
+  domain: physical-interactions
+  surfaces:
+  - approach
+  lemmas:
+  - approach
+  metadata:
+    source: ewok_fast
+    eval_count: 1
+    concept_fields:
+      ConceptB: 1
+    source_files:
+    - physical-interactions.jsonl
+- id: ewok_physical_interactions_attract
+  label: attract
+  domain: physical-interactions
+  surfaces:
+  - attract
+  lemmas:
+  - attract
+  metadata:
+    source: ewok_fast
+    eval_count: 6
+    concept_fields:
+      ConceptA: 6
+    source_files:
+    - physical-interactions.jsonl
+- id: ewok_physical_interactions_break
+  label: break
+  domain: physical-interactions
+  surfaces:
+  - break
+  lemmas:
+  - break
+  metadata:
+    source: ewok_fast
+    eval_count: 9
+    concept_fields:
+      ConceptA: 9
+    source_files:
+    - physical-interactions.jsonl
+- id: ewok_physical_interactions_catch
+  label: catch
+  domain: physical-interactions
+  surfaces:
+  - catch
+  lemmas:
+  - catch
+  metadata:
+    source: ewok_fast
+    eval_count: 7
+    concept_fields:
+      ConceptA: 7
+    source_files:
+    - physical-interactions.jsonl
+- id: ewok_physical_interactions_cool
+  label: cool
+  domain: physical-interactions
+  surfaces:
+  - cool
+  lemmas:
+  - cool
+  metadata:
+    source: ewok_fast
+    eval_count: 21
+    concept_fields:
+      ConceptB: 21
+    source_files:
+    - physical-interactions.jsonl
+- id: ewok_physical_interactions_drop
+  label: drop
+  domain: physical-interactions
+  surfaces:
+  - drop
+  lemmas:
+  - drop
+  metadata:
+    source: ewok_fast
+    eval_count: 8
+    concept_fields:
+      ConceptA: 3
+      ConceptB: 5
+    source_files:
+    - physical-interactions.jsonl
+- id: ewok_physical_interactions_fix
+  label: fix
+  domain: physical-interactions
+  surfaces:
+  - fix
+  lemmas:
+  - fix
+  metadata:
+    source: ewok_fast
+    eval_count: 9
+    concept_fields:
+      ConceptB: 9
+    source_files:
+    - physical-interactions.jsonl
+- id: ewok_physical_interactions_heat
+  label: heat
+  domain: physical-interactions
+  surfaces:
+  - heat
+  lemmas:
+  - heat
+  metadata:
+    source: ewok_fast
+    eval_count: 21
+    concept_fields:
+      ConceptA: 21
+    source_files:
+    - physical-interactions.jsonl
+- id: ewok_physical_interactions_kick
+  label: kick
+  domain: physical-interactions
+  surfaces:
+  - kick
+  lemmas:
+  - kick
+  metadata:
+    source: ewok_fast
+    eval_count: 12
+    concept_fields:
+      ConceptA: 12
+    source_files:
+    - physical-interactions.jsonl
+- id: ewok_physical_interactions_lift
+  label: lift
+  domain: physical-interactions
+  surfaces:
+  - lift
+  lemmas:
+  - lift
+  metadata:
+    source: ewok_fast
+    eval_count: 3
+    concept_fields:
+      ConceptB: 3
+    source_files:
+    - physical-interactions.jsonl
+- id: ewok_physical_interactions_pull
+  label: pull
+  domain: physical-interactions
+  surfaces:
+  - pull
+  lemmas:
+  - pull
+  metadata:
+    source: ewok_fast
+    eval_count: 3
+    concept_fields:
+      ConceptB: 3
+    source_files:
+    - physical-interactions.jsonl
+- id: ewok_physical_interactions_push
+  label: push
+  domain: physical-interactions
+  surfaces:
+  - push
+  lemmas:
+  - push
+  metadata:
+    source: ewok_fast
+    eval_count: 7
+    concept_fields:
+      ConceptA: 7
+    source_files:
+    - physical-interactions.jsonl
+- id: ewok_physical_interactions_repel
+  label: repel
+  domain: physical-interactions
+  surfaces:
+  - repel
+  lemmas:
+  - repel
+  metadata:
+    source: ewok_fast
+    eval_count: 6
+    concept_fields:
+      ConceptB: 6
+    source_files:
+    - physical-interactions.jsonl
+- id: ewok_physical_interactions_throw
+  label: throw
+  domain: physical-interactions
+  surfaces:
+  - throw
+  lemmas:
+  - throw
+  metadata:
+    source: ewok_fast
+    eval_count: 28
+    concept_fields:
+      ConceptA: 18
+      ConceptB: 10
+    source_files:
+    - physical-interactions.jsonl
+- id: ewok_physical_interactions_touch
+  label: touch
+  domain: physical-interactions
+  surfaces:
+  - touch
+  lemmas:
+  - touch
+  metadata:
+    source: ewok_fast
+    eval_count: 11
+    concept_fields:
+      ConceptB: 11
+    source_files:
+    - physical-interactions.jsonl
+- id: ewok_physical_relations_attached
+  label: attached
+  domain: physical-relations
+  surfaces:
+  - attached
+  lemmas:
+  - attached
+  metadata:
+    source: ewok_fast
+    eval_count: 5
+    concept_fields:
+      ConceptA: 2
+      ConceptB: 3
+    source_files:
+    - physical-relations.jsonl
+- id: ewok_physical_relations_bigger
+  label: bigger
+  domain: physical-relations
+  surfaces:
+  - bigger
+  lemmas:
+  - bigger
+  metadata:
+    source: ewok_fast
+    eval_count: 29
+    concept_fields:
+      ConceptA: 29
+    source_files:
+    - physical-relations.jsonl
+- id: ewok_physical_relations_block
+  label: block
+  domain: physical-relations
+  surfaces:
+  - block
+  lemmas:
+  - block
+  metadata:
+    source: ewok_fast
+    eval_count: 3
+    concept_fields:
+      ConceptA: 3
+    source_files:
+    - physical-relations.jsonl
+- id: ewok_physical_relations_connected
+  label: connected
+  domain: physical-relations
+  surfaces:
+  - connected
+  lemmas:
+  - connected
+  metadata:
+    source: ewok_fast
+    eval_count: 5
+    concept_fields:
+      ConceptB: 5
+    source_files:
+    - physical-relations.jsonl
+- id: ewok_physical_relations_contain
+  label: contain
+  domain: physical-relations
+  surfaces:
+  - contain
+  lemmas:
+  - contain
+  metadata:
+    source: ewok_fast
+    eval_count: 18
+    concept_fields:
+      ConceptA: 18
+    source_files:
+    - physical-relations.jsonl
+- id: ewok_physical_relations_cover
+  label: cover
+  domain: physical-relations
+  surfaces:
+  - cover
+  lemmas:
+  - cover
+  metadata:
+    source: ewok_fast
+    eval_count: 1
+    concept_fields:
+      ConceptB: 1
+    source_files:
+    - physical-relations.jsonl
+- id: ewok_physical_relations_inside
+  label: inside
+  domain: physical-relations
+  surfaces:
+  - inside
+  lemmas:
+  - inside
+  metadata:
+    source: ewok_fast
+    eval_count: 27
+    concept_fields:
+      ConceptA: 13
+      ConceptB: 14
+    source_files:
+    - physical-relations.jsonl
+- id: ewok_physical_relations_on
+  label: 'on'
+  domain: physical-relations
+  surfaces:
+  - 'on'
+  lemmas:
+  - 'on'
+  metadata:
+    source: ewok_fast
+    eval_count: 16
+    concept_fields:
+      ConceptB: 16
+    source_files:
+    - physical-relations.jsonl
+- id: ewok_physical_relations_outside
+  label: outside
+  domain: physical-relations
+  surfaces:
+  - outside
+  lemmas:
+  - outside
+  metadata:
+    source: ewok_fast
+    eval_count: 15
+    concept_fields:
+      ConceptB: 15
+    source_files:
+    - physical-relations.jsonl
+- id: ewok_physical_relations_smaller
+  label: smaller
+  domain: physical-relations
+  surfaces:
+  - smaller
+  lemmas:
+  - smaller
+  metadata:
+    source: ewok_fast
+    eval_count: 29
+    concept_fields:
+      ConceptB: 29
+    source_files:
+    - physical-relations.jsonl
+- id: ewok_physical_relations_support
+  label: support
+  domain: physical-relations
+  surfaces:
+  - support
+  lemmas:
+  - support
+  metadata:
+    source: ewok_fast
+    eval_count: 11
+    concept_fields:
+      ConceptA: 10
+      ConceptB: 1
+    source_files:
+    - physical-relations.jsonl
+- id: ewok_physical_relations_supported
+  label: supported
+  domain: physical-relations
+  surfaces:
+  - supported
+  lemmas:
+  - supported
+  metadata:
+    source: ewok_fast
+    eval_count: 12
+    concept_fields:
+      ConceptA: 2
+      ConceptB: 10
+    source_files:
+    - physical-relations.jsonl
+- id: ewok_physical_relations_tied
+  label: tied
+  domain: physical-relations
+  surfaces:
+  - tied
+  lemmas:
+  - tied
+  metadata:
+    source: ewok_fast
+    eval_count: 3
+    concept_fields:
+      ConceptB: 3
+    source_files:
+    - physical-relations.jsonl
+- id: ewok_physical_relations_touching
+  label: touching
+  domain: physical-relations
+  surfaces:
+  - touching
+  lemmas:
+  - touching
+  metadata:
+    source: ewok_fast
+    eval_count: 7
+    concept_fields:
+      ConceptA: 7
+    source_files:
+    - physical-relations.jsonl
+- id: ewok_physical_relations_under
+  label: under
+  domain: physical-relations
+  surfaces:
+  - under
+  lemmas:
+  - under
+  metadata:
+    source: ewok_fast
+    eval_count: 16
+    concept_fields:
+      ConceptA: 16
+    source_files:
+    - physical-relations.jsonl
+- id: ewok_quantitative_properties_all
+  label: all
+  domain: quantitative-properties
+  surfaces:
+  - all
+  lemmas:
+  - all
+  metadata:
+    source: ewok_fast
+    eval_count: 8
+    concept_fields:
+      ConceptB: 8
+    source_files:
+    - quantitative-properties.jsonl
+- id: ewok_quantitative_properties_different
+  label: different
+  domain: quantitative-properties
+  surfaces:
+  - different
+  lemmas:
+  - different
+  metadata:
+    source: ewok_fast
+    eval_count: 8
+    concept_fields:
+      ConceptB: 8
+    source_files:
+    - quantitative-properties.jsonl
+- id: ewok_quantitative_properties_enough
+  label: enough
+  domain: quantitative-properties
+  surfaces:
+  - enough
+  lemmas:
+  - enough
+  metadata:
+    source: ewok_fast
+    eval_count: 18
+    concept_fields:
+      ConceptA: 18
+    source_files:
+    - quantitative-properties.jsonl
+- id: ewok_quantitative_properties_few
+  label: few
+  domain: quantitative-properties
+  surfaces:
+  - few
+  lemmas:
+  - few
+  metadata:
+    source: ewok_fast
+    eval_count: 2
+    concept_fields:
+      ConceptB: 2
+    source_files:
+    - quantitative-properties.jsonl
+- id: ewok_quantitative_properties_fewer
+  label: fewer
+  domain: quantitative-properties
+  surfaces:
+  - fewer
+  lemmas:
+  - fewer
+  metadata:
+    source: ewok_fast
+    eval_count: 16
+    concept_fields:
+      ConceptB: 16
+    source_files:
+    - quantitative-properties.jsonl
+- id: ewok_quantitative_properties_less
+  label: less
+  domain: quantitative-properties
+  surfaces:
+  - less
+  lemmas:
+  - less
+  metadata:
+    source: ewok_fast
+    eval_count: 2
+    concept_fields:
+      ConceptB: 2
+    source_files:
+    - quantitative-properties.jsonl
+- id: ewok_quantitative_properties_many
+  label: many
+  domain: quantitative-properties
+  surfaces:
+  - many
+  lemmas:
+  - many
+  metadata:
+    source: ewok_fast
+    eval_count: 11
+    concept_fields:
+      ConceptA: 11
+    source_files:
+    - quantitative-properties.jsonl
+- id: ewok_quantitative_properties_more
+  label: more
+  domain: quantitative-properties
+  surfaces:
+  - more
+  lemmas:
+  - more
+  metadata:
+    source: ewok_fast
+    eval_count: 18
+    concept_fields:
+      ConceptA: 18
+    source_files:
+    - quantitative-properties.jsonl
+- id: ewok_quantitative_properties_no
+  label: 'no'
+  domain: quantitative-properties
+  surfaces:
+  - 'no'
+  lemmas:
+  - 'no'
+  metadata:
+    source: ewok_fast
+    eval_count: 11
+    concept_fields:
+      ConceptB: 11
+    source_files:
+    - quantitative-properties.jsonl
+- id: ewok_quantitative_properties_none
+  label: none
+  domain: quantitative-properties
+  surfaces:
+  - none
+  lemmas:
+  - none
+  metadata:
+    source: ewok_fast
+    eval_count: 14
+    concept_fields:
+      ConceptA: 14
+    source_files:
+    - quantitative-properties.jsonl
+- id: ewok_quantitative_properties_some
+  label: some
+  domain: quantitative-properties
+  surfaces:
+  - some
+  lemmas:
+  - some
+  metadata:
+    source: ewok_fast
+    eval_count: 9
+    concept_fields:
+      ConceptB: 9
+    source_files:
+    - quantitative-properties.jsonl
+- id: ewok_social_interactions_chase
+  label: chase
+  domain: social-interactions
+  surfaces:
+  - chase
+  lemmas:
+  - chase
+  metadata:
+    source: ewok_fast
+    eval_count: 9
+    concept_fields:
+      ConceptB: 9
+    source_files:
+    - social-interactions.jsonl
+- id: ewok_social_interactions_comfort
+  label: comfort
+  domain: social-interactions
+  surfaces:
+  - comfort
+  lemmas:
+  - comfort
+  metadata:
+    source: ewok_fast
+    eval_count: 17
+    concept_fields:
+      ConceptB: 17
+    source_files:
+    - social-interactions.jsonl
+- id: ewok_social_interactions_compete
+  label: compete
+  domain: social-interactions
+  surfaces:
+  - compete
+  lemmas:
+  - compete
+  metadata:
+    source: ewok_fast
+    eval_count: 9
+    concept_fields:
+      ConceptB: 9
+    source_files:
+    - social-interactions.jsonl
+- id: ewok_social_interactions_cooperate
+  label: cooperate
+  domain: social-interactions
+  surfaces:
+  - cooperate
+  lemmas:
+  - cooperate
+  metadata:
+    source: ewok_fast
+    eval_count: 9
+    concept_fields:
+      ConceptA: 9
+    source_files:
+    - social-interactions.jsonl
+- id: ewok_social_interactions_deceive
+  label: deceive
+  domain: social-interactions
+  surfaces:
+  - deceive
+  lemmas:
+  - deceive
+  metadata:
+    source: ewok_fast
+    eval_count: 9
+    concept_fields:
+      ConceptA: 9
+    source_files:
+    - social-interactions.jsonl
+- id: ewok_social_interactions_evade
+  label: evade
+  domain: social-interactions
+  surfaces:
+  - evade
+  lemmas:
+  - evade
+  metadata:
+    source: ewok_fast
+    eval_count: 16
+    concept_fields:
+      ConceptA: 16
+    source_files:
+    - social-interactions.jsonl
+- id: ewok_social_interactions_flirt
+  label: flirt
+  domain: social-interactions
+  surfaces:
+  - flirt
+  lemmas:
+  - flirt
+  metadata:
+    source: ewok_fast
+    eval_count: 9
+    concept_fields:
+      ConceptA: 9
+    source_files:
+    - social-interactions.jsonl
+- id: ewok_social_interactions_help
+  label: help
+  domain: social-interactions
+  surfaces:
+  - help
+  lemmas:
+  - help
+  metadata:
+    source: ewok_fast
+    eval_count: 19
+    concept_fields:
+      ConceptA: 10
+      ConceptB: 9
+    source_files:
+    - social-interactions.jsonl
+- id: ewok_social_interactions_hinder
+  label: hinder
+  domain: social-interactions
+  surfaces:
+  - hinder
+  lemmas:
+  - hinder
+  metadata:
+    source: ewok_fast
+    eval_count: 10
+    concept_fields:
+      ConceptB: 10
+    source_files:
+    - social-interactions.jsonl
+- id: ewok_social_interactions_insult
+  label: insult
+  domain: social-interactions
+  surfaces:
+  - insult
+  lemmas:
+  - insult
+  metadata:
+    source: ewok_fast
+    eval_count: 21
+    concept_fields:
+      ConceptB: 21
+    source_files:
+    - social-interactions.jsonl
+- id: ewok_social_interactions_learn
+  label: learn
+  domain: social-interactions
+  surfaces:
+  - learn
+  lemmas:
+  - learn
+  metadata:
+    source: ewok_fast
+    eval_count: 18
+    concept_fields:
+      ConceptB: 18
+    source_files:
+    - social-interactions.jsonl
+- id: ewok_social_interactions_respect
+  label: respect
+  domain: social-interactions
+  surfaces:
+  - respect
+  lemmas:
+  - respect
+  metadata:
+    source: ewok_fast
+    eval_count: 12
+    concept_fields:
+      ConceptA: 12
+    source_files:
+    - social-interactions.jsonl
+- id: ewok_social_interactions_seek
+  label: seek
+  domain: social-interactions
+  surfaces:
+  - seek
+  lemmas:
+  - seek
+  metadata:
+    source: ewok_fast
+    eval_count: 7
+    concept_fields:
+      ConceptB: 7
+    source_files:
+    - social-interactions.jsonl
+- id: ewok_social_interactions_teach
+  label: teach
+  domain: social-interactions
+  surfaces:
+  - teach
+  lemmas:
+  - teach
+  metadata:
+    source: ewok_fast
+    eval_count: 18
+    concept_fields:
+      ConceptA: 18
+    source_files:
+    - social-interactions.jsonl
+- id: ewok_social_interactions_tease
+  label: tease
+  domain: social-interactions
+  surfaces:
+  - tease
+  lemmas:
+  - tease
+  metadata:
+    source: ewok_fast
+    eval_count: 17
+    concept_fields:
+      ConceptA: 17
+    source_files:
+    - social-interactions.jsonl
+- id: ewok_social_properties_bigoted
+  label: bigoted
+  domain: social-properties
+  surfaces:
+  - bigoted
+  lemmas:
+  - bigoted
+  metadata:
+    source: ewok_fast
+    eval_count: 12
+    concept_fields:
+      ConceptB: 12
+    source_files:
+    - social-properties.jsonl
+- id: ewok_social_properties_boastful
+  label: boastful
+  domain: social-properties
+  surfaces:
+  - boastful
+  lemmas:
+  - boastful
+  metadata:
+    source: ewok_fast
+    eval_count: 21
+    concept_fields:
+      ConceptA: 21
+    source_files:
+    - social-properties.jsonl
+- id: ewok_social_properties_cold
+  label: cold
+  domain: social-properties
+  surfaces:
+  - cold
+  lemmas:
+  - cold
+  metadata:
+    source: ewok_fast
+    eval_count: 14
+    concept_fields:
+      ConceptB: 14
+    source_files:
+    - social-properties.jsonl
+- id: ewok_social_properties_confident
+  label: confident
+  domain: social-properties
+  surfaces:
+  - confident
+  lemmas:
+  - confident
+  metadata:
+    source: ewok_fast
+    eval_count: 13
+    concept_fields:
+      ConceptB: 13
+    source_files:
+    - social-properties.jsonl
+- id: ewok_social_properties_dominant
+  label: dominant
+  domain: social-properties
+  surfaces:
+  - dominant
+  lemmas:
+  - dominant
+  metadata:
+    source: ewok_fast
+    eval_count: 19
+    concept_fields:
+      ConceptA: 19
+    source_files:
+    - social-properties.jsonl
+- id: ewok_social_properties_friendly
+  label: friendly
+  domain: social-properties
+  surfaces:
+  - friendly
+  lemmas:
+  - friendly
+  metadata:
+    source: ewok_fast
+    eval_count: 9
+    concept_fields:
+      ConceptA: 9
+    source_files:
+    - social-properties.jsonl
+- id: ewok_social_properties_hostile
+  label: hostile
+  domain: social-properties
+  surfaces:
+  - hostile
+  lemmas:
+  - hostile
+  metadata:
+    source: ewok_fast
+    eval_count: 9
+    concept_fields:
+      ConceptB: 9
+    source_files:
+    - social-properties.jsonl
+- id: ewok_social_properties_humble
+  label: humble
+  domain: social-properties
+  surfaces:
+  - humble
+  lemmas:
+  - humble
+  metadata:
+    source: ewok_fast
+    eval_count: 21
+    concept_fields:
+      ConceptB: 21
+    source_files:
+    - social-properties.jsonl
+- id: ewok_social_properties_shy
+  label: shy
+  domain: social-properties
+  surfaces:
+  - shy
+  lemmas:
+  - shy
+  metadata:
+    source: ewok_fast
+    eval_count: 13
+    concept_fields:
+      ConceptA: 13
+    source_files:
+    - social-properties.jsonl
+- id: ewok_social_properties_submissive
+  label: submissive
+  domain: social-properties
+  surfaces:
+  - submissive
+  lemmas:
+  - submissive
+  metadata:
+    source: ewok_fast
+    eval_count: 19
+    concept_fields:
+      ConceptB: 19
+    source_files:
+    - social-properties.jsonl
+- id: ewok_social_properties_tolerant
+  label: tolerant
+  domain: social-properties
+  surfaces:
+  - tolerant
+  lemmas:
+  - tolerant
+  metadata:
+    source: ewok_fast
+    eval_count: 12
+    concept_fields:
+      ConceptA: 12
+    source_files:
+    - social-properties.jsonl
+- id: ewok_social_properties_trustworthy
+  label: trustworthy
+  domain: social-properties
+  surfaces:
+  - trustworthy
+  lemmas:
+  - trustworthy
+  metadata:
+    source: ewok_fast
+    eval_count: 12
+    concept_fields:
+      ConceptA: 12
+    source_files:
+    - social-properties.jsonl
+- id: ewok_social_properties_untrustworthy
+  label: untrustworthy
+  domain: social-properties
+  surfaces:
+  - untrustworthy
+  lemmas:
+  - untrustworthy
+  metadata:
+    source: ewok_fast
+    eval_count: 12
+    concept_fields:
+      ConceptB: 12
+    source_files:
+    - social-properties.jsonl
+- id: ewok_social_properties_warm
+  label: warm
+  domain: social-properties
+  surfaces:
+  - warm
+  lemmas:
+  - warm
+  metadata:
+    source: ewok_fast
+    eval_count: 14
+    concept_fields:
+      ConceptA: 14
+    source_files:
+    - social-properties.jsonl
+- id: ewok_social_relations_boss
+  label: boss
+  domain: social-relations
+  surfaces:
+  - boss
+  lemmas:
+  - boss
+  metadata:
+    source: ewok_fast
+    eval_count: 38
+    concept_fields:
+      ConceptA: 37
+      ConceptB: 1
+    source_files:
+    - social-relations.jsonl
+- id: ewok_social_relations_child
+  label: child
+  domain: social-relations
+  surfaces:
+  - child
+  lemmas:
+  - child
+  metadata:
+    source: ewok_fast
+    eval_count: 22
+    concept_fields:
+      ConceptB: 22
+    source_files:
+    - social-relations.jsonl
+- id: ewok_social_relations_colleague
+  label: colleague
+  domain: social-relations
+  surfaces:
+  - colleague
+  lemmas:
+  - colleague
+  metadata:
+    source: ewok_fast
+    eval_count: 1
+    concept_fields:
+      ConceptA: 1
+    source_files:
+    - social-relations.jsonl
+- id: ewok_social_relations_enemy
+  label: enemy
+  domain: social-relations
+  surfaces:
+  - enemy
+  lemmas:
+  - enemy
+  metadata:
+    source: ewok_fast
+    eval_count: 3
+    concept_fields:
+      ConceptB: 3
+    source_files:
+    - social-relations.jsonl
+- id: ewok_social_relations_friend
+  label: friend
+  domain: social-relations
+  surfaces:
+  - friend
+  lemmas:
+  - friend
+  metadata:
+    source: ewok_fast
+    eval_count: 4
+    concept_fields:
+      ConceptA: 4
+    source_files:
+    - social-relations.jsonl
+- id: ewok_social_relations_landlord
+  label: landlord
+  domain: social-relations
+  surfaces:
+  - landlord
+  lemmas:
+  - landlord
+  metadata:
+    source: ewok_fast
+    eval_count: 16
+    concept_fields:
+      ConceptA: 16
+    source_files:
+    - social-relations.jsonl
+- id: ewok_social_relations_parent
+  label: parent
+  domain: social-relations
+  surfaces:
+  - parent
+  lemmas:
+  - parent
+  metadata:
+    source: ewok_fast
+    eval_count: 23
+    concept_fields:
+      ConceptA: 23
+    source_files:
+    - social-relations.jsonl
+- id: ewok_social_relations_roommate
+  label: roommate
+  domain: social-relations
+  surfaces:
+  - roommate
+  lemmas:
+  - roommate
+  metadata:
+    source: ewok_fast
+    eval_count: 3
+    concept_fields:
+      ConceptB: 3
+    source_files:
+    - social-relations.jsonl
+- id: ewok_social_relations_sibling
+  label: sibling
+  domain: social-relations
+  surfaces:
+  - sibling
+  lemmas:
+  - sibling
+  metadata:
+    source: ewok_fast
+    eval_count: 5
+    concept_fields:
+      ConceptA: 2
+      ConceptB: 3
+    source_files:
+    - social-relations.jsonl
+- id: ewok_social_relations_stranger
+  label: stranger
+  domain: social-relations
+  surfaces:
+  - stranger
+  lemmas:
+  - stranger
+  metadata:
+    source: ewok_fast
+    eval_count: 1
+    concept_fields:
+      ConceptB: 1
+    source_files:
+    - social-relations.jsonl
+- id: ewok_social_relations_student
+  label: student
+  domain: social-relations
+  surfaces:
+  - student
+  lemmas:
+  - student
+  metadata:
+    source: ewok_fast
+    eval_count: 16
+    concept_fields:
+      ConceptB: 16
+    source_files:
+    - social-relations.jsonl
+- id: ewok_social_relations_subordinate
+  label: subordinate
+  domain: social-relations
+  surfaces:
+  - subordinate
+  lemmas:
+  - subordinate
+  metadata:
+    source: ewok_fast
+    eval_count: 37
+    concept_fields:
+      ConceptB: 37
+    source_files:
+    - social-relations.jsonl
+- id: ewok_social_relations_teacher
+  label: teacher
+  domain: social-relations
+  surfaces:
+  - teacher
+  lemmas:
+  - teacher
+  metadata:
+    source: ewok_fast
+    eval_count: 16
+    concept_fields:
+      ConceptA: 16
+    source_files:
+    - social-relations.jsonl
+- id: ewok_social_relations_tenant
+  label: tenant
+  domain: social-relations
+  surfaces:
+  - tenant
+  lemmas:
+  - tenant
+  metadata:
+    source: ewok_fast
+    eval_count: 15
+    concept_fields:
+      ConceptA: 1
+      ConceptB: 14
+    source_files:
+    - social-relations.jsonl
+- id: ewok_spatial_relations_above
+  label: above
+  domain: spatial-relations
+  surfaces:
+  - above
+  lemmas:
+  - above
+  metadata:
+    source: ewok_fast
+    eval_count: 28
+    concept_fields:
+      ConceptA: 28
+    source_files:
+    - spatial-relations.jsonl
+- id: ewok_spatial_relations_behind
+  label: behind
+  domain: spatial-relations
+  surfaces:
+  - behind
+  lemmas:
+  - behind
+  metadata:
+    source: ewok_fast
+    eval_count: 17
+    concept_fields:
+      ConceptB: 17
+    source_files:
+    - spatial-relations.jsonl
+- id: ewok_spatial_relations_below
+  label: below
+  domain: spatial-relations
+  surfaces:
+  - below
+  lemmas:
+  - below
+  metadata:
+    source: ewok_fast
+    eval_count: 28
+    concept_fields:
+      ConceptB: 28
+    source_files:
+    - spatial-relations.jsonl
+- id: ewok_spatial_relations_close
+  label: close
+  domain: spatial-relations
+  surfaces:
+  - close
+  lemmas:
+  - close
+  metadata:
+    source: ewok_fast
+    eval_count: 7
+    concept_fields:
+      ConceptA: 7
+    source_files:
+    - spatial-relations.jsonl
+- id: ewok_spatial_relations_east
+  label: east
+  domain: spatial-relations
+  surfaces:
+  - east
+  lemmas:
+  - east
+  metadata:
+    source: ewok_fast
+    eval_count: 12
+    concept_fields:
+      ConceptA: 12
+    source_files:
+    - spatial-relations.jsonl
+- id: ewok_spatial_relations_far
+  label: far
+  domain: spatial-relations
+  surfaces:
+  - far
+  lemmas:
+  - far
+  metadata:
+    source: ewok_fast
+    eval_count: 7
+    concept_fields:
+      ConceptB: 7
+    source_files:
+    - spatial-relations.jsonl
+- id: ewok_spatial_relations_front
+  label: front
+  domain: spatial-relations
+  surfaces:
+  - front
+  lemmas:
+  - front
+  metadata:
+    source: ewok_fast
+    eval_count: 17
+    concept_fields:
+      ConceptA: 17
+    source_files:
+    - spatial-relations.jsonl
+- id: ewok_spatial_relations_left
+  label: left
+  domain: spatial-relations
+  surfaces:
+  - left
+  lemmas:
+  - left
+  metadata:
+    source: ewok_fast
+    eval_count: 22
+    concept_fields:
+      ConceptA: 22
+    source_files:
+    - spatial-relations.jsonl
+- id: ewok_spatial_relations_north
+  label: north
+  domain: spatial-relations
+  surfaces:
+  - north
+  lemmas:
+  - north
+  metadata:
+    source: ewok_fast
+    eval_count: 14
+    concept_fields:
+      ConceptA: 14
+    source_files:
+    - spatial-relations.jsonl
+- id: ewok_spatial_relations_right
+  label: right
+  domain: spatial-relations
+  surfaces:
+  - right
+  lemmas:
+  - right
+  metadata:
+    source: ewok_fast
+    eval_count: 22
+    concept_fields:
+      ConceptB: 22
+    source_files:
+    - spatial-relations.jsonl
+- id: ewok_spatial_relations_south
+  label: south
+  domain: spatial-relations
+  surfaces:
+  - south
+  lemmas:
+  - south
+  metadata:
+    source: ewok_fast
+    eval_count: 14
+    concept_fields:
+      ConceptB: 14
+    source_files:
+    - spatial-relations.jsonl
+- id: ewok_spatial_relations_west
+  label: west
+  domain: spatial-relations
+  surfaces:
+  - west
+  lemmas:
+  - west
+  metadata:
+    source: ewok_fast
+    eval_count: 12
+    concept_fields:
+      ConceptB: 12
+    source_files:
+    - spatial-relations.jsonl

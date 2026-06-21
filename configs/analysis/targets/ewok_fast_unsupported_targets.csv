@@ -1,0 +1,27 @@
+domain,concept,reason,eval_count,concept_fields,source_files
+agent-properties,-,placeholder,21,ConceptB:21,agent-properties.jsonl
+agent-properties,make an effort,multiword,2,ConceptA:2,agent-properties.jsonl
+agent-properties,make less effort,multiword,52,ConceptB:52,agent-properties.jsonl
+agent-properties,make more effort,multiword,52,ConceptA:52,agent-properties.jsonl
+agent-properties,make no effort,multiword,2,ConceptB:2,agent-properties.jsonl
+agent-properties,not feel,multiword,1,ConceptB:1,agent-properties.jsonl
+agent-properties,not hear,multiword,4,ConceptB:4,agent-properties.jsonl
+agent-properties,not intend,multiword,4,ConceptB:4,agent-properties.jsonl
+agent-properties,not see,multiword,4,ConceptB:4,agent-properties.jsonl
+agent-properties,not taste,multiword,1,ConceptB:1,agent-properties.jsonl
+material-properties,not bouncy,multiword,18,ConceptB:18,material-properties.jsonl
+physical-dynamics,slow down,multiword,17,ConceptB:17,physical-dynamics.jsonl
+physical-interactions,-,placeholder,16,ConceptB:16,physical-interactions.jsonl
+physical-interactions,climb on,multiword,11,ConceptB:11,physical-interactions.jsonl
+physical-interactions,collide with,multiword,10,ConceptA:10,physical-interactions.jsonl
+physical-interactions,revolve around,multiword,3,ConceptA:3,physical-interactions.jsonl
+physical-interactions,sit on,multiword,4,ConceptA:4,physical-interactions.jsonl
+physical-interactions,stand on,multiword,4,ConceptB:4,physical-interactions.jsonl
+physical-relations,-,placeholder,3,ConceptB:3,physical-relations.jsonl
+quantitative-properties,a little,multiword,13,ConceptB:13,quantitative-properties.jsonl
+quantitative-properties,a lot of,multiword,18,ConceptA:18,quantitative-properties.jsonl
+quantitative-properties,not enough,multiword,18,ConceptB:18,quantitative-properties.jsonl
+quantitative-properties,the fewest,multiword,6,ConceptB:6,quantitative-properties.jsonl
+quantitative-properties,the least,multiword,7,ConceptB:7,quantitative-properties.jsonl
+quantitative-properties,the most,multiword,13,ConceptA:13,quantitative-properties.jsonl
+quantitative-properties,the same,multiword,8,ConceptA:8,quantitative-properties.jsonl

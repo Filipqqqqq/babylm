@@ -1,0 +1,190 @@
+version: 1
+domains:
+  agent-properties:
+    concepts:
+    - believe
+    - choose
+    - doubt
+    - feel
+    - hear
+    - imagine
+    - intend
+    - make an effort
+    - make less effort
+    - make more effort
+    - make no effort
+    - not feel
+    - not hear
+    - not intend
+    - not see
+    - not taste
+    - prefer
+    - see
+    - taste
+  material-dynamics:
+    concepts:
+    - break
+    - drape
+    - drip
+    - flap
+    - fold
+    - hang
+    - pile
+    - pour
+    - rip
+    - ripple
+    - splash
+    - squeeze
+    - stir
+    - tap
+    - wrinkle
+  material-properties:
+    concepts:
+    - bouncy
+    - cold
+    - fragile
+    - hard
+    - heavy
+    - light
+    - not bouncy
+    - opaque
+    - rough
+    - smooth
+    - soft
+    - sturdy
+    - transparent
+    - warm
+  physical-dynamics:
+    concepts:
+    - accelerate
+    - fall
+    - float
+    - grow
+    - rise
+    - roll
+    - shrink
+    - sink
+    - slide
+    - slow down
+  physical-interactions:
+    concepts:
+    - approach
+    - attract
+    - break
+    - catch
+    - climb on
+    - collide with
+    - cool
+    - drop
+    - fix
+    - heat
+    - kick
+    - lift
+    - pull
+    - push
+    - repel
+    - revolve around
+    - sit on
+    - stand on
+    - throw
+    - touch
+  physical-relations:
+    concepts:
+    - attached
+    - bigger
+    - block
+    - connected
+    - contain
+    - cover
+    - inside
+    - 'on'
+    - outside
+    - smaller
+    - support
+    - supported
+    - tied
+    - touching
+    - under
+  quantitative-properties:
+    concepts:
+    - a little
+    - a lot of
+    - all
+    - different
+    - enough
+    - few
+    - fewer
+    - less
+    - many
+    - more
+    - 'no'
+    - none
+    - not enough
+    - some
+    - the fewest
+    - the least
+    - the most
+    - the same
+  social-interactions:
+    concepts:
+    - chase
+    - comfort
+    - compete
+    - cooperate
+    - deceive
+    - evade
+    - flirt
+    - help
+    - hinder
+    - insult
+    - learn
+    - respect
+    - seek
+    - teach
+    - tease
+  social-properties:
+    concepts:
+    - bigoted
+    - boastful
+    - cold
+    - confident
+    - dominant
+    - friendly
+    - hostile
+    - humble
+    - shy
+    - submissive
+    - tolerant
+    - trustworthy
+    - untrustworthy
+    - warm
+  social-relations:
+    concepts:
+    - boss
+    - child
+    - colleague
+    - enemy
+    - friend
+    - landlord
+    - parent
+    - roommate
+    - sibling
+    - stranger
+    - student
+    - subordinate
+    - teacher
+    - tenant
+  spatial-relations:
+    concepts:
+    - above
+    - behind
+    - below
+    - close
+    - east
+    - far
+    - front
+    - left
+    - north
+    - right
+    - south
+    - west

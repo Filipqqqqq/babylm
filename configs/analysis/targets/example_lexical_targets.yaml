@@ -1,0 +1,31 @@
+version: 1
+
+targets:
+  - id: dog
+    label: dog
+    surfaces:
+      - dog
+      - dogs
+      - puppy
+      - puppies
+    lemmas:
+      - dog
+      - puppy
+
+  - id: run
+    label: run
+    surfaces:
+      - run
+      - runs
+      - running
+      - ran
+    lemmas:
+      - run
+
+  - id: car
+    label: car
+    surfaces:
+      - car
+      - cars
+    lemmas:
+      - car

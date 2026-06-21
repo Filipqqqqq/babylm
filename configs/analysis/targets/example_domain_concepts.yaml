@@ -1,0 +1,20 @@
+version: 1
+
+domains:
+  animals:
+    concepts:
+      - dog
+      - puppy
+      - cat
+      - ice cream
+
+  actions:
+    concepts:
+      - run
+      - jump
+      - look
+
+  objects:
+    concepts:
+      - car
+      - ball

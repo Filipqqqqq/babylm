@@ -23,6 +23,13 @@ Install Liger kernels only for the LLaMA + Liger recipes:
 pip install -e ".[liger]"
 ```
 
+Install analysis-only dependencies for plotting and lexical/tokenizer reports:
+
+```bash
+pip install -e ".[analysis]"
+python -m spacy download en_core_web_sm
+```
+
 By default, configs write run outputs under:
 
 ```text
@@ -31,6 +38,34 @@ ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/training/
 
 Set `BABYSTEPS_RUNS_DIR` and `BABYSTEPS_CACHE_DIR` to move runs and generated
 caches on another machine.
+
+## Analysis And Lexical Reports
+
+The lexical-analysis implementation lives in
+`src/babysteps/analysis/lexical/`. That folder contains the reusable code for
+target matching, lemmatized word counts, tokenizer fragmentation reports,
+context examples, domain-frequency plots, and EWoK target export.
+
+User-facing entrypoints are under `scripts/analysis/`, and their configs live
+under `configs/analysis/`:
+
+```text
+src/babysteps/analysis/lexical/       reusable lexical-analysis package
+scripts/analysis/report_lexical_analysis.py
+scripts/analysis/export_ewok_lexical_targets.py
+scripts/analysis/plot_domain_concept_frequencies.py
+scripts/analysis/benchmark_spacy_pipe.py
+configs/analysis/                    dataset/report configs and target lists
+```
+
+Analysis outputs are written outside git by default, under:
+
+```text
+${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/analysis/
+```
+
+See `src/babysteps/analysis/lexical/README.md` for the lexical-analysis guide,
+and `scripts/README.md` for the current command list.
 
 ## Train 100M LLaMA + Muon + Liger
 
