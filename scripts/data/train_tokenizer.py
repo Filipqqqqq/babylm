@@ -109,7 +109,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--config",
-        default=str(ROOT / "configs" / "tokenization" / "byte_bpe_8192_10m_block512.yaml"),
+        default=str(
+            ROOT
+            / "configs"
+            / "tokenization"
+            / "legacy_10m_chunks"
+            / "byte_bpe_16384_10m_block512.yaml"
+        ),
         help="Path to a byte-BPE tokenization/chunking YAML config.",
     )
     parser.add_argument("--clean-train-dir", help="Override data.clean_train_dir.")

@@ -114,7 +114,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--config",
-        default=str(ROOT / "configs" / "tokenization" / "gpt2_pretrained_10m_block512.yaml"),
+        default=str(
+            ROOT
+            / "configs"
+            / "tokenization"
+            / "legacy_10m_chunks"
+            / "gpt2_pretrained_10m_block512.yaml"
+        ),
         help="Path to a tokenization/chunking YAML config.",
     )
     parser.add_argument("--output-dir", help="Override chunks.output_dir.")

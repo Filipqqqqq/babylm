@@ -17,21 +17,22 @@ locally, so it is gated behind the environment variable.
 Train a custom byte-BPE tokenizer:
 
 ```bash
-python scripts/data/train_tokenizer.py --config configs/tokenization/byte_bpe_8192_10m_block512.yaml
-python scripts/data/train_tokenizer.py --config configs/tokenization/byte_bpe_16384_10m_block512.yaml
+python scripts/data/train_tokenizer.py \
+  --config configs/tokenization/legacy_10m_chunks/byte_bpe_16384_10m_block512.yaml
 ```
 
 Build token chunks from a tokenizer:
 
 ```bash
-python scripts/data/build_token_chunks.py --config configs/tokenization/gpt2_pretrained_10m_block512.yaml
-python scripts/data/build_token_chunks.py --config configs/tokenization/byte_bpe_8192_10m_block512.yaml
+python scripts/data/build_token_chunks.py \
+  --config configs/tokenization/legacy_10m_chunks/gpt2_pretrained_10m_block512.yaml
+python scripts/data/build_token_chunks.py \
+  --config configs/tokenization/legacy_10m_chunks/byte_bpe_16384_10m_block512.yaml
 ```
 
-Smoke-train tiny GPT-2 models from the custom BPE chunks:
+Smoke-train a tiny GPT-2 model from the custom BPE chunks:
 
 ```bash
-python scripts/train/train_causal_lm.py --config configs/train/smoke/gpt2_tiny_bpe8192_10m_smoke.yaml
 python scripts/train/train_causal_lm.py --config configs/train/smoke/gpt2_tiny_bpe16384_10m_smoke.yaml
 ```
 
