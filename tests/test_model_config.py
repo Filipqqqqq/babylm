@@ -343,64 +343,6 @@ def test_llama_tiny_muon_liger_smoke_config_enables_liger_only() -> None:
     assert config["logging"]["profile_optimizer_steps"] is True
 
 
-def test_llama_10m_muon_liger_config_is_full_observed_default() -> None:
-    config_path = (
-        Path(__file__).resolve().parents[1]
-        / "configs"
-        / "train"
-        / "llama_8l512_bpe16384_10m_muon_liger.yaml"
-    )
-    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-
-    hf_config = build_causal_lm_config_from_dict(config, _tokenizer(vocab_size=16384))
-    training_config = config["training"]
-
-    assert config["data"].get("max_train_chunks") is None
-    assert config["data"].get("max_val_chunks") is None
-    assert hf_config.model_type == "llama"
-    assert hf_config.hidden_size == 512
-    assert hf_config.intermediate_size == 1280
-    assert hf_config.num_hidden_layers == 8
-    assert hf_config.num_attention_heads == 8
-    assert hf_config.num_key_value_heads == 8
-    assert config["model"]["use_liger_kernel"] is True
-    assert training_config["optimizer"] == "muon_pe"
-    assert training_config["muon_lr"] == 0.01
-    assert training_config["batch_size"] == 32
-    assert training_config["warmup_ratio"] == 0.03
-    assert training_config["mixed_precision"] == "bf16"
-
-
-def test_gpt2_10m_muon_config_is_full_observed_default() -> None:
-    config_path = (
-        Path(__file__).resolve().parents[1]
-        / "configs"
-        / "train"
-        / "gpt2_8l512_bpe16384_10m_muon.yaml"
-    )
-    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-
-    hf_config = build_causal_lm_config_from_dict(config, _tokenizer(vocab_size=16384))
-    training_config = config["training"]
-
-    assert config["data"].get("max_train_chunks") is None
-    assert config["data"].get("max_val_chunks") is None
-    assert hf_config.model_type == "gpt2"
-    assert hf_config.vocab_size == 16384
-    assert hf_config.n_ctx == 1024
-    assert hf_config.n_layer == 8
-    assert hf_config.n_head == 8
-    assert hf_config.n_embd == 512
-    assert training_config["optimizer"] == "muon_pe"
-    assert training_config["betas"] == [0.9, 0.999]
-    assert training_config["weight_decay"] == 0.0
-    assert training_config["muon_lr"] == 0.01
-    assert training_config["batch_size"] == 32
-    assert training_config["warmup_ratio"] == 0.03
-    assert training_config["muon_weight_decay"] == 0.1
-    assert training_config["mixed_precision"] == "no"
-
-
 def test_llama_100m_muon_liger_config_is_current_default() -> None:
     config_path = (
         Path(__file__).resolve().parents[1]

@@ -6,8 +6,9 @@ ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "$ROOT"
 
 # Current default LLaMA + Muon + Liger sweep on BabyLM 2026 Strict 16k BPE shards.
-# This wraps run_llama_muon_lr_seed_sweep.sh with the model/data defaults that
-# match configs/train/llama_12l896_bpe16384_babylm2026_strict_muon_liger.yaml.
+# This adds BabyLM 2026 shard preflight checks around the shared LLaMA sweep
+# helper. The defaults match
+# configs/train/llama_12l896_bpe16384_babylm2026_strict_muon_liger.yaml.
 
 export BABYSTEPS_CONFIG="${BABYSTEPS_CONFIG:-configs/train/llama_12l896_bpe16384_babylm2026_strict_muon_liger.yaml}"
 export BABYSTEPS_LAYERS="${BABYSTEPS_LAYERS:-12}"

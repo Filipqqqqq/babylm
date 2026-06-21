@@ -5,14 +5,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "$ROOT"
 
-# LLaMA + Muon LR/seed sweep for the 16k BPE BabyLM 10M setup.
+# Generic LLaMA + Muon LR/seed sweep for the current 16k BPE token-shard setup.
 #
 # Defaults:
-#   architecture: LLaMA, 8 layers, hidden size 512, 8 heads, 16k BPE
-#   MLP width:    parameter-matched round((8/3) * hidden_size) to /256 = 1280
-#   Muon LR:      0.02, 0.01, 0.005
+#   architecture: LLaMA, 12 layers, hidden size 896, 14 heads, 16k BPE
+#   MLP width:    parameter-matched round((8/3) * hidden_size) to /256 = 2304
+#   Muon LR:      0.01
 #   seeds:        42, 43, 44
-#   batch size:   32
+#   batch size:   64 effective, 16 micro-batch
 #   precision:    bf16
 #   Liger:        enabled
 #
@@ -22,17 +22,13 @@ cd "$ROOT"
 # Example launch on GPUs 0 and 1:
 #   BABYSTEPS_GPUS="0 1" bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 #
-# Recommended single full 10M LLaMA + Liger run:
+# Recommended single BabyLM 2026 LLaMA + Liger run:
 #   BABYSTEPS_GPUS="0" BABYSTEPS_MUON_LRS="0.01" BABYSTEPS_SEEDS="42" \
 #   bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 #
 # For a shorter smoke before the full run:
-#   BABYSTEPS_MAX_TRAIN_CHUNKS=1024 BABYSTEPS_MAX_VAL_CHUNKS=128 \
-#   BABYSTEPS_EPOCHS=1 BABYSTEPS_SAVE_FINAL=false \
-#   bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
-#
-# Token-shard configs can use block limits instead:
 #   BABYSTEPS_MAX_TRAIN_BLOCKS=1024 BABYSTEPS_MAX_VAL_BLOCKS=128 \
+#   BABYSTEPS_EPOCHS=1 BABYSTEPS_SAVE_FINAL=false \
 #   bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
 #
 # Override precision when needed:
@@ -56,18 +52,18 @@ SHOW_PROGRESS="${BABYSTEPS_SHOW_PROGRESS:-1}"
 DRY_RUN="${BABYSTEPS_DRY_RUN:-0}"
 RUN_SUFFIX="${BABYSTEPS_RUN_SUFFIX:-}"
 
-CONFIG="${BABYSTEPS_CONFIG:-configs/train/llama_8l512_bpe16384_10m_muon_liger.yaml}"
+CONFIG="${BABYSTEPS_CONFIG:-configs/train/llama_12l896_bpe16384_babylm2026_strict_muon_liger.yaml}"
 SEEDS=(${BABYSTEPS_SEEDS:-42 43 44})
 GPUS=(${BABYSTEPS_GPUS:-1 2})
-MUON_LRS=(${BABYSTEPS_MUON_LRS:-0.02 0.01 0.005})
+MUON_LRS=(${BABYSTEPS_MUON_LRS:-0.01})
 
-LAYERS="${BABYSTEPS_LAYERS:-8}"
-HIDDEN_SIZE="${BABYSTEPS_HIDDEN_SIZE:-512}"
-N_HEAD="${BABYSTEPS_N_HEAD:-8}"
+LAYERS="${BABYSTEPS_LAYERS:-12}"
+HIDDEN_SIZE="${BABYSTEPS_HIDDEN_SIZE:-896}"
+N_HEAD="${BABYSTEPS_N_HEAD:-14}"
 LLAMA_PARAM_ROUND_MULTIPLE="${BABYSTEPS_LLAMA_PARAM_ROUND_MULTIPLE:-256}"
-LLAMA_NUM_KEY_VALUE_HEADS="${BABYSTEPS_LLAMA_NUM_KEY_VALUE_HEADS:-8}"
-BATCH_SIZES=(${BABYSTEPS_BATCH_SIZES:-${BABYSTEPS_BATCH_SIZE:-32}})
-MICRO_BATCH_SIZE="${BABYSTEPS_MICRO_BATCH_SIZE:-}"
+LLAMA_NUM_KEY_VALUE_HEADS="${BABYSTEPS_LLAMA_NUM_KEY_VALUE_HEADS:-14}"
+BATCH_SIZES=(${BABYSTEPS_BATCH_SIZES:-${BABYSTEPS_BATCH_SIZE:-64}})
+MICRO_BATCH_SIZE="${BABYSTEPS_MICRO_BATCH_SIZE:-16}"
 USE_LIGER_KERNEL="${BABYSTEPS_USE_LIGER_KERNEL:-true}"
 LLAMA_DROPOUT="${BABYSTEPS_LLAMA_DROPOUT:-}"
 LLAMA_EMBD_PDROP="${BABYSTEPS_LLAMA_EMBD_PDROP:-$LLAMA_DROPOUT}"
@@ -82,7 +78,7 @@ MUON_NS_STEPS="${BABYSTEPS_MUON_NS_STEPS:-5}"
 MUON_WEIGHT_DECAY="${BABYSTEPS_MUON_WEIGHT_DECAY:-0.1}"
 GRADIENT_CLIP_NORM="${BABYSTEPS_GRADIENT_CLIP_NORM:-1.0}"
 MIXED_PRECISION="${BABYSTEPS_MIXED_PRECISION:-bf16}"
-SAVE_EVERY_EPOCHS="${BABYSTEPS_SAVE_EVERY_EPOCHS:-0}"
+SAVE_EVERY_EPOCHS="${BABYSTEPS_SAVE_EVERY_EPOCHS:-1}"
 SAVE_FINAL="${BABYSTEPS_SAVE_FINAL:-true}"
 
 MAX_TRAIN_CHUNKS="${BABYSTEPS_MAX_TRAIN_CHUNKS:-}"

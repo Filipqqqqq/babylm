@@ -13,8 +13,8 @@ set -euo pipefail
 # Spec format:
 #   layers,hidden_size,n_head[,num_key_value_heads[,intermediate_size[,micro_batch_size]]]
 #
-# If intermediate_size is omitted, scripts/sweeps/run_llama_muon_lr_seed_sweep.sh will
-# compute the parameter-matched LLaMA MLP size for that hidden width.
+# If intermediate_size is omitted, the shared LLaMA sweep helper computes the
+# parameter-matched LLaMA MLP size for that hidden width.
 #
 # Dry-run exact commands:
 #   BABYSTEPS_DRY_RUN=1 bash scripts/sweeps/run_llama_babylm2026_width_depth_sweep.sh

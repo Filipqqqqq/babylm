@@ -2,7 +2,8 @@
 
 Team workspace for BabyLM Challenge experiments: reusable training code,
 configs, evaluation wrappers, and experiment notes. The current main recipes
-are 10M GPT-2 + Muon and 100M LLaMA + Muon + Liger.
+are BabyLM 2026 Strict-Small GPT-2 + Muon and BabyLM 2026 Strict 100M
+LLaMA + Muon + Liger.
 
 Raw corpora, generated token caches, checkpoints, logs, and evaluation outputs
 should stay outside git and be referenced through configs or manifests.
@@ -30,94 +31,6 @@ ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/training/
 
 Set `BABYSTEPS_RUNS_DIR` and `BABYSTEPS_CACHE_DIR` to move runs and generated
 caches on another machine.
-
-## Train 10M GPT-2 + Muon
-
-Use this path for the current strongest BabyLM 10M recipe from the local Muon
-sweeps. It trains the 8-layer, 512-hidden GPT-2 shape with the 16k byte-BPE
-tokenizer, batch size 32, and Muon LR 0.01:
-
-```bash
-CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
-  python -u scripts/train/train_causal_lm.py \
-  --config configs/train/gpt2_8l512_bpe16384_10m_muon.yaml
-```
-
-The launcher defaults to the same observed recipe:
-
-```bash
-BABYSTEPS_GPUS="0" bash scripts/sweeps/run_muon_lr_sweep.sh
-```
-
-For a broader LR/seed sweep, override the env vars explicitly:
-
-```bash
-BABYSTEPS_BATCH_SIZE=32 BABYSTEPS_MUON_LRS="0.0025 0.005 0.01" \
-  BABYSTEPS_SEEDS="42 43 44" \
-  BABYSTEPS_GPUS="0 1" bash scripts/sweeps/run_muon_lr_sweep.sh
-```
-
-Current 10M defaults reflect the local GPT-2 fast-eval sweep: with the tested
-8l512 architecture and batch size 32, `muon_lr=0.01` was best across seeds
-42-45 on the mean of the four fast zero-shot task averages.
-
-## Train 10M LLaMA + Muon + Liger
-
-Use this path for the current non-smoke BabyLM 10M LLaMA recipe. It trains an
-8-layer, 512-hidden LLaMA-style causal LM with the 16k byte-BPE tokenizer, Muon
-optimizer, bf16, and Liger kernels enabled:
-
-```bash
-CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
-  python -u scripts/train/train_causal_lm.py \
-  --config configs/train/llama_8l512_bpe16384_10m_muon_liger.yaml
-```
-
-That config intentionally has no `max_train_chunks` or `max_val_chunks`; the
-older `configs/train/smoke/llama_tiny_*_smoke.yaml` configs are only for quick
-capped checks.
-Outputs go under `${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/training/` unless
-`BABYSTEPS_RUNS_DIR` is set.
-
-If the tokenizer or chunk pickles are missing, build the 16k byte-BPE assets:
-
-```bash
-python scripts/data/train_tokenizer.py \
-  --config configs/tokenization/legacy_10m_chunks/byte_bpe_16384_10m_block512.yaml
-
-python scripts/data/build_token_chunks.py \
-  --config configs/tokenization/legacy_10m_chunks/byte_bpe_16384_10m_block512.yaml
-```
-
-The expected generated inputs are:
-
-```text
-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/tokenizers/babylm10m_byte_bpe_16384/
-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_chunks/babylm10m_byte_bpe_16384_block512_eos/train.pkl
-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_chunks/babylm10m_byte_bpe_16384_block512_eos/dev.pkl
-```
-
-For a seed or LR sweep, use the launcher. It now defaults to the full 10M
-config rather than a capped smoke config:
-
-```bash
-BABYSTEPS_GPUS="0 1" bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
-```
-
-For the recommended single run through the launcher:
-
-```bash
-BABYSTEPS_GPUS="0" BABYSTEPS_MUON_LRS="0.01" BABYSTEPS_SEEDS="42" \
-  bash scripts/sweeps/run_llama_muon_lr_seed_sweep.sh
-```
-
-Current 10M defaults reflect the local LLaMA fast-eval sweep: `muon_lr=0.01`
-beat `0.005` across seeds 42-44 on the mean of the four fast zero-shot task
-averages, with the tested 8l512 architecture and effective batch size 32.
-
-Local note: the 10M LLaMA model has not been as useful as the 10M GPT-2 + Muon
-recipe above, but it is still useful for checking the LLaMA, Muon, and Liger
-training path before scaling up.
 
 ## Train 100M LLaMA + Muon + Liger
 
@@ -155,10 +68,10 @@ baseline in local comparisons.
 
 ## Train 2026 Strict-Small GPT-2 + Muon
 
-Use this path for BabyLM 2026 Strict-Small without changing the older local 10M
-recipes. It trains the same 8-layer, 512-hidden GPT-2 + Muon shape from
-prebuilt token shards for `BabyLM-community/BabyLM-2026-Strict-Small`, using
-bf16 mixed precision by default:
+Use this path for BabyLM 2026 Strict-Small. It trains the 8-layer, 512-hidden
+GPT-2 + Muon shape from prebuilt token shards for
+`BabyLM-community/BabyLM-2026-Strict-Small`, using bf16 mixed precision by
+default:
 
 ```bash
 python scripts/data/build_token_shards.py \

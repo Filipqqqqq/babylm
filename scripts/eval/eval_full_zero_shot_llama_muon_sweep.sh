@@ -5,16 +5,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "$ROOT"
 
-# Run the official BabyLM full zero-shot tasks over the LLaMA + Muon sweep.
+# Run the official BabyLM full zero-shot tasks over the BabyLM 2026 LLaMA + Muon sweep.
 #
 # Defaults match scripts/sweeps/run_llama_muon_lr_seed_sweep.sh:
-#   model:      LLaMA 8l512
+#   model:      LLaMA 12l896
 #   BPE:        16384
-#   Muon LR:    0.02, 0.01, 0.005
+#   Muon LR:    0.01
 #   warmup:     0.03
 #   Muon wd:    0.1
-#   train bs:   32
-#   seeds:      42, 43, 44
+#   train bs:   64
+#   seeds:      42
 #   checkpoint: final
 #
 # Example:
@@ -26,9 +26,6 @@ cd "$ROOT"
 # To evaluate a specific epoch checkpoint instead of final:
 #   BABYSTEPS_CHECKPOINT_NAME=checkpoint-epoch-0005 bash scripts/eval/eval_full_zero_shot_llama_muon_sweep.sh
 #
-# To evaluate runs with a suffix, such as the BabyLM 2026 Strict wrapper:
-#   BABYSTEPS_RUN_SUFFIX=_babylm2026strict bash scripts/eval/eval_full_zero_shot_llama_muon_sweep.sh
-
 CONDA_ENV="${BABYSTEPS_CONDA_ENV:-babylm}"
 TRAINING_ROOT="${BABYSTEPS_TRAINING_ROOT:-${BABYSTEPS_RUNS_DIR:-$HOME/babylm-baby-steps-runs}/training}"
 OUTPUT_ROOT="${BABYSTEPS_FULL_EVAL_OUTPUT_ROOT:-${BABYSTEPS_RUNS_DIR:-$HOME/babylm-baby-steps-runs}/evaluation_full_zero_shot_llama}"
@@ -37,14 +34,14 @@ PIPELINE_DIR="${BABYSTEPS_EVAL_PIPELINE_DIR:-${ROOT}/external/babylm-eval/strict
 EVAL_DATA_DIR="${BABYSTEPS_FULL_EVAL_DATA_DIR:-${PIPELINE_DIR}/evaluation_data/full_eval}"
 
 MODEL_ARCH="${BABYSTEPS_MODEL_ARCH:-llama}"
-MODEL_SIZE="${BABYSTEPS_MODEL_SIZE:-8l512}"
-RUN_SUFFIX="${BABYSTEPS_RUN_SUFFIX:-}"
+MODEL_SIZE="${BABYSTEPS_MODEL_SIZE:-12l896}"
+RUN_SUFFIX="${BABYSTEPS_RUN_SUFFIX:-_babylm2026strict}"
 BPES=(${BABYSTEPS_BPES:-16384})
-MUON_LRS=(${BABYSTEPS_MUON_LRS:-0.02 0.01 0.005})
-SEEDS=(${BABYSTEPS_SEEDS:-42 43 44})
+MUON_LRS=(${BABYSTEPS_MUON_LRS:-0.01})
+SEEDS=(${BABYSTEPS_SEEDS:-42})
 GPUS=(${BABYSTEPS_GPUS:-3})
 
-TRAIN_BATCH_SIZE="${BABYSTEPS_BATCH_SIZE:-32}"
+TRAIN_BATCH_SIZE="${BABYSTEPS_BATCH_SIZE:-64}"
 WARMUP_RATIO="${BABYSTEPS_WARMUP_RATIO:-0.03}"
 MUON_WEIGHT_DECAY="${BABYSTEPS_MUON_WEIGHT_DECAY:-0.1}"
 EVAL_BATCH_SIZE="${BABYSTEPS_EVAL_BATCH_SIZE:-64}"

@@ -61,74 +61,18 @@ def test_babylm2026_train_config_paths_can_use_env_roots(monkeypatch) -> None:
     )
 
 
-def test_llama_10m_train_config_paths_can_use_env_roots(monkeypatch) -> None:
-    train_script = load_train_script_module()
-    monkeypatch.delenv("BABYSTEPS_10M_BPE16384_TOKENIZER_DIR", raising=False)
-    monkeypatch.delenv("BABYSTEPS_10M_BPE16384_CHUNKS_DIR", raising=False)
-    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
-    monkeypatch.setenv("BABYSTEPS_RUNS_DIR", "/runs")
-
-    config = train_script.load_yaml_config(
-        ROOT / "configs" / "train" / "llama_8l512_bpe16384_10m_muon_liger.yaml"
-    )
-
-    assert config["run"]["output_root"] == "/runs/training"
-    assert (
-        config["data"]["train_chunks"]
-        == "/cache/token_chunks/babylm10m_byte_bpe_16384_block512_eos/train.pkl"
-    )
-    assert (
-        config["data"]["val_chunks"]
-        == "/cache/token_chunks/babylm10m_byte_bpe_16384_block512_eos/dev.pkl"
-    )
-    assert config["tokenizer"]["name"] == "/cache/tokenizers/babylm10m_byte_bpe_16384"
-
-
-def test_gpt2_10m_muon_train_config_paths_can_use_env_roots(monkeypatch) -> None:
-    train_script = load_train_script_module()
-    monkeypatch.delenv("BABYSTEPS_10M_BPE16384_TOKENIZER_DIR", raising=False)
-    monkeypatch.delenv("BABYSTEPS_10M_BPE16384_CHUNKS_DIR", raising=False)
-    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
-    monkeypatch.setenv("BABYSTEPS_RUNS_DIR", "/runs")
-
-    config = train_script.load_yaml_config(
-        ROOT / "configs" / "train" / "gpt2_8l512_bpe16384_10m_muon.yaml"
-    )
-
-    assert config["run"]["output_root"] == "/runs/training"
-    assert (
-        config["data"]["train_chunks"]
-        == "/cache/token_chunks/babylm10m_byte_bpe_16384_block512_eos/train.pkl"
-    )
-    assert (
-        config["data"]["val_chunks"]
-        == "/cache/token_chunks/babylm10m_byte_bpe_16384_block512_eos/dev.pkl"
-    )
-    assert config["tokenizer"]["name"] == "/cache/tokenizers/babylm10m_byte_bpe_16384"
-
-
-def test_llama_muon_sweep_defaults_to_full_10m_config() -> None:
+def test_llama_muon_sweep_defaults_to_current_babylm2026_config() -> None:
     script = (
         ROOT / "scripts" / "sweeps" / "run_llama_muon_lr_seed_sweep.sh"
     ).read_text(encoding="utf-8")
 
     assert (
         'CONFIG="${BABYSTEPS_CONFIG:-configs/train/'
-        'llama_8l512_bpe16384_10m_muon_liger.yaml}"'
-    ) in script
-
-
-def test_gpt2_muon_sweep_defaults_to_observed_10m_recipe() -> None:
-    script = (ROOT / "scripts" / "sweeps" / "run_muon_lr_sweep.sh").read_text(
-        encoding="utf-8"
-    )
-
-    assert (
-        'CONFIG="${BABYSTEPS_CONFIG:-configs/train/'
-        'gpt2_8l512_bpe16384_10m_muon.yaml}"'
+        'llama_12l896_bpe16384_babylm2026_strict_muon_liger.yaml}"'
     ) in script
     assert "MUON_LRS=(${BABYSTEPS_MUON_LRS:-0.01})" in script
-    assert 'BATCH_SIZE="${BABYSTEPS_BATCH_SIZE:-32}"' in script
+    assert "BATCH_SIZES=(${BABYSTEPS_BATCH_SIZES:-${BABYSTEPS_BATCH_SIZE:-64}})" in script
+    assert 'MICRO_BATCH_SIZE="${BABYSTEPS_MICRO_BATCH_SIZE:-16}"' in script
 
 
 def test_babylm2026_llama_wrapper_defaults_to_current_liger_recipe() -> None:
