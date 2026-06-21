@@ -49,11 +49,11 @@ The launcher defaults to the same observed recipe:
 BABYSTEPS_GPUS="0" bash scripts/sweeps/run_muon_lr_sweep.sh
 ```
 
-For a broader sweep, override the env vars explicitly:
+For a broader LR/seed sweep, override the env vars explicitly:
 
 ```bash
-BABYSTEPS_BPES="8192 16384" BABYSTEPS_BATCH_SIZE=32 \
-  BABYSTEPS_MUON_LRS="0.0025 0.005 0.01" BABYSTEPS_SEEDS="42 43 44" \
+BABYSTEPS_BATCH_SIZE=32 BABYSTEPS_MUON_LRS="0.0025 0.005 0.01" \
+  BABYSTEPS_SEEDS="42 43 44" \
   BABYSTEPS_GPUS="0 1" bash scripts/sweeps/run_muon_lr_sweep.sh
 ```
 
@@ -74,7 +74,8 @@ CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
 ```
 
 That config intentionally has no `max_train_chunks` or `max_val_chunks`; the
-older `llama_tiny_*_smoke.yaml` configs are only for quick capped checks.
+older `configs/train/smoke/llama_tiny_*_smoke.yaml` configs are only for quick
+capped checks.
 Outputs go under `${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/training/` unless
 `BABYSTEPS_RUNS_DIR` is set.
 

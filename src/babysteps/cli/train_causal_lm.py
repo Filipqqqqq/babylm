@@ -221,7 +221,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--config",
-        default=str(ROOT / "configs" / "train" / "gpt2_small_10m_smoke.yaml"),
+        default=str(ROOT / "configs" / "train" / "smoke" / "gpt2_small_10m_smoke.yaml"),
         help="Path to a YAML training config.",
     )
     parser.add_argument(

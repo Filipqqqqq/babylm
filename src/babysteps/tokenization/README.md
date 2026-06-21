@@ -31,8 +31,8 @@ python scripts/data/build_token_chunks.py --config configs/tokenization/byte_bpe
 Smoke-train tiny GPT-2 models from the custom BPE chunks:
 
 ```bash
-python scripts/train/train_causal_lm.py --config configs/train/gpt2_tiny_bpe8192_10m_smoke.yaml
-python scripts/train/train_causal_lm.py --config configs/train/gpt2_tiny_bpe16384_10m_smoke.yaml
+python scripts/train/train_causal_lm.py --config configs/train/smoke/gpt2_tiny_bpe8192_10m_smoke.yaml
+python scripts/train/train_causal_lm.py --config configs/train/smoke/gpt2_tiny_bpe16384_10m_smoke.yaml
 ```
 
 Current flow:

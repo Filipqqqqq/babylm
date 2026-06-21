@@ -282,6 +282,7 @@ def test_llama_tiny_smoke_config_builds_llama_adamw_surface() -> None:
         Path(__file__).resolve().parents[1]
         / "configs"
         / "train"
+        / "smoke"
         / "llama_tiny_bpe16384_10m_smoke.yaml"
     )
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
@@ -302,6 +303,7 @@ def test_llama_tiny_muon_smoke_config_uses_moonshot_muon_defaults() -> None:
         Path(__file__).resolve().parents[1]
         / "configs"
         / "train"
+        / "smoke"
         / "llama_tiny_bpe16384_10m_muon_smoke.yaml"
     )
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
@@ -328,6 +330,7 @@ def test_llama_tiny_muon_liger_smoke_config_enables_liger_only() -> None:
         Path(__file__).resolve().parents[1]
         / "configs"
         / "train"
+        / "smoke"
         / "llama_tiny_bpe16384_10m_muon_liger_smoke.yaml"
     )
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))

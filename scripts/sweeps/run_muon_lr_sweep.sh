@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "$ROOT"
 
-# Full Muon LR pretraining sweep. This uses the real 8l512 configs and all
+# Full Muon LR pretraining sweep. This uses the current 8l512 Muon config and all
 # available chunks unless BABYSTEPS_MAX_TRAIN_CHUNKS / BABYSTEPS_MAX_VAL_CHUNKS
 # are explicitly set.
 #
@@ -13,14 +13,15 @@ cd "$ROOT"
 # seed 42, and Muon LR 0.01.
 #
 # Example broader run:
-#   BABYSTEPS_BPES="8192 16384" BABYSTEPS_SEEDS="42 43" bash scripts/sweeps/run_muon_lr_sweep.sh
+#   BABYSTEPS_MUON_LRS="0.005 0.01" BABYSTEPS_SEEDS="42 43" bash scripts/sweeps/run_muon_lr_sweep.sh
 
 CONDA_ENV="${BABYSTEPS_CONDA_ENV:-babylm}"
 LOG_DIR="${BABYSTEPS_LOG_DIR:-${BABYSTEPS_RUNS_DIR:-$HOME/babylm-baby-steps-runs}/logs/muon}"
 SHOW_PROGRESS="${BABYSTEPS_SHOW_PROGRESS:-1}"
 DRY_RUN="${BABYSTEPS_DRY_RUN:-0}"
+CONFIG="${BABYSTEPS_CONFIG:-configs/train/gpt2_8l512_bpe16384_10m_muon.yaml}"
+RUN_BPE_LABEL="${BABYSTEPS_BPE_LABEL:-16384}"
 
-BPES=(${BABYSTEPS_BPES:-16384})
 SEEDS=(${BABYSTEPS_SEEDS:-42})
 GPUS=(${BABYSTEPS_GPUS:-1 2})
 MUON_LRS=(${BABYSTEPS_MUON_LRS:-0.01})
@@ -114,15 +115,13 @@ fi
 
 launch_run() {
   local gpu="$1"
-  local bpe="$2"
-  local muon_lr="$3"
-  local seed="$4"
-  local config="configs/train/gpt2_8l512_bpe${bpe}_10m.yaml"
+  local muon_lr="$2"
+  local seed="$3"
   local batch_suffix=""
   if [[ -n "$BATCH_SIZE" ]]; then
     batch_suffix="_bs${BATCH_SIZE}"
   fi
-  local name="gpt2_8l512_bpe${bpe}_muon_lr$(slug "$muon_lr")_wu$(slug "$WARMUP_RATIO")_mwd$(slug "$MUON_WEIGHT_DECAY")${batch_suffix}_seed${seed}"
+  local name="gpt2_8l512_bpe${RUN_BPE_LABEL}_muon_lr$(slug "$muon_lr")_wu$(slug "$WARMUP_RATIO")_mwd$(slug "$MUON_WEIGHT_DECAY")${batch_suffix}_seed${seed}"
   local log_path="${LOG_DIR}/${name}.log"
   local train_pid
   local progress_pid
@@ -132,7 +131,7 @@ launch_run() {
     env "CUDA_VISIBLE_DEVICES=${gpu}"
     setsid conda run --no-capture-output -n "$CONDA_ENV"
     python -u scripts/train/train_causal_lm.py
-    --config "$config"
+    --config "$CONFIG"
     --set "run.name=${name}"
     --set "run.seed=${seed}"
     --set "training.epochs=${EPOCHS}"
@@ -164,6 +163,7 @@ launch_run() {
   fi
 
   echo "Launching ${name} on GPU ${gpu}"
+  echo "  config: ${CONFIG}"
   echo "  aux lr: ${AUX_LR}"
   echo "  muon lr: ${muon_lr}"
   echo "  epochs: ${EPOCHS}"
@@ -225,23 +225,21 @@ wait_for_batch() {
   gpu_slot=0
 }
 
-for bpe in "${BPES[@]}"; do
-  for muon_lr in "${MUON_LRS[@]}"; do
-    for seed in "${SEEDS[@]}"; do
-      launch_run "${GPUS[$gpu_slot]}" "$bpe" "$muon_lr" "$seed"
+for muon_lr in "${MUON_LRS[@]}"; do
+  for seed in "${SEEDS[@]}"; do
+    launch_run "${GPUS[$gpu_slot]}" "$muon_lr" "$seed"
 
-      if [[ "$DRY_RUN" == "1" ]]; then
-        gpu_slot=$(( (gpu_slot + 1) % ${#GPUS[@]} ))
-        continue
-      fi
+    if [[ "$DRY_RUN" == "1" ]]; then
+      gpu_slot=$(( (gpu_slot + 1) % ${#GPUS[@]} ))
+      continue
+    fi
 
-      active_jobs=$((active_jobs + 1))
-      gpu_slot=$((gpu_slot + 1))
+    active_jobs=$((active_jobs + 1))
+    gpu_slot=$((gpu_slot + 1))
 
-      if [[ "$active_jobs" -eq "${#GPUS[@]}" ]]; then
-        wait_for_batch
-      fi
-    done
+    if [[ "$active_jobs" -eq "${#GPUS[@]}" ]]; then
+      wait_for_batch
+    fi
   done
 done
 

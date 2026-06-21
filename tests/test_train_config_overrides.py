@@ -123,7 +123,10 @@ def test_gpt2_muon_sweep_defaults_to_observed_10m_recipe() -> None:
         encoding="utf-8"
     )
 
-    assert "BPES=(${BABYSTEPS_BPES:-16384})" in script
+    assert (
+        'CONFIG="${BABYSTEPS_CONFIG:-configs/train/'
+        'gpt2_8l512_bpe16384_10m_muon.yaml}"'
+    ) in script
     assert "MUON_LRS=(${BABYSTEPS_MUON_LRS:-0.01})" in script
     assert 'BATCH_SIZE="${BABYSTEPS_BATCH_SIZE:-32}"' in script
 
