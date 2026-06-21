@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -76,7 +77,11 @@ def main() -> None:
     output_dir = resolve_path(
         args.output_dir
         or output_config.get("result_dir")
-        or ROOT / "runs" / "evaluation" / eval_config.get("name", "babylm_fast_eval")
+        or Path(
+            os.environ.get("BABYSTEPS_RUNS_DIR", "~/babylm-baby-steps-runs")
+        ).expanduser()
+        / "evaluation"
+        / eval_config.get("name", "babylm_fast_eval")
     )
 
     explicit_checkpoints = [resolve_path(item) for item in (args.checkpoints or [])]

@@ -272,7 +272,6 @@ babylm-baby-steps/
   src/babysteps/  Reusable Python package code.
   tests/          Developer regression and smoke tests.
   notebooks/      Scratch exploration; promote stable logic into src/.
-  runs/           Generated outputs; gitignored.
   cache/          Generated local caches; gitignored.
 ```
 

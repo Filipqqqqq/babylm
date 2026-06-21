@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -124,7 +125,15 @@ def resolve_output_dir(config: dict[str, Any]) -> Path:
     if output_dir:
         path = Path(output_dir)
     else:
-        output_root = Path(run.get("output_root", ROOT / "runs" / "training"))
+        output_root = Path(
+            run.get(
+                "output_root",
+                Path(
+                    os.environ.get("BABYSTEPS_RUNS_DIR", "~/babylm-baby-steps-runs")
+                ).expanduser()
+                / "training",
+            )
+        )
         path = output_root / run["name"]
 
     if not path.is_absolute():

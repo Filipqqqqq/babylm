@@ -36,8 +36,7 @@ logs/**
 wandb/
 mlruns/
 
-# Keep empty output directories visible in a fresh clone.
-!runs/.gitkeep
+# Keep the empty cache directory visible in a fresh clone.
 !cache/.gitkeep
 
 # Heavy data/cache formats
