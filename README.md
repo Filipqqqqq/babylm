@@ -250,51 +250,6 @@ python scripts/train/train_causal_lm.py --config configs/train/gpt2_small_10m_pl
 That config points `data.train_chunks` and `data.val_chunks` at the generated
 GPT-2 chunk pickles.
 
-## Material-World Synthetic Data
-
-The material-world generator lives under
-`scripts/synthetic_data_generation/material_world/` with reusable code in
-`src/babysteps/material_world/`. Its catalogues are in
-`configs/material_world/`.
-
-Default generation stays broad. EWoK-inspired material properties and dynamics
-are opt-in through `coverage_sets.json` and `coverage_mix`; the pipeline can
-assign quota-backed rows for EWoK objects, materials, property concepts, or
-dynamic concepts while leaving the remaining rows sampled from the full
-material/object catalogues. For controlled object exposure, set
-`object_sampling.mode` to `balanced_round_robin` so selected objects are assigned
-to rows in a seeded, near-even cycle. Use `selection_seed` to make catalogue
-order, coverage row assignment, and balanced object assignment semi-deterministic.
-
-For a 500-row broad run with a soft EWoK upweight, prefer a config-level mix:
-
-```json
-{
-  "coverage_mix": {
-    "ewok_material_properties": {
-      "object_fraction": 0.25,
-      "material_fraction": 0.25
-    },
-    "ewok_material_dynamics": {
-      "dynamic_fraction": 0.10
-    }
-  },
-  "object_sampling": {
-    "mode": "balanced_round_robin",
-    "scope": "selected_objects"
-  },
-  "selection_seed": "mw-softmix-001",
-  "scenario_limit": 500
-}
-```
-
-Generated row metadata includes fields such as `coverage_role`,
-`target_property_concept`, `target_dynamic_concept`, `target_object_id`, and
-`target_material`. Each run also writes `coverage_report.json`, which compares
-the requested mix with assigned and observed coverage, plus
-`object_sampling_report.json` for assigned and observed object counts. See
-`configs/material_world/README.md` for the catalogue rules and examples.
-
 ## Layout
 
 ```text
@@ -311,10 +266,9 @@ babylm-baby-steps/
 ```
 
 Preferred command-line entrypoints are grouped under `scripts/data/`,
-`scripts/train/`, `scripts/eval/`, `scripts/sweeps/`, `scripts/analysis/`,
-`scripts/hf/`, and `scripts/synthetic_data_generation/material_world/`. Some
-root-level Python scripts remain as compatibility shims for older commands; new
-docs and launchers should prefer the grouped paths.
+`scripts/train/`, `scripts/eval/`, `scripts/sweeps/`, `scripts/analysis/`, and
+`scripts/hf/`. Some root-level Python scripts remain as compatibility shims for
+older commands; new docs and launchers should prefer the grouped paths.
 
 Deprecated root aliases that duplicated newer entrypoints have been removed:
 use `scripts/data/build_token_shards.py` instead of

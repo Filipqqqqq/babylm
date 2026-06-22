@@ -9,8 +9,6 @@ scripts/eval/                                      evaluation launchers and wrap
 scripts/sweeps/                                    training sweep launchers
 scripts/analysis/                                  plotting, result summaries, and lexical reports
 scripts/hf/                                        Hugging Face download/upload helpers
-scripts/synthetic_data_generation/material_world/  material-world synthetic generation, audit, and review utilities
-scripts/material_world/                            older material-world compatibility entrypoints
 ```
 
 The root-level Python scripts are compatibility shims for older commands. New
