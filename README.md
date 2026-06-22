@@ -96,6 +96,24 @@ conda run --no-capture-output -n babylm python scripts/data/build_token_shards.p
   --config configs/tokenization/babylm2026_strict_byte_bpe_16384_shards.yaml
 ```
 
+## Quick Modern Smoke Train
+
+The default smoke config uses BabyLM 2026 Strict-Small token shards and the
+local 16k byte-BPE tokenizer. It is capped to a small number of shard blocks so
+it is useful for checking the trainer, plotting hooks, and checkpoint writing:
+
+```bash
+python scripts/train/train_causal_lm.py \
+  --config configs/train/smoke/gpt2_bpe16384_babylm2026_strict_small_smoke.yaml
+```
+
+If the Strict-Small shards are missing, build them first:
+
+```bash
+python scripts/data/build_token_shards.py \
+  --config configs/tokenization/babylm2026_strict_small_byte_bpe_16384_shards.yaml
+```
+
 Project note: LLaMA + Muon + Liger was chosen for the 100M track because it
 works well under memory and speed constraints. It may or may not beat a GPT-2
 small model at that scale, but it has been much better than the GPT-2 100M
@@ -248,7 +266,9 @@ python scripts/train/train_causal_lm.py --config configs/train/gpt2_small_10m_pl
 ```
 
 That config points `data.train_chunks` and `data.val_chunks` at the generated
-GPT-2 chunk pickles.
+GPT-2 chunk pickles. The old 10M chunk smoke recipe now lives under
+`configs/train/legacy/gpt2_small_10m_chunks_smoke.yaml` so the default GPT-2
+smoke path uses the current BabyLM 2026 shard setup.
 
 ## Layout
 

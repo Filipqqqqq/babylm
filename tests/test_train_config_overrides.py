@@ -3,6 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from pathlib import Path
 
+import numpy as np
+
 from babysteps.cli import build_token_shards as token_shard_builder
 from babysteps.cli import train_causal_lm as train_script
 
@@ -167,6 +169,155 @@ def test_gpt2_strict_small_train_config_paths_can_use_env_roots(monkeypatch) -> 
         config["tokenizer"]["name"]
         == "/cache/tokenizers/babylm2026_strict_small_byte_bpe_16384"
     )
+
+
+def test_modern_gpt2_smoke_config_uses_strict_small_shards(monkeypatch) -> None:
+    train_script = load_train_script_module()
+    monkeypatch.delenv("BABYSTEPS_BABYLM2026_STRICT_SMALL_TOKENIZER_DIR", raising=False)
+    monkeypatch.delenv("BABYSTEPS_BABYLM2026_STRICT_SMALL_SHARDS_DIR", raising=False)
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+    monkeypatch.setenv("BABYSTEPS_RUNS_DIR", "/runs")
+
+    config = train_script.load_yaml_config(
+        ROOT
+        / "configs"
+        / "train"
+        / "smoke"
+        / "gpt2_bpe16384_babylm2026_strict_small_smoke.yaml"
+    )
+
+    assert config["run"]["name"] == "gpt2_bpe16384_babylm2026_strict_small_smoke"
+    assert config["run"]["output_root"] == "/runs/training"
+    assert config["data"]["format"] == "token_shards"
+    assert config["data"]["max_train_blocks"] == 32
+    assert config["data"]["max_val_blocks"] == 4
+    assert config["training"]["batch_size"] == 8
+    assert (
+        config["data"]["data_dir"]
+        == "/cache/token_shards/babylm2026_strict_small_byte_bpe_16384_bos_eos"
+    )
+    assert (
+        config["tokenizer"]["name"]
+        == "/cache/tokenizers/babylm2026_strict_small_byte_bpe_16384"
+    )
+
+
+def test_default_babylm_eval_dir_prefers_full_eval_when_present(tmp_path: Path) -> None:
+    train_script = load_train_script_module()
+    full_dir = (
+        tmp_path
+        / "external"
+        / "babylm-eval"
+        / "strict"
+        / "evaluation_data"
+        / "full_eval"
+        / "blimp_filtered"
+    )
+    full_dir.mkdir(parents=True)
+
+    path = train_script.default_babylm_eval_dir(
+        "full_eval",
+        "blimp_filtered",
+        fallback_split="fast_eval",
+        fallback_relative_parts=("blimp_fast",),
+        root=tmp_path,
+    )
+
+    assert path == full_dir
+
+
+def test_default_babylm_eval_dir_falls_back_to_fast_eval_when_full_missing(
+    tmp_path: Path,
+) -> None:
+    train_script = load_train_script_module()
+    fast_dir = (
+        tmp_path
+        / "external"
+        / "babylm-eval"
+        / "strict"
+        / "evaluation_data"
+        / "fast_eval"
+        / "blimp_fast"
+    )
+    fast_dir.mkdir(parents=True)
+
+    path = train_script.default_babylm_eval_dir(
+        "full_eval",
+        "blimp_filtered",
+        fallback_split="fast_eval",
+        fallback_relative_parts=("blimp_fast",),
+        root=tmp_path,
+    )
+
+    assert path == fast_dir
+
+
+class FakeTokenizer:
+    all_special_ids = [0, 1, 2]
+    bos_token_id = 1
+    eos_token_id = 2
+    pad_token_id = 0
+
+    def decode(
+        self,
+        token_ids,
+        *,
+        skip_special_tokens: bool = True,
+        clean_up_tokenization_spaces: bool = False,
+    ) -> str:
+        pieces = {3: "hello", 4: " world", 5: " again"}
+        return "".join(pieces[token_id] for token_id in token_ids)
+
+
+def test_estimate_words_per_token_uses_raw_chunk_token_count() -> None:
+    train_script = load_train_script_module()
+    dataset = SimpleNamespace(chunks=[[1, 3, 4, 2, 5]])
+
+    estimate = train_script.estimate_words_per_token_from_dataset(
+        dataset,
+        FakeTokenizer(),
+        sample_tokens=5,
+    )
+
+    assert estimate["sample_tokens"] == 5
+    assert estimate["sample_words"] == 3
+    assert estimate["words_per_token"] == 3 / 5
+
+
+def test_sample_training_token_ids_reads_token_shard_prefix(tmp_path: Path) -> None:
+    train_script = load_train_script_module()
+    shard = tmp_path / "train_000000.bin"
+    np.asarray([10, 11, 12, 13], dtype=np.uint16).tofile(shard)
+    dataset = SimpleNamespace(shards=[shard])
+
+    assert train_script.sample_training_token_ids(dataset, sample_tokens=3) == [
+        10,
+        11,
+        12,
+    ]
+
+
+def test_default_babylm_eval_dir_without_fallback_returns_full_eval_path(
+    tmp_path: Path,
+) -> None:
+    train_script = load_train_script_module()
+    full_dir = (
+        tmp_path
+        / "external"
+        / "babylm-eval"
+        / "strict"
+        / "evaluation_data"
+        / "full_eval"
+        / "ewok_filtered"
+    )
+
+    path = train_script.default_babylm_eval_dir(
+        "full_eval",
+        "ewok_filtered",
+        root=tmp_path,
+    )
+
+    assert path == full_dir
 
 
 def test_cli_config_overrides_update_nested_values() -> None:

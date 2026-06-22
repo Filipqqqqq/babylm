@@ -1,5 +1,13 @@
+# Legacy BabyLM 10M GPT-2 chunk smoke config.
+#
+# This requires prebuilt GPT-2 token chunks at:
+#   ${BABYSTEPS_CACHE_DIR}/token_chunks/babylm10m_gpt2_pretrained_block512_eos
+#
+# For the current runnable smoke path, use:
+#   configs/train/smoke/gpt2_bpe16384_babylm2026_strict_small_smoke.yaml
+
 run:
-  name: gpt2_small_10m_smoke
+  name: gpt2_small_10m_chunks_smoke
   seed: 42
   deterministic: false
   output_root: ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/training

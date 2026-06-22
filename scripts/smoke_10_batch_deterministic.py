@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run a deterministic 10-batch GPT-2 smoke test.
+"""Run a deterministic 10-batch legacy GPT-2 token-chunk smoke test.
 
 This is a controlled training check, not a real training run. It verifies that:
 
@@ -9,7 +9,8 @@ This is a controlled training check, not a real training run. It verifies that:
 3. Two same-seed runs produce the same loss history and final parameters.
 
 By default the script uses a tiny GPT-2-shaped model for speed. Pass
-``--full-gpt2-small`` to use GPT-2 small dimensions.
+``--full-gpt2-small`` to use GPT-2 small dimensions. The default config is the
+legacy BabyLM 10M chunk recipe and requires those chunk pickles to exist.
 """
 
 from __future__ import annotations
@@ -249,7 +250,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--config",
-        default=str(ROOT / "configs" / "train" / "smoke" / "gpt2_small_10m_smoke.yaml"),
+        default=str(
+            ROOT
+            / "configs"
+            / "train"
+            / "legacy"
+            / "gpt2_small_10m_chunks_smoke.yaml"
+        ),
         help="Training config to source data/model optimizer settings from.",
     )
     parser.add_argument("--batches", type=int, default=10)
