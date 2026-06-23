@@ -6,6 +6,7 @@ from babysteps.training.causal_lm_loop import (
     set_all_seeds,
     train_causal_lm,
 )
+from babysteps.training.hybrid_lm_loop import train_hybrid_lm
 from babysteps.training.liger import apply_liger_kernel_if_requested
 from babysteps.training.optimizers import build_optimizer
 
@@ -16,4 +17,5 @@ __all__ = [
     "evaluate_causal_lm_loss",
     "set_all_seeds",
     "train_causal_lm",
+    "train_hybrid_lm",
 ]

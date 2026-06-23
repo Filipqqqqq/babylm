@@ -10,7 +10,7 @@ from babysteps.optim import (
     build_muon_pe_param_groups,
     polar_express_orthogonalize,
 )
-from babysteps.training.optimizers import build_optimizer
+from babysteps.training.optimizers import Lamb, build_optimizer
 
 
 class _Block(nn.Module):
@@ -260,6 +260,35 @@ def test_build_optimizer_accepts_muon_config() -> None:
     assert info.auxiliary_tensors > 0
     assert optimizer.param_groups[0]["lr"] == 0.03
     assert optimizer.param_groups[0]["base_lr"] == 0.03
+
+
+def test_build_optimizer_accepts_lamb_config_and_steps() -> None:
+    torch.manual_seed(0)
+    model = _TinyGPTLike()
+    optimizer, info = build_optimizer(
+        model,
+        {
+            "optimizer": "lamb",
+            "learning_rate": 1e-3,
+            "betas": [0.9, 0.98],
+            "eps": 1e-8,
+            "weight_decay": 0.1,
+        },
+    )
+
+    assert isinstance(optimizer, Lamb)
+    assert info.name == "lamb"
+    assert info.primary_tensors > 0
+    assert info.auxiliary_tensors > 0
+
+    before = model.transformer.h[0].mlp.c_fc.weight.detach().clone()
+    for param in model.parameters():
+        param.grad = torch.randn_like(param)
+    optimizer.step()
+
+    after = model.transformer.h[0].mlp.c_fc.weight.detach()
+    assert torch.isfinite(after).all()
+    assert not torch.equal(before, after)
 
 
 def test_build_optimizer_keeps_adamw_as_default() -> None:

@@ -1,0 +1,789 @@
+"""Hybrid GPT-BERT causal + masked-next-token training loop."""
+
+from __future__ import annotations
+
+import shutil
+import time
+from itertools import islice
+from pathlib import Path
+from typing import Any, Iterable
+
+import torch
+import torch.nn.functional as F
+from tqdm.auto import tqdm
+
+from babysteps.evaluation import mntp_likelihood
+from babysteps.models.causal_lm import DEFAULT_GPT_BERT_REPO
+from babysteps.training.causal_lm_loop import save_json_atomic
+
+
+MNTP_LIKELIHOOD_BENCHMARKS = (
+    "blimp",
+    "blimp_supplement",
+    "entity_tracking",
+    "comps",
+)
+
+
+def word_interval_due(*, words_seen: float, next_words: float | None) -> bool:
+    """Return whether a word-count scheduled event is due."""
+
+    return next_words is not None and words_seen >= next_words
+
+
+def advance_word_interval(
+    *,
+    next_words: float | None,
+    every_words: float | None,
+    words_seen: float,
+) -> float | None:
+    """Advance a word-count threshold past the current progress point."""
+
+    if next_words is None or every_words is None:
+        return next_words
+    while next_words <= words_seen:
+        next_words += every_words
+    return next_words
+
+
+def progress_metadata(
+    *,
+    epoch: int,
+    step: int,
+    tokens_seen: float,
+    words_per_token: float | None,
+    run_name: str | None,
+) -> dict[str, Any]:
+    """Build shared metadata for benchmark records."""
+
+    metadata: dict[str, Any] = {
+        "epoch": epoch,
+        "step": step,
+        "tokens_seen": int(tokens_seen),
+    }
+    if words_per_token is not None:
+        metadata["words_seen"] = tokens_seen * words_per_token
+    if run_name:
+        metadata["run_name"] = run_name
+    return metadata
+
+
+def unwrap_module(model: torch.nn.Module) -> torch.nn.Module:
+    """Peel common distributed wrappers without requiring an Accelerator."""
+
+    current = model
+    while hasattr(current, "module"):
+        current = current.module
+    return current
+
+
+def set_gpt_bert_is_causal(model: torch.nn.Module, is_causal: bool) -> None:
+    """Set the GPT-BERT backbone attention mode on wrapped or unwrapped models."""
+
+    base = unwrap_module(model)
+    backbone = getattr(base, "model", None)
+    if backbone is None:
+        raise ValueError("Expected a GPT-BERT model with a .model backbone.")
+    backbone.is_causal = bool(is_causal)
+
+
+def make_causal_batch(input_ids: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """Build standard next-token labels for already-packed token sequences."""
+
+    labels = torch.full_like(input_ids, -100)
+    labels[:, :-1] = input_ids[:, 1:]
+    return input_ids, labels
+
+
+def make_masked_batch(
+    input_ids: torch.Tensor,
+    special_mask: torch.Tensor,
+    mask_ratio: float,
+    vocab_size: int,
+    mask_id: int,
+    p_random: float,
+    p_keep: float,
+    gen: torch.Generator,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Build MNTP inputs/labels following the GPT-BERT baseline convention."""
+
+    batch_size, seq_len = input_ids.shape
+    del batch_size, seq_len
+    orig = input_ids
+    eligible = ~special_mask
+    selected = torch.bernoulli(
+        torch.full(orig.shape, float(mask_ratio), device=orig.device),
+        generator=gen,
+    ).bool()
+    selected = selected & eligible
+
+    corrupted = orig.clone()
+    rand = torch.rand(orig.shape, device=orig.device, generator=gen)
+    do_mask = selected & (rand < (1.0 - p_random - p_keep))
+    do_rand = selected & (rand >= (1.0 - p_random - p_keep)) & (rand < (1.0 - p_keep))
+    corrupted[do_mask] = int(mask_id)
+
+    n_rand = int(do_rand.sum().item())
+    if n_rand > 0:
+        rand_tok = torch.randint(0, int(vocab_size), (n_rand,), device=orig.device, generator=gen)
+        corrupted[do_rand] = rand_tok
+
+    labels = torch.full_like(orig, -100)
+    labels[:, :-1] = torch.where(
+        selected[:, 1:],
+        orig[:, 1:],
+        torch.full_like(orig[:, 1:], -100),
+    )
+    return corrupted, labels
+
+
+def objective_for(global_micro_step: int, causal_per_masked: int) -> str:
+    """Return masked once per period, otherwise causal."""
+
+    period = int(causal_per_masked) + 1
+    return "masked" if int(global_micro_step) % period == 0 else "causal"
+
+
+def mask_ratio_for_step(global_update_step: int, total_update_steps: int, start: float, end: float) -> float:
+    """Linearly decay the MNTP mask ratio over optimizer-update steps."""
+
+    frac = int(global_update_step) / max(1, int(total_update_steps) - 1)
+    return float(start) + (float(end) - float(start)) * frac
+
+
+def compute_gpt_bert_loss(
+    model: torch.nn.Module,
+    *,
+    input_ids: torch.Tensor,
+    labels: torch.Tensor,
+    attention_mask: torch.Tensor,
+    z_loss: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Compute selected-token cross-entropy plus optional z-loss."""
+
+    outputs = model(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)
+    logits = outputs.logits
+    vocab_size = logits.size(-1)
+    flat_logits = logits.reshape(-1, vocab_size)
+    flat_labels = labels.reshape(-1)
+    valid = flat_labels != -100
+    token_count = valid.sum()
+    if token_count == 0:
+        zero = logits.sum() * 0.0
+        return zero, zero.detach(), token_count.detach()
+
+    selected_logits = flat_logits[valid]
+    selected_labels = flat_labels[valid]
+    ce_loss = F.cross_entropy(selected_logits, selected_labels)
+    z = torch.logsumexp(selected_logits, dim=-1)
+    total_loss = ce_loss + float(z_loss) * (z**2).mean()
+    return total_loss, ce_loss.detach(), token_count.detach()
+
+
+def special_token_ids(tokenizer: Any) -> set[int]:
+    """Collect token ids that should not be selected as MNTP targets."""
+
+    ids = set(int(token_id) for token_id in getattr(tokenizer, "all_special_ids", []) or [])
+    for attr in (
+        "bos_token_id",
+        "eos_token_id",
+        "pad_token_id",
+        "cls_token_id",
+        "sep_token_id",
+        "mask_token_id",
+    ):
+        token_id = getattr(tokenizer, attr, None)
+        if token_id is not None:
+            ids.add(int(token_id))
+    return ids
+
+
+def build_special_mask(input_ids: torch.Tensor, special_ids: set[int]) -> torch.Tensor:
+    """Return true where input ids are special tokens."""
+
+    mask = torch.zeros_like(input_ids, dtype=torch.bool)
+    for token_id in special_ids:
+        mask |= input_ids == int(token_id)
+    return mask
+
+
+def make_torch_generator(device: torch.device, seed: int) -> torch.Generator:
+    """Create a torch RNG on the current training device when supported."""
+
+    try:
+        return torch.Generator(device=device).manual_seed(int(seed))
+    except RuntimeError:
+        return torch.Generator().manual_seed(int(seed))
+
+
+@torch.no_grad()
+def evaluate_hybrid_lm_loss(
+    model: torch.nn.Module,
+    dataloader: Iterable,
+    accelerator,
+    *,
+    tokenizer: Any,
+    hybrid_config: dict[str, Any],
+    vocab_size: int,
+    max_batches: int | None = None,
+) -> dict[str, float]:
+    """Evaluate causal CE and fixed-ratio MNTP CE separately."""
+
+    model.eval()
+    special_ids = special_token_ids(tokenizer)
+    mask_id = tokenizer.mask_token_id
+    if mask_id is None:
+        raise ValueError("Hybrid GPT-BERT validation requires tokenizer.mask_token_id.")
+
+    causal_loss_sum = torch.tensor(0.0, device=accelerator.device)
+    causal_tokens = torch.tensor(0.0, device=accelerator.device)
+    mntp_loss_sum = torch.tensor(0.0, device=accelerator.device)
+    mntp_tokens = torch.tensor(0.0, device=accelerator.device)
+    gen = make_torch_generator(accelerator.device, int(hybrid_config.get("validation_seed", 1234)))
+    batches = dataloader if max_batches is None else islice(dataloader, int(max_batches))
+
+    for input_ids, _labels, _loss_mask, attention_mask in batches:
+        with accelerator.autocast():
+            set_gpt_bert_is_causal(model, True)
+            causal_input_ids, causal_labels = make_causal_batch(input_ids)
+            _loss, ce_loss, token_count = compute_gpt_bert_loss(
+                model,
+                input_ids=causal_input_ids,
+                labels=causal_labels,
+                attention_mask=attention_mask,
+                z_loss=0.0,
+            )
+        causal_loss_sum += ce_loss.float() * token_count.float()
+        causal_tokens += token_count.float()
+
+        special_mask = build_special_mask(input_ids, special_ids)
+        masked_input_ids, masked_labels = make_masked_batch(
+            input_ids,
+            special_mask,
+            float(hybrid_config.get("mask_end", 0.15)),
+            vocab_size,
+            int(mask_id),
+            float(hybrid_config.get("random_ratio", 0.10)),
+            float(hybrid_config.get("keep_ratio", 0.10)),
+            gen,
+        )
+        with accelerator.autocast():
+            set_gpt_bert_is_causal(model, False)
+            _loss, ce_loss, token_count = compute_gpt_bert_loss(
+                model,
+                input_ids=masked_input_ids,
+                labels=masked_labels,
+                attention_mask=attention_mask,
+                z_loss=0.0,
+            )
+        mntp_loss_sum += ce_loss.float() * token_count.float()
+        mntp_tokens += token_count.float()
+
+    if accelerator.num_processes > 1:
+        causal_loss_sum = accelerator.reduce(causal_loss_sum, reduction="sum")
+        causal_tokens = accelerator.reduce(causal_tokens, reduction="sum")
+        mntp_loss_sum = accelerator.reduce(mntp_loss_sum, reduction="sum")
+        mntp_tokens = accelerator.reduce(mntp_tokens, reduction="sum")
+
+    model.train()
+    return {
+        "val_causal_loss": (causal_loss_sum / causal_tokens.clamp_min(1)).item(),
+        "val_mntp_loss": (mntp_loss_sum / mntp_tokens.clamp_min(1)).item(),
+    }
+
+
+def copy_gpt_bert_repo_file(repo: str, filename: str, output_dir: Path) -> None:
+    """Copy remote-code files from a local repo path or the Hugging Face cache."""
+
+    repo_path = Path(repo)
+    destination = output_dir / filename
+    if repo_path.is_dir():
+        source = repo_path / filename
+        if source.exists():
+            shutil.copyfile(source, destination)
+        return
+
+    from huggingface_hub import hf_hub_download
+
+    source = hf_hub_download(repo, filename)
+    shutil.copyfile(source, destination)
+
+
+def save_gpt_bert_checkpoint(
+    model: torch.nn.Module,
+    tokenizer: Any,
+    accelerator,
+    output_dir: str | Path,
+    *,
+    name: str,
+    repo: str = DEFAULT_GPT_BERT_REPO,
+) -> None:
+    """Save GPT-BERT in the trust_remote_code format expected by HF loading."""
+
+    accelerator.wait_for_everyone()
+    if not accelerator.is_main_process:
+        return
+
+    checkpoint_dir = Path(output_dir) / name
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    unwrapped_model = accelerator.unwrap_model(model)
+    torch.save(unwrapped_model.state_dict(), checkpoint_dir / "pytorch_model.bin")
+    tokenizer.save_pretrained(checkpoint_dir)
+
+    for filename in ("configuration_gpt_bert.py", "modeling_gpt_bert.py", "config.json"):
+        try:
+            copy_gpt_bert_repo_file(repo, filename, checkpoint_dir)
+        except Exception as exc:
+            print(
+                f"   (warning) could not refresh {filename} in {checkpoint_dir}: {exc}",
+                flush=True,
+            )
+
+
+def evaluate_mntp_likelihood_benchmark(
+    *,
+    benchmark_name: str,
+    model: torch.nn.Module,
+    tokenizer: Any,
+    items: list[Any],
+    batch_size: int,
+    device: torch.device,
+    score_reduction: str,
+) -> mntp_likelihood.MntpBenchmarkResult:
+    """Evaluate one BabyLM benchmark with the MNTP scoring backend."""
+
+    if benchmark_name in {"blimp", "blimp_supplement"}:
+        return mntp_likelihood.evaluate_blimp_mntp_likelihood(
+            model=model,
+            tokenizer=tokenizer,
+            items=items,
+            batch_size=batch_size,
+            device=device,
+            score_reduction=score_reduction,  # type: ignore[arg-type]
+        )
+    if benchmark_name == "entity_tracking":
+        return mntp_likelihood.evaluate_entity_tracking_mntp_likelihood(
+            model=model,
+            tokenizer=tokenizer,
+            items=items,
+            batch_size=batch_size,
+            device=device,
+            score_reduction=score_reduction,  # type: ignore[arg-type]
+        )
+    if benchmark_name == "comps":
+        return mntp_likelihood.evaluate_comps_mntp_likelihood(
+            model=model,
+            tokenizer=tokenizer,
+            items=items,
+            batch_size=batch_size,
+            device=device,
+            score_reduction=score_reduction,  # type: ignore[arg-type]
+        )
+    raise ValueError(f"Unsupported MNTP benchmark: {benchmark_name!r}.")
+
+
+def overall_summary_row(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return the overall/all row emitted by BabyLM benchmark aggregators."""
+
+    return next(
+        row
+        for row in rows
+        if row["group_scope"] == "overall" and row["group_name"] == "all"
+    )
+
+
+def train_hybrid_lm(
+    *,
+    model: torch.nn.Module,
+    tokenizer: Any,
+    train_loader,
+    val_loader,
+    optimizer: torch.optim.Optimizer,
+    scheduler,
+    accelerator,
+    output_dir: str | Path,
+    epochs: int,
+    total_update_steps: int,
+    hybrid_config: dict[str, Any],
+    model_repo: str = DEFAULT_GPT_BERT_REPO,
+    seed: int = 42,
+    log_every_steps: int = 50,
+    eval_every_steps: int = 500,
+    eval_max_batches: int | None = 20,
+    gradient_clip_norm: float | None = None,
+    save_every_epochs: int | None = 1,
+    save_final: bool = True,
+    benchmark_eval_at_start: bool = True,
+    mntp_likelihood_items: dict[str, list[Any]] | None = None,
+    mntp_likelihood_every_steps: int = 0,
+    mntp_likelihood_every_words: float | None = None,
+    mntp_likelihood_batch_size: int = 64,
+    mntp_likelihood_score_reductions: tuple[str, ...] = ("sum",),
+    mntp_likelihood_run_name: str | None = None,
+    words_per_token: float | None = None,
+) -> list[dict[str, Any]]:
+    """Train GPT-BERT with a configurable CLM/MNTP hybrid objective."""
+
+    output_dir = Path(output_dir)
+    metrics_path = output_dir / "metrics_history.json"
+    benchmark_dir = output_dir / "benchmarks" / "mntp_likelihood"
+    mntp_items_path = benchmark_dir / "likelihood_items.jsonl"
+    mntp_summary_path = benchmark_dir / "likelihood_summary.csv"
+    history: list[dict[str, Any]] = []
+    global_micro_step = 0
+    global_update_step = 0
+    cumulative_tokens_seen = 0.0
+    next_mntp_likelihood_words = mntp_likelihood_every_words
+    vocab_size = int(getattr(accelerator.unwrap_model(model).config, "vocab_size", len(tokenizer)))
+    mask_id = tokenizer.mask_token_id
+    if mask_id is None:
+        raise ValueError("Hybrid GPT-BERT training requires tokenizer.mask_token_id.")
+    if mntp_likelihood_every_words is not None and words_per_token is None:
+        raise ValueError("MNTP word-count benchmark intervals require words_per_token.")
+    if not mntp_likelihood_score_reductions:
+        raise ValueError("mntp_likelihood_score_reductions must not be empty.")
+
+    special_ids = special_token_ids(tokenizer)
+    causal_per_masked = int(hybrid_config.get("causal_per_masked", 15))
+    mask_start = float(hybrid_config.get("mask_start", 0.30))
+    mask_end = float(hybrid_config.get("mask_end", 0.15))
+    random_ratio = float(hybrid_config.get("random_ratio", 0.10))
+    keep_ratio = float(hybrid_config.get("keep_ratio", 0.10))
+    z_loss = float(hybrid_config.get("z_loss", 1e-4))
+    train_gen = make_torch_generator(accelerator.device, int(seed) + 1000 + accelerator.process_index)
+
+    if accelerator.is_main_process:
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    def run_mntp_likelihood_eval(*, epoch: int, step: int, tokens_seen: float) -> None:
+        if not mntp_likelihood_items:
+            return
+        accelerator.wait_for_everyone()
+        if accelerator.is_main_process:
+            unwrapped_model = accelerator.unwrap_model(model)
+            set_gpt_bert_is_causal(unwrapped_model, False)
+            metadata = progress_metadata(
+                epoch=epoch,
+                step=step,
+                tokens_seen=tokens_seen,
+                words_per_token=words_per_token,
+                run_name=mntp_likelihood_run_name,
+            )
+            for benchmark_name, items in mntp_likelihood_items.items():
+                for score_reduction in mntp_likelihood_score_reductions:
+                    result = evaluate_mntp_likelihood_benchmark(
+                        benchmark_name=benchmark_name,
+                        model=unwrapped_model,
+                        tokenizer=tokenizer,
+                        items=items,
+                        batch_size=mntp_likelihood_batch_size,
+                        device=accelerator.device,
+                        score_reduction=score_reduction,
+                    )
+                    mntp_likelihood.append_item_records_jsonl(
+                        result.item_records,
+                        mntp_items_path,
+                        benchmark=benchmark_name,
+                        metadata=metadata,
+                    )
+                    mntp_likelihood.append_summary_csv(
+                        result.summary_rows,
+                        mntp_summary_path,
+                        benchmark=benchmark_name,
+                        metadata=metadata,
+                    )
+                    overall = overall_summary_row(result.summary_rows)
+                    record = {
+                        "type": "mntp_likelihood",
+                        "benchmark": benchmark_name,
+                        **metadata,
+                        "score_reduction": score_reduction,
+                        "score": overall.get("score"),
+                        "correct": overall.get("correct"),
+                        "items": overall.get("items"),
+                        "ties": overall.get("ties"),
+                        "mean_margin": overall.get("mean_margin"),
+                        "score_kind": overall.get("score_kind"),
+                        "micro_score": overall.get("micro_score"),
+                    }
+                    history.append(record)
+                    print(
+                        f"[step {step:06d}] "
+                        f"{benchmark_name}_mntp_score={float(overall.get('score', 0.0)):.4f} "
+                        f"reduction={score_reduction} "
+                        f"items={overall.get('items')}",
+                        flush=True,
+                    )
+            save_json_atomic(history, metrics_path)
+        accelerator.wait_for_everyone()
+
+    if benchmark_eval_at_start:
+        run_mntp_likelihood_eval(epoch=0, step=0, tokens_seen=0.0)
+
+    for epoch in range(1, int(epochs) + 1):
+        model.train()
+        epoch_loss_sum = 0.0
+        epoch_ce_sum = 0.0
+        epoch_tokens = 0.0
+        window_loss_sum = 0.0
+        window_ce_sum = 0.0
+        window_tokens = 0.0
+        window_causal_microsteps = 0
+        window_masked_microsteps = 0
+        started = time.perf_counter()
+
+        progress = tqdm(
+            train_loader,
+            desc=f"Hybrid epoch {epoch}/{epochs}",
+            disable=not accelerator.is_local_main_process,
+        )
+
+        for input_ids, _loader_labels, _loss_mask, attention_mask in progress:
+            objective = objective_for(global_micro_step, causal_per_masked)
+            mask_ratio = mask_ratio_for_step(
+                global_update_step,
+                total_update_steps,
+                mask_start,
+                mask_end,
+            )
+            global_micro_step += 1
+
+            with accelerator.accumulate(model):
+                with accelerator.autocast():
+                    if objective == "masked":
+                        special_mask = build_special_mask(input_ids, special_ids)
+                        batch_input_ids, labels = make_masked_batch(
+                            input_ids,
+                            special_mask,
+                            mask_ratio,
+                            vocab_size,
+                            int(mask_id),
+                            random_ratio,
+                            keep_ratio,
+                            train_gen,
+                        )
+                        set_gpt_bert_is_causal(model, False)
+                    else:
+                        batch_input_ids, labels = make_causal_batch(input_ids)
+                        set_gpt_bert_is_causal(model, True)
+
+                    loss, ce_loss, target_tokens = compute_gpt_bert_loss(
+                        model,
+                        input_ids=batch_input_ids,
+                        labels=labels,
+                        attention_mask=attention_mask,
+                        z_loss=z_loss,
+                    )
+
+                accelerator.backward(loss)
+                if gradient_clip_norm and accelerator.sync_gradients:
+                    accelerator.clip_grad_norm_(model.parameters(), gradient_clip_norm)
+                optimizer.step()
+                if scheduler is not None and accelerator.sync_gradients:
+                    scheduler.step()
+                optimizer.zero_grad(set_to_none=True)
+
+            target_tokens_float = target_tokens.float()
+            loss_sum = (loss.detach() * target_tokens_float).float()
+            ce_sum = (ce_loss.detach() * target_tokens_float).float()
+            input_tokens = torch.tensor(float(input_ids.numel()), device=accelerator.device)
+            if accelerator.num_processes > 1:
+                loss_sum = accelerator.reduce(loss_sum, reduction="sum")
+                ce_sum = accelerator.reduce(ce_sum, reduction="sum")
+                target_tokens_float = accelerator.reduce(target_tokens_float, reduction="sum")
+                input_tokens = accelerator.reduce(input_tokens, reduction="sum")
+
+            if accelerator.sync_gradients:
+                global_update_step += 1
+
+            loss_sum_value = loss_sum.item()
+            ce_sum_value = ce_sum.item()
+            target_token_value = target_tokens_float.item()
+            cumulative_tokens_seen += input_tokens.item()
+            current_words_seen = (
+                cumulative_tokens_seen * words_per_token
+                if words_per_token is not None
+                else None
+            )
+            epoch_loss_sum += loss_sum_value
+            epoch_ce_sum += ce_sum_value
+            epoch_tokens += target_token_value
+            window_loss_sum += loss_sum_value
+            window_ce_sum += ce_sum_value
+            window_tokens += target_token_value
+            if objective == "masked":
+                window_masked_microsteps += 1
+            else:
+                window_causal_microsteps += 1
+
+            if accelerator.is_local_main_process:
+                progress.set_postfix(
+                    loss=f"{loss.item():.4f}",
+                    obj=objective,
+                    step=global_update_step,
+                )
+
+            should_log = (
+                log_every_steps > 0
+                and accelerator.sync_gradients
+                and global_update_step % int(log_every_steps) == 0
+            )
+            if should_log and accelerator.is_main_process:
+                record = {
+                    "type": "train",
+                    "epoch": epoch,
+                    "step": global_update_step,
+                    "global_micro_step": global_micro_step,
+                    "tokens_seen": int(cumulative_tokens_seen),
+                    "loss": window_loss_sum / max(1.0, window_tokens),
+                    "ce_loss": window_ce_sum / max(1.0, window_tokens),
+                    "mask_ratio": mask_ratio,
+                    "causal_microsteps": window_causal_microsteps,
+                    "masked_microsteps": window_masked_microsteps,
+                    "seconds": time.perf_counter() - started,
+                }
+                if current_words_seen is not None:
+                    record["words_seen"] = current_words_seen
+                history.append(record)
+                print(
+                    f"[step {global_update_step:06d}] "
+                    f"train_loss={record['loss']:.4f} "
+                    f"ce_loss={record['ce_loss']:.4f} "
+                    f"mask={mask_ratio:.3f} "
+                    f"micro={global_micro_step}",
+                    flush=True,
+                )
+                save_json_atomic(history, metrics_path)
+                window_loss_sum = 0.0
+                window_ce_sum = 0.0
+                window_tokens = 0.0
+                window_causal_microsteps = 0
+                window_masked_microsteps = 0
+
+            should_eval = (
+                val_loader is not None
+                and eval_every_steps > 0
+                and accelerator.sync_gradients
+                and global_update_step % int(eval_every_steps) == 0
+            )
+            if should_eval:
+                val_losses = evaluate_hybrid_lm_loss(
+                    model,
+                    val_loader,
+                    accelerator,
+                    tokenizer=tokenizer,
+                    hybrid_config=hybrid_config,
+                    vocab_size=vocab_size,
+                    max_batches=eval_max_batches,
+                )
+                if accelerator.is_main_process:
+                    record = {
+                        "type": "validation",
+                        "epoch": epoch,
+                        "step": global_update_step,
+                        "global_micro_step": global_micro_step,
+                        "tokens_seen": int(cumulative_tokens_seen),
+                        "max_batches": eval_max_batches,
+                        **val_losses,
+                    }
+                    if current_words_seen is not None:
+                        record["words_seen"] = current_words_seen
+                    history.append(record)
+                    print(
+                        f"[step {global_update_step:06d}] "
+                        f"val_causal_loss={val_losses['val_causal_loss']:.4f} "
+                        f"val_mntp_loss={val_losses['val_mntp_loss']:.4f}",
+                        flush=True,
+                    )
+                    save_json_atomic(history, metrics_path)
+
+            mntp_word_due = (
+                current_words_seen is not None
+                and word_interval_due(
+                    words_seen=current_words_seen,
+                    next_words=next_mntp_likelihood_words,
+                )
+            )
+            should_mntp_likelihood_eval = (
+                mntp_likelihood_items is not None
+                and accelerator.sync_gradients
+                and (
+                    (
+                        mntp_likelihood_every_steps > 0
+                        and global_update_step % int(mntp_likelihood_every_steps) == 0
+                    )
+                    or mntp_word_due
+                )
+            )
+            if should_mntp_likelihood_eval:
+                run_mntp_likelihood_eval(
+                    epoch=epoch,
+                    step=global_update_step,
+                    tokens_seen=cumulative_tokens_seen,
+                )
+                if mntp_word_due:
+                    next_mntp_likelihood_words = advance_word_interval(
+                        next_words=next_mntp_likelihood_words,
+                        every_words=mntp_likelihood_every_words,
+                        words_seen=current_words_seen or 0.0,
+                    )
+
+        epoch_record = {
+            "type": "epoch",
+            "epoch": epoch,
+            "step": global_update_step,
+            "global_micro_step": global_micro_step,
+            "tokens_seen": int(cumulative_tokens_seen),
+            "train_loss": epoch_loss_sum / max(1.0, epoch_tokens),
+            "train_ce_loss": epoch_ce_sum / max(1.0, epoch_tokens),
+        }
+        if words_per_token is not None:
+            epoch_record["words_seen"] = cumulative_tokens_seen * words_per_token
+        if accelerator.is_main_process:
+            history.append(epoch_record)
+            print(
+                f"Hybrid epoch {epoch} "
+                f"train_loss={epoch_record['train_loss']:.4f} "
+                f"train_ce_loss={epoch_record['train_ce_loss']:.4f}",
+                flush=True,
+            )
+            save_json_atomic(history, metrics_path)
+
+        if save_every_epochs and epoch % int(save_every_epochs) == 0:
+            save_gpt_bert_checkpoint(
+                model,
+                tokenizer,
+                accelerator,
+                output_dir,
+                name=f"checkpoint-epoch-{epoch:04d}",
+                repo=model_repo,
+            )
+
+    if save_final:
+        save_gpt_bert_checkpoint(
+            model,
+            tokenizer,
+            accelerator,
+            output_dir,
+            name="final",
+            repo=model_repo,
+        )
+
+    accelerator.wait_for_everyone()
+    return history
+
+
+__all__ = [
+    "build_special_mask",
+    "compute_gpt_bert_loss",
+    "evaluate_mntp_likelihood_benchmark",
+    "evaluate_hybrid_lm_loss",
+    "make_causal_batch",
+    "make_masked_batch",
+    "mask_ratio_for_step",
+    "objective_for",
+    "save_gpt_bert_checkpoint",
+    "set_gpt_bert_is_causal",
+    "special_token_ids",
+    "train_hybrid_lm",
+]

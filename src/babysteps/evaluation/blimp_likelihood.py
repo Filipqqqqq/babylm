@@ -8,9 +8,13 @@ import statistics
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import torch
+
+
+ScoreReduction = Literal["sum", "mean"]
+VALID_SCORE_REDUCTIONS = {"sum", "mean"}
 
 
 @dataclass(frozen=True)
@@ -186,21 +190,42 @@ def score_sentence_logprobs(
     return scores
 
 
+def validate_score_reduction(score_reduction: str) -> ScoreReduction:
+    """Validate the token-score reduction used to compare candidates."""
+
+    if score_reduction not in VALID_SCORE_REDUCTIONS:
+        raise ValueError(
+            "score_reduction must be 'sum' or 'mean', "
+            f"got {score_reduction!r}."
+        )
+    return score_reduction  # type: ignore[return-value]
+
+
+def reduce_sentence_score(score: SentenceScore, score_reduction: ScoreReduction) -> float:
+    """Return the candidate score used for ranking."""
+
+    if score_reduction == "mean":
+        return score.sum_logprob / score.scored_token_count
+    return score.sum_logprob
+
+
 def build_item_records(
     *,
     items: list[BlimpItem],
     good_scores: list[SentenceScore],
     bad_scores: list[SentenceScore],
+    score_reduction: ScoreReduction = "sum",
 ) -> list[dict[str, Any]]:
     """Build records using strict ``score_good > score_bad`` correctness."""
 
+    score_reduction = validate_score_reduction(score_reduction)
     if len(good_scores) != len(items) or len(bad_scores) != len(items):
         raise ValueError("items, good_scores, and bad_scores must have the same length.")
 
     records: list[dict[str, Any]] = []
     for item_index, (item, good, bad) in enumerate(zip(items, good_scores, bad_scores)):
-        score_good = good.sum_logprob
-        score_bad = bad.sum_logprob
+        score_good = reduce_sentence_score(good, score_reduction)
+        score_bad = reduce_sentence_score(bad, score_reduction)
         margin = score_good - score_bad
         correct = score_good > score_bad
         records.append(
@@ -213,6 +238,7 @@ def build_item_records(
                 "linguistics_term": item.linguistics_term,
                 "uid": item.uid,
                 "contrast": item.contrast,
+                "score_reduction": score_reduction,
                 "sentence_good": item.sentence_good,
                 "sentence_bad": item.sentence_bad,
                 "score_good": score_good,
@@ -243,6 +269,7 @@ def _row_for_group(
     return {
         "group_scope": scope,
         "group_name": name,
+        "score_reduction": records[0].get("score_reduction", "") if records else "",
         "items": len(records),
         "correct": correct,
         "score": micro_score if override_score is None else override_score,
@@ -299,8 +326,11 @@ def evaluate_blimp_likelihood(
     items: list[BlimpItem],
     batch_size: int = 64,
     device: torch.device | str | None = None,
+    score_reduction: ScoreReduction = "sum",
 ) -> BlimpLikelihoodResult:
-    """Evaluate ``score_good = sum log P(sentence_good)`` vs bad."""
+    """Evaluate sentence likelihood pairs with sum or mean token logprobs."""
+
+    score_reduction = validate_score_reduction(score_reduction)
 
     good_scores = score_sentence_logprobs(
         model=model,
@@ -320,6 +350,7 @@ def evaluate_blimp_likelihood(
         items=items,
         good_scores=good_scores,
         bad_scores=bad_scores,
+        score_reduction=score_reduction,
     )
     return BlimpLikelihoodResult(
         item_records=item_records,
@@ -347,6 +378,7 @@ ITEM_RECORD_FIELDNAMES = [
     "linguistics_term",
     "uid",
     "contrast",
+    "score_reduction",
     "sentence_good",
     "sentence_bad",
     "score_good",
@@ -365,6 +397,7 @@ SUMMARY_FIELDNAMES = [
     *RUN_METADATA_FIELDNAMES,
     "group_scope",
     "group_name",
+    "score_reduction",
     "items",
     "correct",
     "score",
@@ -454,6 +487,7 @@ __all__ = [
     "BlimpItem",
     "BlimpLikelihoodResult",
     "SentenceScore",
+    "ScoreReduction",
     "add_record_metadata",
     "aggregate_item_records",
     "append_item_records_jsonl",
@@ -462,7 +496,9 @@ __all__ = [
     "encode_sentence",
     "evaluate_blimp_likelihood",
     "read_blimp_items",
+    "reduce_sentence_score",
     "score_sentence_logprobs",
+    "validate_score_reduction",
     "write_item_records_jsonl",
     "write_summary_csv",
 ]

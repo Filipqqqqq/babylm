@@ -8,6 +8,7 @@ import torch
 import yaml
 from transformers import AutoModelForCausalLM
 
+import babysteps.models.causal_lm as causal_lm_module
 from babysteps.models import (
     build_causal_lm_config,
     build_causal_lm_config_from_dict,
@@ -45,6 +46,7 @@ def _config_rope_theta(hf_config) -> float:
 def test_normalize_model_arch_accepts_expected_aliases() -> None:
     assert normalize_model_arch("gpt-2") == "gpt2"
     assert normalize_model_arch("llama_3") == "llama"
+    assert normalize_model_arch("gpt-bert") == "gpt_bert"
 
     with pytest.raises(ValueError, match="Unsupported model architecture"):
         normalize_model_arch("mamba")
@@ -240,6 +242,64 @@ def test_tiny_gpt2_model_helper_instantiates_and_runs_forward() -> None:
 
     assert outputs.logits.shape == (1, 4, 64)
     assert model.config.model_type == "gpt2"
+
+
+def test_gpt_bert_config_from_dict_uses_baseline_repo(monkeypatch) -> None:
+    calls = {}
+
+    def fake_from_pretrained(repo: str, *, trust_remote_code: bool):
+        calls["repo"] = repo
+        calls["trust_remote_code"] = trust_remote_code
+        return SimpleNamespace(vocab_size=0, use_cache=True)
+
+    monkeypatch.setattr(causal_lm_module.AutoConfig, "from_pretrained", fake_from_pretrained)
+    config = {
+        "model": {
+            "architecture": "gpt_bert",
+            "repo": "example/gpt-bert",
+        }
+    }
+    tokenizer = _tokenizer(vocab_size=123)
+    tokenizer.bos_token_id = None
+    tokenizer.cls_token_id = 1
+    tokenizer.eos_token_id = None
+    tokenizer.sep_token_id = 2
+
+    hf_config = build_causal_lm_config_from_dict(config, tokenizer)
+
+    assert calls == {"repo": "example/gpt-bert", "trust_remote_code": True}
+    assert hf_config.vocab_size == 123
+    assert hf_config.bos_token_id == 1
+    assert hf_config.eos_token_id == 2
+    assert hf_config.pad_token_id == 0
+    assert hf_config.use_cache is False
+    assert hf_config.babysteps_gpt_bert_repo == "example/gpt-bert"
+
+
+def test_gpt_bert_model_builder_uses_masked_lm_class(monkeypatch) -> None:
+    sentinel_config = SimpleNamespace(vocab_size=64, use_cache=False)
+    sentinel_model = object()
+    calls = {}
+
+    monkeypatch.setattr(
+        causal_lm_module.AutoConfig,
+        "from_pretrained",
+        lambda repo, *, trust_remote_code: sentinel_config,
+    )
+
+    def fake_from_config(hf_config, *, trust_remote_code: bool):
+        calls["hf_config"] = hf_config
+        calls["trust_remote_code"] = trust_remote_code
+        return sentinel_model
+
+    monkeypatch.setattr(causal_lm_module.AutoModelForMaskedLM, "from_config", fake_from_config)
+    model = build_causal_lm_model(
+        {"model": {"architecture": "gpt_bert", "repo": "example/gpt-bert"}},
+        _tokenizer(vocab_size=64),
+    )
+
+    assert model is sentinel_model
+    assert calls == {"hf_config": sentinel_config, "trust_remote_code": True}
 
 
 def test_llama_config_rejects_invalid_attention_shapes() -> None:

@@ -8,7 +8,7 @@ import statistics
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import torch
 
@@ -26,6 +26,8 @@ SUBTASK_ORDER = (
     "wugs_dist_before",
     "wugs_dist_in_between",
 )
+ScoreReduction = Literal["sum", "mean"]
+VALID_SCORE_REDUCTIONS = {"sum", "mean"}
 
 
 @dataclass(frozen=True)
@@ -288,13 +290,37 @@ def score_continuations(
     return scores
 
 
+def validate_score_reduction(score_reduction: str) -> ScoreReduction:
+    """Validate the token-score reduction used to compare candidates."""
+
+    if score_reduction not in VALID_SCORE_REDUCTIONS:
+        raise ValueError(
+            "score_reduction must be 'sum' or 'mean', "
+            f"got {score_reduction!r}."
+        )
+    return score_reduction  # type: ignore[return-value]
+
+
+def reduce_continuation_score(
+    score: ContinuationScore,
+    score_reduction: ScoreReduction,
+) -> float:
+    """Return the candidate score used for ranking."""
+
+    if score_reduction == "mean":
+        return score.sum_logprob / score.scored_token_count
+    return score.sum_logprob
+
+
 def build_item_records(
     *,
     items: list[CompsItem],
     scores: list[ContinuationScore],
+    score_reduction: ScoreReduction = "sum",
 ) -> list[dict[str, Any]]:
     """Build records using strict ``score_acceptable > score_unacceptable``."""
 
+    score_reduction = validate_score_reduction(score_reduction)
     if len(scores) != 2 * len(items):
         raise ValueError("COMPS scoring expects exactly two continuation scores per item.")
 
@@ -302,8 +328,8 @@ def build_item_records(
     for item_index, item in enumerate(items):
         acceptable = scores[2 * item_index]
         unacceptable = scores[2 * item_index + 1]
-        score_acceptable = acceptable.sum_logprob
-        score_unacceptable = unacceptable.sum_logprob
+        score_acceptable = reduce_continuation_score(acceptable, score_reduction)
+        score_unacceptable = reduce_continuation_score(unacceptable, score_reduction)
         margin = score_acceptable - score_unacceptable
         correct = score_acceptable > score_unacceptable
         records.append(
@@ -316,6 +342,7 @@ def build_item_records(
                 "negative_sample_type": item.negative_sample_type,
                 "distraction_type": item.distraction_type,
                 "similarity": item.similarity if item.similarity is not None else "",
+                "score_reduction": score_reduction,
                 "prefix_acceptable": item.prefix_acceptable,
                 "prefix_unacceptable": item.prefix_unacceptable,
                 "property_phrase": item.property_phrase,
@@ -350,6 +377,7 @@ def _row_for_group(
     return {
         "group_scope": scope,
         "group_name": name,
+        "score_reduction": records[0].get("score_reduction", "") if records else "",
         "items": len(records),
         "correct": correct,
         "score": micro_score if override_score is None else override_score,
@@ -427,8 +455,11 @@ def evaluate_comps_likelihood(
     items: list[CompsItem],
     batch_size: int = 64,
     device: torch.device | str | None = None,
+    score_reduction: ScoreReduction = "sum",
 ) -> CompsLikelihoodResult:
-    """Evaluate ``sum log P(property_phrase | prefix_*)`` for COMPS pairs."""
+    """Evaluate property-phrase likelihoods with sum or mean token logprobs."""
+
+    score_reduction = validate_score_reduction(score_reduction)
 
     scores = score_continuations(
         model=model,
@@ -437,7 +468,11 @@ def evaluate_comps_likelihood(
         batch_size=batch_size,
         device=device,
     )
-    item_records = build_item_records(items=items, scores=scores)
+    item_records = build_item_records(
+        items=items,
+        scores=scores,
+        score_reduction=score_reduction,
+    )
     return CompsLikelihoodResult(
         item_records=item_records,
         summary_rows=aggregate_item_records(item_records),
@@ -464,6 +499,7 @@ ITEM_RECORD_FIELDNAMES = [
     "negative_sample_type",
     "distraction_type",
     "similarity",
+    "score_reduction",
     "prefix_acceptable",
     "prefix_unacceptable",
     "property_phrase",
@@ -485,6 +521,7 @@ SUMMARY_FIELDNAMES = [
     *RUN_METADATA_FIELDNAMES,
     "group_scope",
     "group_name",
+    "score_reduction",
     "items",
     "correct",
     "score",
@@ -551,6 +588,7 @@ __all__ = [
     "CompsLikelihoodResult",
     "ContinuationRequest",
     "ContinuationScore",
+    "ScoreReduction",
     "aggregate_item_records",
     "append_item_records_jsonl",
     "append_summary_csv",
@@ -559,5 +597,7 @@ __all__ = [
     "evaluate_comps_likelihood",
     "make_continuation_requests",
     "read_comps_items",
+    "reduce_continuation_score",
     "score_continuations",
+    "validate_score_reduction",
 ]

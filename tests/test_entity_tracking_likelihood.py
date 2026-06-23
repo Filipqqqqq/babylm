@@ -146,6 +146,27 @@ def test_build_item_records_uses_strict_option_zero_greater_than_all() -> None:
     assert records[1]["tie_for_best"] is True
 
 
+def test_build_item_records_can_use_mean_token_log_likelihood() -> None:
+    records = build_item_records(
+        items=[make_item()],
+        score_map={
+            0: {
+                0: ContinuationScore(-2.0, 2, 4),
+                1: ContinuationScore(-1.5, 1, 3),
+                2: ContinuationScore(-3.0, 1, 3),
+                3: ContinuationScore(-4.0, 1, 3),
+                4: ContinuationScore(-5.0, 1, 3),
+            },
+        },
+        score_reduction="mean",
+    )
+
+    assert records[0]["score_reduction"] == "mean"
+    assert records[0]["score_correct"] == -1.0
+    assert records[0]["best_distractor_score"] == -1.5
+    assert records[0]["correct"] is True
+
+
 def test_evaluate_entity_tracking_likelihood_scores_continuations() -> None:
     result = evaluate_entity_tracking_likelihood(
         model=GoodOptionModel(),

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train a byte-BPE tokenizer and build packed token shards from text datasets."""
+"""Prepare a tokenizer and build packed token shards from text datasets."""
 
 from __future__ import annotations
 

@@ -147,6 +147,24 @@ def test_build_item_records_uses_strict_good_greater_than_bad() -> None:
     assert records[1]["score"] == 0.0
 
 
+def test_build_item_records_can_use_mean_token_log_likelihood() -> None:
+    records = build_item_records(
+        items=[make_item()],
+        good_scores=[
+            SentenceScore(sum_logprob=-2.0, scored_token_count=2, input_token_count=3),
+        ],
+        bad_scores=[
+            SentenceScore(sum_logprob=-1.5, scored_token_count=1, input_token_count=2),
+        ],
+        score_reduction="mean",
+    )
+
+    assert records[0]["score_reduction"] == "mean"
+    assert records[0]["score_good"] == -1.0
+    assert records[0]["score_bad"] == -1.5
+    assert records[0]["correct"] is True
+
+
 def test_aggregate_counts_ties_as_wrong() -> None:
     item = make_item()
     records = build_item_records(

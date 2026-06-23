@@ -8,12 +8,14 @@ import statistics
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import torch
 
 
 ENTITY_TRACKING_FAMILIES = ("regular", "ambiref", "move_contents")
+ScoreReduction = Literal["sum", "mean"]
+VALID_SCORE_REDUCTIONS = {"sum", "mean"}
 
 
 @dataclass(frozen=True)
@@ -282,17 +284,44 @@ def _require_scores(
     return item_scores
 
 
+def validate_score_reduction(score_reduction: str) -> ScoreReduction:
+    """Validate the token-score reduction used to compare candidates."""
+
+    if score_reduction not in VALID_SCORE_REDUCTIONS:
+        raise ValueError(
+            "score_reduction must be 'sum' or 'mean', "
+            f"got {score_reduction!r}."
+        )
+    return score_reduction  # type: ignore[return-value]
+
+
+def reduce_continuation_score(
+    score: ContinuationScore,
+    score_reduction: ScoreReduction,
+) -> float:
+    """Return the candidate score used for ranking."""
+
+    if score_reduction == "mean":
+        return score.sum_logprob / score.scored_token_count
+    return score.sum_logprob
+
+
 def build_item_records(
     *,
     items: list[EntityTrackingItem],
     score_map: dict[int, dict[int, ContinuationScore]],
+    score_reduction: ScoreReduction = "sum",
 ) -> list[dict[str, Any]]:
     """Build records using strict option-0-greater-than-all correctness."""
 
+    score_reduction = validate_score_reduction(score_reduction)
     records: list[dict[str, Any]] = []
     for item_index, item in enumerate(items):
         item_scores = _require_scores(score_map, item_index, len(item.options))
-        option_scores = [item_scores[index].sum_logprob for index in range(len(item.options))]
+        option_scores = [
+            reduce_continuation_score(item_scores[index], score_reduction)
+            for index in range(len(item.options))
+        ]
         correct_score = option_scores[0]
         best_distractor_score = max(option_scores[1:])
         margin = correct_score - best_distractor_score
@@ -313,6 +342,7 @@ def build_item_records(
                 "family": item.family,
                 "numops": item.numops,
                 "uid": item.uid,
+                "score_reduction": score_reduction,
                 "input_prefix": item.input_prefix,
                 "options": list(item.options),
                 "score_correct": correct_score,
@@ -346,6 +376,7 @@ def _row_for_group(
     return {
         "group_scope": scope,
         "group_name": name,
+        "score_reduction": records[0].get("score_reduction", "") if records else "",
         "items": len(records),
         "correct": correct,
         "score": micro_score if override_score is None else override_score,
@@ -432,8 +463,11 @@ def evaluate_entity_tracking_likelihood(
     items: list[EntityTrackingItem],
     batch_size: int = 64,
     device: torch.device | str | None = None,
+    score_reduction: ScoreReduction = "sum",
 ) -> EntityTrackingResult:
-    """Evaluate ``score_option_i = sum log P(option_i | input_prefix)``."""
+    """Evaluate option likelihoods with sum or mean token logprobs."""
+
+    score_reduction = validate_score_reduction(score_reduction)
 
     score_map = score_continuations(
         model=model,
@@ -442,7 +476,11 @@ def evaluate_entity_tracking_likelihood(
         batch_size=batch_size,
         device=device,
     )
-    item_records = build_item_records(items=items, score_map=score_map)
+    item_records = build_item_records(
+        items=items,
+        score_map=score_map,
+        score_reduction=score_reduction,
+    )
     return EntityTrackingResult(
         item_records=item_records,
         summary_rows=aggregate_item_records(item_records),
@@ -468,6 +506,7 @@ ITEM_RECORD_FIELDNAMES = [
     "family",
     "numops",
     "uid",
+    "score_reduction",
     "input_prefix",
     "options",
     "score_correct",
@@ -486,6 +525,7 @@ SUMMARY_FIELDNAMES = [
     *RUN_METADATA_FIELDNAMES,
     "group_scope",
     "group_name",
+    "score_reduction",
     "items",
     "correct",
     "score",
@@ -548,6 +588,7 @@ __all__ = [
     "ContinuationScore",
     "EntityTrackingItem",
     "EntityTrackingResult",
+    "ScoreReduction",
     "aggregate_item_records",
     "append_item_records_jsonl",
     "append_summary_csv",
@@ -556,5 +597,7 @@ __all__ = [
     "evaluate_entity_tracking_likelihood",
     "make_continuation_requests",
     "read_entity_tracking_items",
+    "reduce_continuation_score",
     "score_continuations",
+    "validate_score_reduction",
 ]

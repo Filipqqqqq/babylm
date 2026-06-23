@@ -10,10 +10,18 @@ import inspect
 from typing import Any
 
 from torch import nn
-from transformers import AutoModelForCausalLM, GPT2Config, LlamaConfig, PretrainedConfig
+from transformers import (
+    AutoConfig,
+    AutoModelForCausalLM,
+    AutoModelForMaskedLM,
+    GPT2Config,
+    LlamaConfig,
+    PretrainedConfig,
+)
 
 
-SUPPORTED_MODEL_ARCHES = ("gpt2", "llama")
+DEFAULT_GPT_BERT_REPO = "BabyLM-community/babylm-baseline-10m-gpt-bert-causal-focus"
+SUPPORTED_MODEL_ARCHES = ("gpt2", "llama", "gpt_bert")
 
 
 def normalize_model_arch(model_arch: str | None) -> str:
@@ -28,6 +36,9 @@ def normalize_model_arch(model_arch: str | None) -> str:
         "llama-2": "llama",
         "llama3": "llama",
         "llama-3": "llama",
+        "gptbert": "gpt_bert",
+        "gpt-bert": "gpt_bert",
+        "gpt_bert": "gpt_bert",
     }
     if arch not in aliases:
         supported = ", ".join(SUPPORTED_MODEL_ARCHES)
@@ -195,6 +206,17 @@ def build_causal_lm_config_from_dict(
     architecture = normalize_model_arch(
         _first_present(model_config, ("architecture", "model_arch"), "gpt2")
     )
+    if architecture == "gpt_bert":
+        repo = str(model_config.get("repo", DEFAULT_GPT_BERT_REPO))
+        hf_config = AutoConfig.from_pretrained(repo, trust_remote_code=True)
+        hf_config.vocab_size = resolve_model_vocab_size(model_config, tokenizer)
+        hf_config.bos_token_id = _token_id(tokenizer, "bos_token_id", "cls_token_id")
+        hf_config.eos_token_id = _token_id(tokenizer, "eos_token_id", "sep_token_id")
+        hf_config.pad_token_id = _token_id(tokenizer, "pad_token_id")
+        hf_config.use_cache = False
+        hf_config.babysteps_gpt_bert_repo = repo
+        return hf_config
+
     context_length = int(_first_present(model_config, ("context_length", "seq_len"), 1024))
     n_embd = int(_first_present(model_config, ("n_embd", "hidden_size"), 768))
     n_head = int(_first_present(model_config, ("n_head", "num_attention_heads"), 12))
@@ -297,7 +319,13 @@ def apply_llama_training_dropout(model, hf_config: PretrainedConfig):
 def build_causal_lm_model(config: dict[str, Any], tokenizer: Any):
     """Instantiate a Hugging Face causal LM from a BabySteps config dict."""
 
+    architecture = normalize_model_arch(
+        _first_present(config["model"], ("architecture", "model_arch"), "gpt2")
+    )
     hf_config = build_causal_lm_config_from_dict(config, tokenizer)
+    if architecture == "gpt_bert":
+        return AutoModelForMaskedLM.from_config(hf_config, trust_remote_code=True)
+
     model_kwargs: dict[str, Any] = {}
     attn_implementation = config["model"].get("attn_implementation")
     if attn_implementation:

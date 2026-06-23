@@ -23,6 +23,58 @@ class OptimizerBuildInfo:
     use_fused: bool = False
 
 
+class Lamb(torch.optim.Optimizer):
+    """Layer-wise adaptive moments optimizer used by the GPT-BERT baseline."""
+
+    def __init__(
+        self,
+        params,
+        lr: float = 7e-3,
+        betas: tuple[float, float] = (0.9, 0.98),
+        eps: float = 1e-8,
+        weight_decay: float = 0.0,
+    ) -> None:
+        defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
+        super().__init__(params, defaults)
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        loss = closure() if closure is not None else None
+        for group in self.param_groups:
+            beta1, beta2 = group["betas"]
+            eps, weight_decay, lr = group["eps"], group["weight_decay"], group["lr"]
+            for param in group["params"]:
+                if param.grad is None:
+                    continue
+                grad = param.grad
+                state = self.state[param]
+                if len(state) == 0:
+                    state["step"] = 0
+                    state["m"] = torch.zeros_like(param)
+                    state["v"] = torch.zeros_like(param)
+
+                m, v = state["m"], state["v"]
+                state["step"] += 1
+                step = state["step"]
+                m.mul_(beta1).add_(grad, alpha=1.0 - beta1)
+                v.mul_(beta2).addcmul_(grad, grad, value=1.0 - beta2)
+
+                m_hat = m / (1.0 - beta1**step)
+                v_hat = v / (1.0 - beta2**step)
+                update = m_hat / (v_hat.sqrt() + eps)
+                if weight_decay != 0:
+                    update = update.add(param, alpha=weight_decay)
+
+                weight_norm = param.norm()
+                update_norm = update.norm()
+                if weight_norm > 0 and update_norm > 0:
+                    trust_ratio = weight_norm / update_norm
+                else:
+                    trust_ratio = torch.ones((), device=param.device)
+                param.add_(update, alpha=-lr * float(trust_ratio))
+        return loss
+
+
 def _as_betas(value: Any) -> tuple[float, float]:
     beta1, beta2 = value
     return float(beta1), float(beta2)
@@ -104,6 +156,55 @@ def build_adamw_optimizer(
     return optimizer, info
 
 
+def build_lamb_optimizer(
+    model: torch.nn.Module,
+    *,
+    learning_rate: float,
+    weight_decay: float,
+    betas: tuple[float, float],
+    eps: float,
+) -> tuple[Lamb, OptimizerBuildInfo]:
+    """Build LAMB with decayed matrix/tensor params and no-decay vectors."""
+
+    param_dict = _trainable_named_parameters(model)
+    decay_params = [param for param in param_dict.values() if param.dim() >= 2]
+    nodecay_params = [param for param in param_dict.values() if param.dim() < 2]
+
+    param_groups: list[dict[str, Any]] = []
+    if decay_params:
+        param_groups.append(
+            {
+                "params": decay_params,
+                "lr": float(learning_rate),
+                "base_lr": float(learning_rate),
+                "weight_decay": float(weight_decay),
+            }
+        )
+    if nodecay_params:
+        param_groups.append(
+            {
+                "params": nodecay_params,
+                "lr": float(learning_rate),
+                "base_lr": float(learning_rate),
+                "weight_decay": 0.0,
+            }
+        )
+
+    optimizer = Lamb(
+        param_groups,
+        lr=float(learning_rate),
+        betas=betas,
+        eps=float(eps),
+    )
+    info = OptimizerBuildInfo(
+        name="lamb",
+        primary_tensors=len(decay_params),
+        auxiliary_tensors=len(nodecay_params),
+        use_fused=False,
+    )
+    return optimizer, info
+
+
 def build_muon_pe_optimizer(
     model: torch.nn.Module,
     *,
@@ -174,6 +275,15 @@ def build_optimizer(
             use_fused_adamw=bool(settings.get("use_fused_adamw", False)),
         )
 
+    if optimizer_name == "lamb":
+        return build_lamb_optimizer(
+            model,
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
+            betas=betas,
+            eps=eps,
+        )
+
     if optimizer_name == "muon_pe":
         muon_lr = float(settings.get("muon_lr", 0.02))
         return build_muon_pe_optimizer(
@@ -191,4 +301,6 @@ def build_optimizer(
             muon_batch_updates=bool(settings.get("muon_batch_updates", True)),
         )
 
-    raise ValueError(f"Unsupported optimizer={optimizer_name!r}. Expected 'adamw' or 'muon_pe'.")
+    raise ValueError(
+        f"Unsupported optimizer={optimizer_name!r}. Expected 'adamw', 'lamb', or 'muon_pe'."
+    )

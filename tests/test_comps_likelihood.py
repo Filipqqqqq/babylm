@@ -137,6 +137,22 @@ def test_build_item_records_uses_strict_acceptable_greater_than_unacceptable() -
     assert records[1]["tie"] is True
 
 
+def test_build_item_records_can_use_mean_token_log_likelihood() -> None:
+    records = build_item_records(
+        items=[make_item()],
+        scores=[
+            ContinuationScore(-2.0, 2, 4),
+            ContinuationScore(-1.5, 1, 3),
+        ],
+        score_reduction="mean",
+    )
+
+    assert records[0]["score_reduction"] == "mean"
+    assert records[0]["score_acceptable"] == -1.0
+    assert records[0]["score_unacceptable"] == -1.5
+    assert records[0]["correct"] is True
+
+
 def test_aggregate_item_records_uses_subtask_macro_for_overall_score() -> None:
     records = []
     for index in range(4):

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Train a byte-BPE tokenizer and build packed token shards from text datasets.
+"""Prepare a tokenizer and build packed token shards from text datasets.
 
-The default source is a Hugging Face dataset, matching the original BabyLM
-2026 workflow. Local text and JSONL files are also supported for custom
-datasets.
+The tokenizer can be trained as byte-BPE or copied from a pretrained
+Hugging Face tokenizer. The default data source is a Hugging Face dataset,
+matching the original BabyLM 2026 workflow. Local text and JSONL files are
+also supported for custom datasets.
 """
 
 from __future__ import annotations
@@ -127,6 +128,60 @@ def train_or_load_tokenizer(
         print(f"Tokenizer exists, reusing: {output_dir}")
         validate_tokenizer_dir(output_dir)
         return AutoTokenizer.from_pretrained(output_dir)
+
+    tokenizer_kind = str(tokenizer_config.get("kind", "byte_bpe")).strip().lower()
+    if tokenizer_kind in {"pretrained", "hf", "hub"}:
+        source = tokenizer_config.get("source") or tokenizer_config.get("name")
+        if not source:
+            raise ValueError("Pretrained tokenizer configs must set tokenizer.source.")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        hf_tokenizer = AutoTokenizer.from_pretrained(
+            str(source),
+            trust_remote_code=bool(tokenizer_config.get("trust_remote_code", False)),
+        )
+        hf_tokenizer.model_max_length = int(
+            tokenizer_config.get(
+                "model_max_length",
+                getattr(hf_tokenizer, "model_max_length", 1024),
+            )
+        )
+        hf_tokenizer.save_pretrained(output_dir)
+        validate_tokenizer_dir(output_dir)
+        hf_tokenizer = AutoTokenizer.from_pretrained(output_dir)
+        manifest = {
+            "created_utc": datetime.now(timezone.utc).isoformat(),
+            "name": config.get("name"),
+            "dataset": dataset_config,
+            "tokenizer": tokenizer_config,
+            "source": str(source),
+            "actual_vocab_size": len(hf_tokenizer),
+            "unk_token_id": hf_tokenizer.unk_token_id,
+            "bos_token_id": hf_tokenizer.bos_token_id,
+            "eos_token_id": hf_tokenizer.eos_token_id,
+            "pad_token_id": hf_tokenizer.pad_token_id,
+            "cls_token_id": hf_tokenizer.cls_token_id,
+            "sep_token_id": hf_tokenizer.sep_token_id,
+            "mask_token_id": hf_tokenizer.mask_token_id,
+        }
+        atomic_write_json(output_dir / "manifest.json", manifest)
+        print(f"Tokenizer copied from {source} to: {output_dir}")
+        print(f"Actual vocab size: {len(hf_tokenizer):,}")
+        print(
+            "Special ids: "
+            f"unk={hf_tokenizer.unk_token_id} "
+            f"bos={hf_tokenizer.bos_token_id} "
+            f"eos={hf_tokenizer.eos_token_id} "
+            f"pad={hf_tokenizer.pad_token_id} "
+            f"cls={hf_tokenizer.cls_token_id} "
+            f"sep={hf_tokenizer.sep_token_id} "
+            f"mask={hf_tokenizer.mask_token_id}"
+        )
+        return hf_tokenizer
+
+    if tokenizer_kind != "byte_bpe":
+        raise ValueError(
+            f"Unsupported tokenizer.kind={tokenizer_kind!r}; expected byte_bpe or pretrained."
+        )
 
     output_dir.mkdir(parents=True, exist_ok=True)
     text_batches = iter_text_batches(
@@ -278,10 +333,14 @@ def build_token_shards(
             meta_path.unlink()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    bos_token_id = tokenizer.bos_token_id
-    eos_token_id = tokenizer.eos_token_id
+    bos_token_id = getattr(tokenizer, "bos_token_id", None)
+    if bos_token_id is None:
+        bos_token_id = getattr(tokenizer, "cls_token_id", None)
+    eos_token_id = getattr(tokenizer, "eos_token_id", None)
+    if eos_token_id is None:
+        eos_token_id = getattr(tokenizer, "sep_token_id", None)
     if bos_token_id is None or eos_token_id is None:
-        raise ValueError("Tokenizer must define bos_token_id and eos_token_id.")
+        raise ValueError("Tokenizer must define bos/eos or cls/sep token ids.")
     if len(tokenizer) > UINT16_LIMIT:
         raise ValueError(f"Tokenizer vocab size {len(tokenizer)} exceeds uint16 capacity.")
 
@@ -347,8 +406,27 @@ def build_token_shards(
         "dtype": "uint16",
         "bos_token_id": int(bos_token_id),
         "eos_token_id": int(eos_token_id),
-        "pad_token_id": int(tokenizer.pad_token_id) if tokenizer.pad_token_id is not None else None,
-        "doc_format": "[BOS] + byte_bpe(text) + [EOS]",
+        "cls_token_id": (
+            int(tokenizer.cls_token_id)
+            if getattr(tokenizer, "cls_token_id", None) is not None
+            else None
+        ),
+        "sep_token_id": (
+            int(tokenizer.sep_token_id)
+            if getattr(tokenizer, "sep_token_id", None) is not None
+            else None
+        ),
+        "pad_token_id": (
+            int(tokenizer.pad_token_id)
+            if getattr(tokenizer, "pad_token_id", None) is not None
+            else None
+        ),
+        "mask_token_id": (
+            int(tokenizer.mask_token_id)
+            if getattr(tokenizer, "mask_token_id", None) is not None
+            else None
+        ),
+        "doc_format": "[BOS/CLS] + tokenizer(text) + [EOS/SEP]",
         "shard_tokens": int(shard_config.get("shard_tokens", 1_000_000)),
         "val_shards": int(shard_config.get("val_shards", 1)),
         "num_shards_total": int(sink.next_shard_idx),
