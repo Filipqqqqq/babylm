@@ -134,6 +134,55 @@ python scripts/train/train_causal_lm.py \
   --config configs/train/gpt2_8l512_bpe16384_babylm2026_strict_small_muon.yaml
 ```
 
+## Train 2026 Strict-Small GPT-BERT Hybrid
+
+Use this path for the GPT-BERT baseline-style hybrid objective. It uses the
+baseline tokenizer from
+`BabyLM-community/babylm-baseline-10m-gpt-bert-causal-focus`, rebuilds
+Strict-Small token shards with that tokenizer, then trains GPT-BERT with a
+15:1 causal-to-MNTP schedule, LAMB, bf16, z-loss, and 10 full epochs by
+default:
+
+```bash
+python scripts/data/build_token_shards.py \
+  --config configs/tokenization/babylm2026_strict_small_gpt_bert_baseline_causal_focus_shards.yaml
+
+python scripts/train/train_hybrid_lm.py \
+  --config configs/train/gpt_bert_baseline_causal_focus_babylm2026_strict_small.yaml
+```
+
+The generated tokenizer and shards go under:
+
+```text
+${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/tokenizers/gpt_bert_baseline_causal_focus
+${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_shards/babylm2026_strict_small_gpt_bert_baseline_causal_focus
+```
+
+The training config uses `seq_len: 512`, `training.batch_size: 32`, and
+`training.gradient_accumulation_steps: 1`, so the default effective batch is
+32 sequences per optimizer update. For a micro-batch size of 16 while keeping
+the same global batch size, run:
+
+```bash
+python scripts/train/train_hybrid_lm.py \
+  --config configs/train/gpt_bert_baseline_causal_focus_babylm2026_strict_small.yaml \
+  --set training.batch_size=16 \
+  --set training.gradient_accumulation_steps=2
+```
+
+MNTP BabyLM benchmark scoring is enabled in the config every 1,000,000
+estimated words with `score_reduction: sum`. Those diagnostics are written
+inside the run directory:
+
+```text
+benchmarks/mntp_likelihood/likelihood_items.jsonl
+benchmarks/mntp_likelihood/likelihood_summary.csv
+```
+
+GPT-BERT checkpoints are saved in the baseline-compatible remote-code format,
+including `pytorch_model.bin`, tokenizer files, `configuration_gpt_bert.py`,
+`modeling_gpt_bert.py`, and `config.json`.
+
 ## Custom Datasets And Tokenizers
 
 The trainer is intentionally dataset-agnostic: it consumes prebuilt
