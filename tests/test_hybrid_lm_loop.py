@@ -245,6 +245,9 @@ def test_train_hybrid_lm_smoke_logs_validation_and_saves(tmp_path: Path) -> None
     assert any(record["type"] == "validation" for record in history)
     assert any("val_causal_loss" in record for record in history)
     assert any("val_mntp_loss" in record for record in history)
+    train_records = [record for record in history if record["type"] == "train"]
+    assert any("train_causal_loss" in record for record in train_records)
+    assert any("train_mntp_loss" in record for record in train_records)
     assert (tmp_path / "checkpoint-epoch-0001" / "pytorch_model.bin").exists()
     assert (tmp_path / "checkpoint-epoch-0001" / "modeling_gpt_bert.py").exists()
     assert (tmp_path / "final" / "pytorch_model.bin").exists()

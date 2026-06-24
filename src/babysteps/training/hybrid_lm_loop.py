@@ -432,6 +432,22 @@ def overall_summary_row(rows: list[dict[str, Any]]) -> dict[str, Any]:
     )
 
 
+def add_objective_loss_metrics(
+    record: dict[str, Any],
+    *,
+    prefix: str,
+    loss_sum: float,
+    ce_sum: float,
+    tokens: float,
+) -> None:
+    """Add token-averaged objective loss metrics when the window has targets."""
+
+    record[f"{prefix}_target_tokens"] = tokens
+    if tokens > 0:
+        record[f"{prefix}_loss"] = loss_sum / tokens
+        record[f"{prefix}_ce_loss"] = ce_sum / tokens
+
+
 def plot_mntp_likelihood_summaries(
     *,
     summary_paths: dict[str, Path],
@@ -669,9 +685,21 @@ def train_hybrid_lm(
         epoch_loss_sum = 0.0
         epoch_ce_sum = 0.0
         epoch_tokens = 0.0
+        epoch_causal_loss_sum = 0.0
+        epoch_causal_ce_sum = 0.0
+        epoch_causal_tokens = 0.0
+        epoch_mntp_loss_sum = 0.0
+        epoch_mntp_ce_sum = 0.0
+        epoch_mntp_tokens = 0.0
         window_loss_sum = 0.0
         window_ce_sum = 0.0
         window_tokens = 0.0
+        window_causal_loss_sum = 0.0
+        window_causal_ce_sum = 0.0
+        window_causal_tokens = 0.0
+        window_mntp_loss_sum = 0.0
+        window_mntp_ce_sum = 0.0
+        window_mntp_tokens = 0.0
         window_causal_microsteps = 0
         window_masked_microsteps = 0
         started = time.perf_counter()
@@ -756,8 +784,20 @@ def train_hybrid_lm(
             window_ce_sum += ce_sum_value
             window_tokens += target_token_value
             if objective == "masked":
+                epoch_mntp_loss_sum += loss_sum_value
+                epoch_mntp_ce_sum += ce_sum_value
+                epoch_mntp_tokens += target_token_value
+                window_mntp_loss_sum += loss_sum_value
+                window_mntp_ce_sum += ce_sum_value
+                window_mntp_tokens += target_token_value
                 window_masked_microsteps += 1
             else:
+                epoch_causal_loss_sum += loss_sum_value
+                epoch_causal_ce_sum += ce_sum_value
+                epoch_causal_tokens += target_token_value
+                window_causal_loss_sum += loss_sum_value
+                window_causal_ce_sum += ce_sum_value
+                window_causal_tokens += target_token_value
                 window_causal_microsteps += 1
 
             if accelerator.is_local_main_process:
@@ -786,21 +826,47 @@ def train_hybrid_lm(
                     "masked_microsteps": window_masked_microsteps,
                     "seconds": time.perf_counter() - started,
                 }
+                add_objective_loss_metrics(
+                    record,
+                    prefix="train_causal",
+                    loss_sum=window_causal_loss_sum,
+                    ce_sum=window_causal_ce_sum,
+                    tokens=window_causal_tokens,
+                )
+                add_objective_loss_metrics(
+                    record,
+                    prefix="train_mntp",
+                    loss_sum=window_mntp_loss_sum,
+                    ce_sum=window_mntp_ce_sum,
+                    tokens=window_mntp_tokens,
+                )
                 if current_words_seen is not None:
                     record["words_seen"] = current_words_seen
                 history.append(record)
+                objective_pieces = []
+                if "train_causal_loss" in record:
+                    objective_pieces.append(f"causal_loss={record['train_causal_loss']:.4f}")
+                if "train_mntp_loss" in record:
+                    objective_pieces.append(f"mntp_loss={record['train_mntp_loss']:.4f}")
                 print(
                     f"[step {global_update_step:06d}] "
                     f"train_loss={record['loss']:.4f} "
                     f"ce_loss={record['ce_loss']:.4f} "
                     f"mask={mask_ratio:.3f} "
-                    f"micro={global_micro_step}",
+                    f"micro={global_micro_step}"
+                    + (f" {' '.join(objective_pieces)}" if objective_pieces else ""),
                     flush=True,
                 )
                 save_json_atomic(history, metrics_path)
                 window_loss_sum = 0.0
                 window_ce_sum = 0.0
                 window_tokens = 0.0
+                window_causal_loss_sum = 0.0
+                window_causal_ce_sum = 0.0
+                window_causal_tokens = 0.0
+                window_mntp_loss_sum = 0.0
+                window_mntp_ce_sum = 0.0
+                window_mntp_tokens = 0.0
                 window_causal_microsteps = 0
                 window_masked_microsteps = 0
 
@@ -881,6 +947,20 @@ def train_hybrid_lm(
             "train_loss": epoch_loss_sum / max(1.0, epoch_tokens),
             "train_ce_loss": epoch_ce_sum / max(1.0, epoch_tokens),
         }
+        add_objective_loss_metrics(
+            epoch_record,
+            prefix="train_causal",
+            loss_sum=epoch_causal_loss_sum,
+            ce_sum=epoch_causal_ce_sum,
+            tokens=epoch_causal_tokens,
+        )
+        add_objective_loss_metrics(
+            epoch_record,
+            prefix="train_mntp",
+            loss_sum=epoch_mntp_loss_sum,
+            ce_sum=epoch_mntp_ce_sum,
+            tokens=epoch_mntp_tokens,
+        )
         if words_per_token is not None:
             epoch_record["words_seen"] = cumulative_tokens_seen * words_per_token
         if accelerator.is_main_process:
@@ -919,6 +999,7 @@ def train_hybrid_lm(
 
 __all__ = [
     "build_special_mask",
+    "add_objective_loss_metrics",
     "compute_gpt_bert_loss",
     "evaluate_mntp_likelihood_benchmark",
     "evaluate_hybrid_lm_loss",

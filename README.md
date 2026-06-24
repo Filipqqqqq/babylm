@@ -67,6 +67,19 @@ ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/analysis/
 See `src/babysteps/analysis/lexical/README.md` for the lexical-analysis guide,
 and `scripts/README.md` for the current command list.
 
+To compare optimizer/model learning dynamics, plot training loss from one or
+more run `metrics_history.json` files. Use `words_seen` when the runs logged a
+words/token estimate:
+
+```bash
+python scripts/analysis/plot_training_loss_dynamics.py \
+  ~/babylm-baby-steps-runs/training/run_a/metrics_history.json \
+  ~/babylm-baby-steps-runs/training/run_b/metrics_history.json \
+  --label llama_muon \
+  --label gpt_bert_lamb \
+  --output-dir ~/babylm-baby-steps-runs/analysis/loss_dynamics
+```
+
 ## Train 100M LLaMA + Muon + Liger
 
 Use this path for the current BabyLM 2026 Strict 100M-track LLaMA default. It
