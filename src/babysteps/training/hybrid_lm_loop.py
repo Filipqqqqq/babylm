@@ -12,6 +12,12 @@ import torch
 import torch.nn.functional as F
 from tqdm.auto import tqdm
 
+from babysteps.analysis.blimp_likelihood_dynamics import (
+    plot_blimp_likelihood_summary,
+    plot_overall_accuracy as plot_blimp_overall_accuracy,
+)
+from babysteps.analysis.comps_dynamics import plot_comps_summary
+from babysteps.analysis.entity_tracking_dynamics import plot_entity_tracking_summary
 from babysteps.evaluation import mntp_likelihood
 from babysteps.models.causal_lm import DEFAULT_GPT_BERT_REPO
 from babysteps.training.causal_lm_loop import save_json_atomic
@@ -23,6 +29,18 @@ MNTP_LIKELIHOOD_BENCHMARKS = (
     "entity_tracking",
     "comps",
 )
+BENCHMARK_X_AXES = {"step", "tokens_seen", "words_seen"}
+
+
+def benchmark_label(benchmark_name: str) -> str:
+    """Return the display label used for one BabyLM benchmark."""
+
+    return {
+        "blimp": "BLiMP",
+        "blimp_supplement": "BLiMP Supplement",
+        "entity_tracking": "Entity Tracking",
+        "comps": "COMPS",
+    }.get(benchmark_name, benchmark_name.replace("_", " ").title())
 
 
 def word_interval_due(*, words_seen: float, next_words: float | None) -> bool:
@@ -414,6 +432,58 @@ def overall_summary_row(rows: list[dict[str, Any]]) -> dict[str, Any]:
     )
 
 
+def plot_mntp_likelihood_summaries(
+    *,
+    summary_paths: dict[str, Path],
+    output_dir: Path,
+    run_name: str | None,
+    score_reduction: str | None,
+    x_axis: str,
+) -> None:
+    """Write MNTP benchmark dynamics plots from per-benchmark summary files."""
+
+    blimp_summary_paths: dict[str, Path] = {}
+    for benchmark_name, summary_path in summary_paths.items():
+        benchmark_output_dir = output_dir / benchmark_name
+        if benchmark_name in {"blimp", "blimp_supplement"}:
+            label = benchmark_label(benchmark_name)
+            plot_blimp_likelihood_summary(
+                summary_csv=summary_path,
+                output_dir=benchmark_output_dir,
+                benchmark_label=label,
+                run_name=run_name,
+                score_reduction=score_reduction,
+                x_axis=x_axis,
+            )
+            blimp_summary_paths[label] = summary_path
+        elif benchmark_name == "entity_tracking":
+            plot_entity_tracking_summary(
+                summary_csv=summary_path,
+                output_dir=benchmark_output_dir,
+                run_name=run_name,
+                score_reduction=score_reduction,
+                x_axis=x_axis,
+            )
+        elif benchmark_name == "comps":
+            plot_comps_summary(
+                summary_csv=summary_path,
+                output_dir=benchmark_output_dir,
+                run_name=run_name,
+                score_reduction=score_reduction,
+                x_axis=x_axis,
+            )
+
+    if blimp_summary_paths:
+        plot_blimp_overall_accuracy(
+            summary_csvs=blimp_summary_paths,
+            output_path=output_dir / "blimp_mntp_likelihood_overall_accuracy.png",
+            run_name=run_name,
+            score_reduction=score_reduction,
+            title="BLiMP MNTP Likelihood Overall Accuracy",
+            x_axis=x_axis,
+        )
+
+
 def train_hybrid_lm(
     *,
     model: torch.nn.Module,
@@ -442,9 +512,26 @@ def train_hybrid_lm(
     mntp_likelihood_batch_size: int = 64,
     mntp_likelihood_score_reductions: tuple[str, ...] = ("sum",),
     mntp_likelihood_run_name: str | None = None,
+    mntp_likelihood_plot: bool = False,
+    mntp_likelihood_plot_every_evals: int = 1,
+    benchmark_plot_x_axis: str = "step",
     words_per_token: float | None = None,
 ) -> list[dict[str, Any]]:
     """Train GPT-BERT with a configurable CLM/MNTP hybrid objective."""
+
+    if benchmark_plot_x_axis not in BENCHMARK_X_AXES:
+        raise ValueError(
+            "benchmark_plot_x_axis must be one of "
+            f"{sorted(BENCHMARK_X_AXES)}, got {benchmark_plot_x_axis!r}."
+        )
+    if (
+        mntp_likelihood_plot
+        and benchmark_plot_x_axis == "words_seen"
+        and words_per_token is None
+    ):
+        raise ValueError("MNTP likelihood plots with x_axis='words_seen' require words_per_token.")
+    if mntp_likelihood_plot and mntp_likelihood_plot_every_evals <= 0:
+        raise ValueError("mntp_likelihood_plot_every_evals must be positive.")
 
     output_dir = Path(output_dir)
     metrics_path = output_dir / "metrics_history.json"
@@ -456,6 +543,7 @@ def train_hybrid_lm(
     global_update_step = 0
     cumulative_tokens_seen = 0.0
     next_mntp_likelihood_words = mntp_likelihood_every_words
+    mntp_likelihood_eval_count = 0
     vocab_size = int(getattr(accelerator.unwrap_model(model).config, "vocab_size", len(tokenizer)))
     mask_id = tokenizer.mask_token_id
     if mask_id is None:
@@ -477,7 +565,12 @@ def train_hybrid_lm(
     if accelerator.is_main_process:
         output_dir.mkdir(parents=True, exist_ok=True)
 
+    def reduction_filter(score_reductions: tuple[str, ...]) -> str | None:
+        return score_reductions[0] if len(score_reductions) == 1 else None
+
     def run_mntp_likelihood_eval(*, epoch: int, step: int, tokens_seen: float) -> None:
+        nonlocal mntp_likelihood_eval_count
+
         if not mntp_likelihood_items:
             return
         accelerator.wait_for_everyone()
@@ -491,7 +584,12 @@ def train_hybrid_lm(
                 words_per_token=words_per_token,
                 run_name=mntp_likelihood_run_name,
             )
+            summary_paths: dict[str, Path] = {}
             for benchmark_name, items in mntp_likelihood_items.items():
+                benchmark_output_dir = benchmark_dir / benchmark_name
+                benchmark_items_path = benchmark_output_dir / "likelihood_items.jsonl"
+                benchmark_summary_path = benchmark_output_dir / "likelihood_summary.csv"
+                summary_paths[benchmark_name] = benchmark_summary_path
                 for score_reduction in mntp_likelihood_score_reductions:
                     result = evaluate_mntp_likelihood_benchmark(
                         benchmark_name=benchmark_name,
@@ -508,9 +606,21 @@ def train_hybrid_lm(
                         benchmark=benchmark_name,
                         metadata=metadata,
                     )
+                    mntp_likelihood.append_item_records_jsonl(
+                        result.item_records,
+                        benchmark_items_path,
+                        benchmark=benchmark_name,
+                        metadata=metadata,
+                    )
                     mntp_likelihood.append_summary_csv(
                         result.summary_rows,
                         mntp_summary_path,
+                        benchmark=benchmark_name,
+                        metadata=metadata,
+                    )
+                    mntp_likelihood.append_summary_csv(
+                        result.summary_rows,
+                        benchmark_summary_path,
                         benchmark=benchmark_name,
                         metadata=metadata,
                     )
@@ -536,6 +646,18 @@ def train_hybrid_lm(
                         f"items={overall.get('items')}",
                         flush=True,
                     )
+            mntp_likelihood_eval_count += 1
+            if (
+                mntp_likelihood_plot
+                and mntp_likelihood_eval_count % max(1, mntp_likelihood_plot_every_evals) == 0
+            ):
+                plot_mntp_likelihood_summaries(
+                    summary_paths=summary_paths,
+                    output_dir=benchmark_dir,
+                    run_name=mntp_likelihood_run_name,
+                    score_reduction=reduction_filter(mntp_likelihood_score_reductions),
+                    x_axis=benchmark_plot_x_axis,
+                )
             save_json_atomic(history, metrics_path)
         accelerator.wait_for_everyone()
 
@@ -805,6 +927,7 @@ __all__ = [
     "mask_ratio_for_step",
     "objective_schedule_from_config",
     "objective_for",
+    "plot_mntp_likelihood_summaries",
     "save_gpt_bert_checkpoint",
     "set_gpt_bert_is_causal",
     "special_token_ids",

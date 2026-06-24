@@ -172,12 +172,14 @@ python scripts/train/train_hybrid_lm.py \
 ```
 
 MNTP BabyLM benchmark scoring is enabled in the config every 1,000,000
-estimated words with `score_reduction: sum`. Those diagnostics are written
-inside the run directory:
+estimated words with `score_reduction: sum`, and plots are generated after
+each benchmark eval using `progress.benchmark_plot_x_axis: words_seen`. Those
+diagnostics are written inside the run directory:
 
 ```text
 benchmarks/mntp_likelihood/likelihood_items.jsonl
 benchmarks/mntp_likelihood/likelihood_summary.csv
+benchmarks/mntp_likelihood/{blimp,blimp_supplement,entity_tracking,comps}/
 ```
 
 GPT-BERT checkpoints are saved in the baseline-compatible remote-code format,

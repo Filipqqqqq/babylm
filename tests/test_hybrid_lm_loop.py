@@ -255,6 +255,7 @@ def test_train_hybrid_lm_runs_mntp_benchmarks_on_word_interval(
     monkeypatch,
 ) -> None:
     calls = []
+    plot_calls = []
 
     def fake_evaluate_mntp_likelihood_benchmark(**kwargs):
         calls.append(kwargs)
@@ -288,10 +289,20 @@ def test_train_hybrid_lm_runs_mntp_benchmarks_on_word_interval(
             ],
         )
 
+    def fake_plot_mntp_likelihood_summaries(**kwargs):
+        plot_calls.append(kwargs)
+        assert kwargs["summary_paths"]["blimp"].exists()
+        assert kwargs["x_axis"] == "words_seen"
+
     monkeypatch.setattr(
         hybrid_lm_loop,
         "evaluate_mntp_likelihood_benchmark",
         fake_evaluate_mntp_likelihood_benchmark,
+    )
+    monkeypatch.setattr(
+        hybrid_lm_loop,
+        "plot_mntp_likelihood_summaries",
+        fake_plot_mntp_likelihood_summaries,
     )
 
     tokenizer = _Tokenizer()
@@ -344,6 +355,8 @@ def test_train_hybrid_lm_runs_mntp_benchmarks_on_word_interval(
         mntp_likelihood_items={"blimp": [object()]},
         mntp_likelihood_every_words=10,
         mntp_likelihood_score_reductions=("sum",),
+        mntp_likelihood_plot=True,
+        benchmark_plot_x_axis="words_seen",
         words_per_token=1.0,
         log_every_steps=0,
         eval_every_steps=0,
@@ -353,6 +366,7 @@ def test_train_hybrid_lm_runs_mntp_benchmarks_on_word_interval(
 
     records = [record for record in history if record["type"] == "mntp_likelihood"]
     assert len(calls) == 1
+    assert len(plot_calls) == 1
     assert len(records) == 1
     assert records[0]["benchmark"] == "blimp"
     assert records[0]["score_reduction"] == "sum"
@@ -360,3 +374,17 @@ def test_train_hybrid_lm_runs_mntp_benchmarks_on_word_interval(
     assert records[0]["words_seen"] == 16.0
     assert (tmp_path / "benchmarks" / "mntp_likelihood" / "likelihood_summary.csv").exists()
     assert (tmp_path / "benchmarks" / "mntp_likelihood" / "likelihood_items.jsonl").exists()
+    assert (
+        tmp_path
+        / "benchmarks"
+        / "mntp_likelihood"
+        / "blimp"
+        / "likelihood_summary.csv"
+    ).exists()
+    assert (
+        tmp_path
+        / "benchmarks"
+        / "mntp_likelihood"
+        / "blimp"
+        / "likelihood_items.jsonl"
+    ).exists()

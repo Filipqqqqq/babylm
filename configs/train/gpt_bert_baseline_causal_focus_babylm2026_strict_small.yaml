@@ -43,6 +43,8 @@ mntp_likelihood:
   every_words: 1000000
   batch_size: 64
   score_reduction: sum
+  plot: true
+  plot_every_evals: 1
 
 training:
   epochs: 10

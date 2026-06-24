@@ -368,6 +368,19 @@ def main() -> None:
     )
     if words_per_token_sample_tokens <= 0:
         raise ValueError("words_per_token_sample_tokens must be positive.")
+    benchmark_plot_x_axis = str(
+        progress_config.get(
+            "benchmark_plot_x_axis",
+            logging_config.get("benchmark_plot_x_axis", "step"),
+        )
+    )
+
+    mntp_likelihood_plot = bool(mntp_likelihood_config.get("plot", False))
+    mntp_likelihood_plot_every_evals = int(
+        mntp_likelihood_config.get("plot_every_evals", 1) or 1
+    )
+    if mntp_likelihood_plot and mntp_likelihood_plot_every_evals <= 0:
+        raise ValueError("mntp_likelihood.plot_every_evals must be positive.")
 
     output_dir = resolve_output_dir(config)
     seed = int(run_config.get("seed", 42))
@@ -484,6 +497,13 @@ def main() -> None:
                 + f"reductions={','.join(mntp_likelihood_score_reductions)}",
                 flush=True,
             )
+            if mntp_likelihood_plot:
+                print(
+                    "MNTP likelihood plots: "
+                    f"enabled every {mntp_likelihood_plot_every_evals} eval(s), "
+                    f"x_axis={benchmark_plot_x_axis}",
+                    flush=True,
+                )
 
     model = build_causal_lm_model(config, tokenizer)
     if accelerator.is_main_process:
@@ -606,6 +626,9 @@ def main() -> None:
         mntp_likelihood_batch_size=int(mntp_likelihood_config.get("batch_size", 64)),
         mntp_likelihood_score_reductions=mntp_likelihood_score_reductions,
         mntp_likelihood_run_name=str(run_config.get("name", "")),
+        mntp_likelihood_plot=mntp_likelihood_plot,
+        mntp_likelihood_plot_every_evals=mntp_likelihood_plot_every_evals,
+        benchmark_plot_x_axis=benchmark_plot_x_axis,
         words_per_token=words_per_token,
     )
 
