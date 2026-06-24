@@ -25,7 +25,8 @@ model:
   context_length: 512
 
 hybrid:
-  causal_per_masked: 15
+  causal_steps: 15
+  masked_steps: 1
   mask_start: 0.30
   mask_end: 0.15
   random_ratio: 0.10

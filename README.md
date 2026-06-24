@@ -141,7 +141,8 @@ baseline tokenizer from
 `BabyLM-community/babylm-baseline-10m-gpt-bert-causal-focus`, rebuilds
 Strict-Small token shards with that tokenizer, then trains GPT-BERT with a
 15:1 causal-to-MNTP schedule, LAMB, bf16, z-loss, and 10 full epochs by
-default:
+default. The objective ratio is set explicitly with `hybrid.causal_steps: 15`
+and `hybrid.masked_steps: 1`:
 
 ```bash
 python scripts/data/build_token_shards.py \

@@ -137,11 +137,33 @@ def make_masked_batch(
     return corrupted, labels
 
 
-def objective_for(global_micro_step: int, causal_per_masked: int) -> str:
-    """Return masked once per period, otherwise causal."""
+def objective_schedule_from_config(hybrid_config: dict[str, Any]) -> tuple[int, int]:
+    """Read the causal/MNTP microstep schedule from config."""
 
-    period = int(causal_per_masked) + 1
-    return "masked" if int(global_micro_step) % period == 0 else "causal"
+    if "causal_per_masked" in hybrid_config:
+        raise ValueError(
+            "hybrid.causal_per_masked was removed; use hybrid.causal_steps "
+            "and hybrid.masked_steps instead."
+        )
+    causal_steps = int(hybrid_config.get("causal_steps", 15))
+    masked_steps = int(hybrid_config.get("masked_steps", 1))
+    if causal_steps < 0 or masked_steps < 0:
+        raise ValueError("hybrid.causal_steps and hybrid.masked_steps must be non-negative.")
+    if causal_steps + masked_steps <= 0:
+        raise ValueError(
+            "At least one of hybrid.causal_steps or hybrid.masked_steps must be positive."
+        )
+    return causal_steps, masked_steps
+
+
+def objective_for(global_micro_step: int, causal_steps: int, masked_steps: int) -> str:
+    """Return the objective for a microstep within a causal/MNTP cycle."""
+
+    period = int(causal_steps) + int(masked_steps)
+    if period <= 0:
+        raise ValueError("causal_steps + masked_steps must be positive.")
+    phase = int(global_micro_step) % period
+    return "causal" if phase < int(causal_steps) else "masked"
 
 
 def mask_ratio_for_step(global_update_step: int, total_update_steps: int, start: float, end: float) -> float:
@@ -444,7 +466,7 @@ def train_hybrid_lm(
         raise ValueError("mntp_likelihood_score_reductions must not be empty.")
 
     special_ids = special_token_ids(tokenizer)
-    causal_per_masked = int(hybrid_config.get("causal_per_masked", 15))
+    causal_steps, masked_steps = objective_schedule_from_config(hybrid_config)
     mask_start = float(hybrid_config.get("mask_start", 0.30))
     mask_end = float(hybrid_config.get("mask_end", 0.15))
     random_ratio = float(hybrid_config.get("random_ratio", 0.10))
@@ -539,7 +561,7 @@ def train_hybrid_lm(
         )
 
         for input_ids, _loader_labels, _loss_mask, attention_mask in progress:
-            objective = objective_for(global_micro_step, causal_per_masked)
+            objective = objective_for(global_micro_step, causal_steps, masked_steps)
             mask_ratio = mask_ratio_for_step(
                 global_update_step,
                 total_update_steps,
@@ -781,6 +803,7 @@ __all__ = [
     "make_causal_batch",
     "make_masked_batch",
     "mask_ratio_for_step",
+    "objective_schedule_from_config",
     "objective_for",
     "save_gpt_bert_checkpoint",
     "set_gpt_bert_is_causal",

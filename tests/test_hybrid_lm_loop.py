@@ -16,6 +16,7 @@ from babysteps.training.hybrid_lm_loop import (
     compute_gpt_bert_loss,
     make_causal_batch,
     make_masked_batch,
+    objective_schedule_from_config,
     objective_for,
     set_gpt_bert_is_causal,
     train_hybrid_lm,
@@ -77,8 +78,7 @@ def _batch(tokens: torch.Tensor):
 
 
 def test_objective_schedule_uses_micro_steps() -> None:
-    assert [objective_for(step, 3) for step in range(8)] == [
-        "masked",
+    assert [objective_for(step, causal_steps=3, masked_steps=1) for step in range(8)] == [
         "causal",
         "causal",
         "causal",
@@ -86,7 +86,40 @@ def test_objective_schedule_uses_micro_steps() -> None:
         "causal",
         "causal",
         "causal",
+        "masked",
     ]
+
+
+def test_objective_schedule_supports_masked_focus() -> None:
+    assert [objective_for(step, causal_steps=1, masked_steps=3) for step in range(8)] == [
+        "causal",
+        "masked",
+        "masked",
+        "masked",
+        "causal",
+        "masked",
+        "masked",
+        "masked",
+    ]
+
+
+def test_objective_schedule_config_replaces_causal_per_masked() -> None:
+    assert objective_schedule_from_config({"causal_steps": 15, "masked_steps": 1}) == (15, 1)
+    assert objective_schedule_from_config({"causal_steps": 1, "masked_steps": 15}) == (1, 15)
+
+    try:
+        objective_schedule_from_config({"causal_per_masked": 15})
+    except ValueError as exc:
+        assert "causal_per_masked was removed" in str(exc)
+    else:
+        raise AssertionError("Expected causal_per_masked to be rejected.")
+
+    try:
+        objective_schedule_from_config({"causal_steps": 0, "masked_steps": 0})
+    except ValueError as exc:
+        assert "At least one" in str(exc)
+    else:
+        raise AssertionError("Expected an empty objective schedule to be rejected.")
 
 
 def test_make_causal_batch_shifts_labels() -> None:
@@ -193,7 +226,8 @@ def test_train_hybrid_lm_smoke_logs_validation_and_saves(tmp_path: Path) -> None
         epochs=1,
         total_update_steps=2,
         hybrid_config={
-            "causal_per_masked": 1,
+            "causal_steps": 1,
+            "masked_steps": 1,
             "mask_start": 1.0,
             "mask_end": 1.0,
             "random_ratio": 0.0,
@@ -298,7 +332,8 @@ def test_train_hybrid_lm_runs_mntp_benchmarks_on_word_interval(
         epochs=1,
         total_update_steps=2,
         hybrid_config={
-            "causal_per_masked": 1,
+            "causal_steps": 1,
+            "masked_steps": 1,
             "mask_start": 1.0,
             "mask_end": 1.0,
             "random_ratio": 0.0,

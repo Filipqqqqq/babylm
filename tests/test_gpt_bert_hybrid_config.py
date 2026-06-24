@@ -78,7 +78,8 @@ def test_gpt_bert_train_config_uses_hybrid_defaults(monkeypatch) -> None:
     assert config["training"]["optimizer"] == "lamb"
     assert config["training"]["learning_rate"] == 0.007
     assert config["data"]["seq_len"] == 512
-    assert config["hybrid"]["causal_per_masked"] == 15
+    assert config["hybrid"]["causal_steps"] == 15
+    assert config["hybrid"]["masked_steps"] == 1
     assert config["hybrid"]["mask_start"] == 0.30
     assert config["hybrid"]["mask_end"] == 0.15
     assert config["progress"]["benchmark_plot_x_axis"] == "words_seen"
