@@ -46,6 +46,11 @@ mntp_likelihood:
   plot: true
   plot_every_evals: 1
 
+loss_dynamics:
+  plot: true
+  plot_every_evals: 1
+  x_axis: words_seen
+
 training:
   epochs: 10
   batch_size: 32

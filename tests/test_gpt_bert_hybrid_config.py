@@ -89,6 +89,9 @@ def test_gpt_bert_train_config_uses_hybrid_defaults(monkeypatch) -> None:
     assert config["mntp_likelihood"]["score_reduction"] == "sum"
     assert config["mntp_likelihood"]["plot"] is True
     assert config["mntp_likelihood"]["plot_every_evals"] == 1
+    assert config["loss_dynamics"]["plot"] is True
+    assert config["loss_dynamics"]["plot_every_evals"] == 1
+    assert config["loss_dynamics"]["x_axis"] == "words_seen"
     assert config["logging"]["benchmark_eval_at_start"] is True
     assert (
         config["tokenizer"]["name"]

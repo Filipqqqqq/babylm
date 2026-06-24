@@ -18,6 +18,7 @@ import torch
 from accelerate import Accelerator
 from transformers import AutoTokenizer, get_cosine_schedule_with_warmup
 
+from babysteps.analysis.loss_dynamics import DEFAULT_LOSS_KEYS
 from babysteps.cli.train_causal_lm import (
     apply_config_overrides,
     default_babylm_eval_dir,
@@ -153,6 +154,23 @@ def format_eval_step_preview(steps: list[int], *, preview: int = 20) -> str:
     if len(steps) > preview:
         shown += f", ... last={steps[-1]}"
     return f"{len(steps)} evals at update steps: {shown}"
+
+
+def read_loss_keys(config: dict[str, Any]) -> tuple[str, ...]:
+    """Read loss-dynamics metric keys from config."""
+
+    raw_value = config.get("loss_keys")
+    if raw_value is None:
+        return DEFAULT_LOSS_KEYS
+    if isinstance(raw_value, str):
+        loss_keys = tuple(part.strip() for part in raw_value.split(",") if part.strip())
+    elif isinstance(raw_value, (list, tuple)):
+        loss_keys = tuple(str(part).strip() for part in raw_value if str(part).strip())
+    else:
+        raise ValueError("loss_dynamics.loss_keys must be a string or list of strings.")
+    if not loss_keys:
+        raise ValueError("loss_dynamics.loss_keys must not be empty.")
+    return loss_keys
 
 
 def resolve_padding_for_gpt_bert(tokenizer: Any) -> None:
@@ -300,6 +318,7 @@ def main() -> None:
     checkpoint_config = config.get("checkpointing", {})
     progress_config = config.get("progress", {})
     mntp_likelihood_config = config.get("mntp_likelihood", {})
+    loss_dynamics_config = config.get("loss_dynamics", {})
 
     mntp_likelihood_every_steps = int(mntp_likelihood_config.get("every_steps", 0) or 0)
     mntp_likelihood_every_words = read_every_words(
@@ -381,6 +400,22 @@ def main() -> None:
     )
     if mntp_likelihood_plot and mntp_likelihood_plot_every_evals <= 0:
         raise ValueError("mntp_likelihood.plot_every_evals must be positive.")
+    loss_dynamics_plot = bool(
+        loss_dynamics_config.get("plot", mntp_likelihood_plot)
+    )
+    loss_dynamics_plot_every_evals = int(
+        loss_dynamics_config.get(
+            "plot_every_evals",
+            mntp_likelihood_plot_every_evals,
+        )
+        or 1
+    )
+    if loss_dynamics_plot and loss_dynamics_plot_every_evals <= 0:
+        raise ValueError("loss_dynamics.plot_every_evals must be positive.")
+    loss_dynamics_x_axis = str(
+        loss_dynamics_config.get("x_axis", benchmark_plot_x_axis)
+    )
+    loss_dynamics_loss_keys = read_loss_keys(loss_dynamics_config)
 
     output_dir = resolve_output_dir(config)
     seed = int(run_config.get("seed", 42))
@@ -502,6 +537,13 @@ def main() -> None:
                     "MNTP likelihood plots: "
                     f"enabled every {mntp_likelihood_plot_every_evals} eval(s), "
                     f"x_axis={benchmark_plot_x_axis}",
+                    flush=True,
+                )
+            if loss_dynamics_plot:
+                print(
+                    "Training loss dynamics plots: "
+                    f"enabled every {loss_dynamics_plot_every_evals} benchmark eval(s), "
+                    f"x_axis={loss_dynamics_x_axis}",
                     flush=True,
                 )
 
@@ -629,6 +671,11 @@ def main() -> None:
         mntp_likelihood_plot=mntp_likelihood_plot,
         mntp_likelihood_plot_every_evals=mntp_likelihood_plot_every_evals,
         benchmark_plot_x_axis=benchmark_plot_x_axis,
+        loss_dynamics_plot=loss_dynamics_plot,
+        loss_dynamics_plot_every_evals=loss_dynamics_plot_every_evals,
+        loss_dynamics_x_axis=loss_dynamics_x_axis,
+        loss_dynamics_loss_keys=loss_dynamics_loss_keys,
+        loss_dynamics_run_name=str(run_config.get("name", "")),
         words_per_token=words_per_token,
     )
 

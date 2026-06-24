@@ -259,6 +259,7 @@ def test_train_hybrid_lm_runs_mntp_benchmarks_on_word_interval(
 ) -> None:
     calls = []
     plot_calls = []
+    loss_plot_calls = []
 
     def fake_evaluate_mntp_likelihood_benchmark(**kwargs):
         calls.append(kwargs)
@@ -297,6 +298,15 @@ def test_train_hybrid_lm_runs_mntp_benchmarks_on_word_interval(
         assert kwargs["summary_paths"]["blimp"].exists()
         assert kwargs["x_axis"] == "words_seen"
 
+    def fake_write_training_loss_plots(**kwargs):
+        loss_plot_calls.append(kwargs)
+        assert kwargs["metrics_paths"] == [tmp_path / "metrics_history.json"]
+        assert kwargs["output_dir"] == tmp_path / "loss_dynamics"
+        assert kwargs["labels"] == ["toy_run"]
+        assert kwargs["x_axis"] == "words_seen"
+        assert kwargs["metrics_paths"][0].exists()
+        return [tmp_path / "loss_dynamics" / "loss_by_words_seen.png"]
+
     monkeypatch.setattr(
         hybrid_lm_loop,
         "evaluate_mntp_likelihood_benchmark",
@@ -306,6 +316,11 @@ def test_train_hybrid_lm_runs_mntp_benchmarks_on_word_interval(
         hybrid_lm_loop,
         "plot_mntp_likelihood_summaries",
         fake_plot_mntp_likelihood_summaries,
+    )
+    monkeypatch.setattr(
+        hybrid_lm_loop,
+        "write_training_loss_plots",
+        fake_write_training_loss_plots,
     )
 
     tokenizer = _Tokenizer()
@@ -359,9 +374,12 @@ def test_train_hybrid_lm_runs_mntp_benchmarks_on_word_interval(
         mntp_likelihood_every_words=10,
         mntp_likelihood_score_reductions=("sum",),
         mntp_likelihood_plot=True,
+        mntp_likelihood_run_name="toy_run",
+        loss_dynamics_plot=True,
+        loss_dynamics_run_name="toy_run",
         benchmark_plot_x_axis="words_seen",
         words_per_token=1.0,
-        log_every_steps=0,
+        log_every_steps=1,
         eval_every_steps=0,
         save_every_epochs=0,
         save_final=False,
@@ -370,6 +388,7 @@ def test_train_hybrid_lm_runs_mntp_benchmarks_on_word_interval(
     records = [record for record in history if record["type"] == "mntp_likelihood"]
     assert len(calls) == 1
     assert len(plot_calls) == 1
+    assert len(loss_plot_calls) == 1
     assert len(records) == 1
     assert records[0]["benchmark"] == "blimp"
     assert records[0]["score_reduction"] == "sum"

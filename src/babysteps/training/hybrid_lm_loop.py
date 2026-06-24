@@ -18,6 +18,8 @@ from babysteps.analysis.blimp_likelihood_dynamics import (
 )
 from babysteps.analysis.comps_dynamics import plot_comps_summary
 from babysteps.analysis.entity_tracking_dynamics import plot_entity_tracking_summary
+from babysteps.analysis.loss_dynamics import DEFAULT_LOSS_KEYS
+from babysteps.analysis.loss_dynamics import write_training_loss_plots
 from babysteps.evaluation import mntp_likelihood
 from babysteps.models.causal_lm import DEFAULT_GPT_BERT_REPO
 from babysteps.training.causal_lm_loop import save_json_atomic
@@ -448,6 +450,22 @@ def add_objective_loss_metrics(
         record[f"{prefix}_ce_loss"] = ce_sum / tokens
 
 
+def has_training_loss_plot_rows(
+    history: list[dict[str, Any]],
+    *,
+    x_axis: str,
+    loss_keys: tuple[str, ...],
+) -> bool:
+    """Return whether the in-memory metrics can produce a loss plot."""
+
+    for record in history:
+        if record.get("type") != "train" or record.get(x_axis) is None:
+            continue
+        if any(record.get(loss_key) is not None for loss_key in loss_keys):
+            return True
+    return False
+
+
 def plot_mntp_likelihood_summaries(
     *,
     summary_paths: dict[str, Path],
@@ -531,6 +549,11 @@ def train_hybrid_lm(
     mntp_likelihood_plot: bool = False,
     mntp_likelihood_plot_every_evals: int = 1,
     benchmark_plot_x_axis: str = "step",
+    loss_dynamics_plot: bool = False,
+    loss_dynamics_plot_every_evals: int = 1,
+    loss_dynamics_x_axis: str = "words_seen",
+    loss_dynamics_loss_keys: tuple[str, ...] = DEFAULT_LOSS_KEYS,
+    loss_dynamics_run_name: str | None = None,
     words_per_token: float | None = None,
 ) -> list[dict[str, Any]]:
     """Train GPT-BERT with a configurable CLM/MNTP hybrid objective."""
@@ -548,10 +571,22 @@ def train_hybrid_lm(
         raise ValueError("MNTP likelihood plots with x_axis='words_seen' require words_per_token.")
     if mntp_likelihood_plot and mntp_likelihood_plot_every_evals <= 0:
         raise ValueError("mntp_likelihood_plot_every_evals must be positive.")
+    if loss_dynamics_x_axis not in BENCHMARK_X_AXES:
+        raise ValueError(
+            "loss_dynamics_x_axis must be one of "
+            f"{sorted(BENCHMARK_X_AXES)}, got {loss_dynamics_x_axis!r}."
+        )
+    if loss_dynamics_plot and loss_dynamics_x_axis == "words_seen" and words_per_token is None:
+        raise ValueError("Loss dynamics plots with x_axis='words_seen' require words_per_token.")
+    if loss_dynamics_plot and loss_dynamics_plot_every_evals <= 0:
+        raise ValueError("loss_dynamics_plot_every_evals must be positive.")
+    if not loss_dynamics_loss_keys:
+        raise ValueError("loss_dynamics_loss_keys must not be empty.")
 
     output_dir = Path(output_dir)
     metrics_path = output_dir / "metrics_history.json"
     benchmark_dir = output_dir / "benchmarks" / "mntp_likelihood"
+    loss_dynamics_dir = output_dir / "loss_dynamics"
     mntp_items_path = benchmark_dir / "likelihood_items.jsonl"
     mntp_summary_path = benchmark_dir / "likelihood_summary.csv"
     history: list[dict[str, Any]] = []
@@ -675,6 +710,22 @@ def train_hybrid_lm(
                     x_axis=benchmark_plot_x_axis,
                 )
             save_json_atomic(history, metrics_path)
+            if (
+                loss_dynamics_plot
+                and mntp_likelihood_eval_count % max(1, loss_dynamics_plot_every_evals) == 0
+                and has_training_loss_plot_rows(
+                    history,
+                    x_axis=loss_dynamics_x_axis,
+                    loss_keys=loss_dynamics_loss_keys,
+                )
+            ):
+                write_training_loss_plots(
+                    metrics_paths=[metrics_path],
+                    output_dir=loss_dynamics_dir,
+                    labels=[loss_dynamics_run_name] if loss_dynamics_run_name else None,
+                    loss_keys=loss_dynamics_loss_keys,
+                    x_axis=loss_dynamics_x_axis,
+                )
         accelerator.wait_for_everyone()
 
     if benchmark_eval_at_start:
@@ -1003,6 +1054,7 @@ __all__ = [
     "compute_gpt_bert_loss",
     "evaluate_mntp_likelihood_benchmark",
     "evaluate_hybrid_lm_loss",
+    "has_training_loss_plot_rows",
     "make_causal_batch",
     "make_masked_batch",
     "mask_ratio_for_step",

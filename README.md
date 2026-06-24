@@ -67,8 +67,10 @@ ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/analysis/
 See `src/babysteps/analysis/lexical/README.md` for the lexical-analysis guide,
 and `scripts/README.md` for the current command list.
 
-To compare optimizer/model learning dynamics, plot training loss from one or
-more run `metrics_history.json` files. Use `words_seen` when the runs logged a
+GPT-BERT hybrid runs generate training-loss dynamics plots after benchmark
+evals, under `loss_dynamics/`. To compare optimizer/model learning dynamics
+across completed runs, plot training loss from one or more run
+`metrics_history.json` files. Use `words_seen` when the runs logged a
 words/token estimate:
 
 ```bash
