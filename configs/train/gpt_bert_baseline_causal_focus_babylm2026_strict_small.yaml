@@ -40,7 +40,7 @@ progress:
 
 mntp_likelihood:
   enabled: true
-  every_words: 1000000
+  every_words: 10000000
   batch_size: 64
   score_reduction: sum
   plot: true
@@ -63,7 +63,7 @@ logging:
   log_every_steps: 50
   eval_every_steps: 1000
   eval_max_batches: 20
-  benchmark_eval_at_start: false
+  benchmark_eval_at_start: true
 
 checkpointing:
   save_every_epochs: 1

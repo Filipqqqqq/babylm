@@ -171,10 +171,10 @@ python scripts/train/train_hybrid_lm.py \
   --set training.gradient_accumulation_steps=2
 ```
 
-MNTP BabyLM benchmark scoring is enabled in the config every 1,000,000
-estimated words with `score_reduction: sum`, and plots are generated after
-each benchmark eval using `progress.benchmark_plot_x_axis: words_seen`. Those
-diagnostics are written inside the run directory:
+MNTP BabyLM benchmark scoring is enabled at training start and then every
+10,000,000 estimated words with `score_reduction: sum`; plots are generated
+after each benchmark eval using `progress.benchmark_plot_x_axis: words_seen`.
+Those diagnostics are written inside the run directory:
 
 ```text
 benchmarks/mntp_likelihood/likelihood_items.jsonl
