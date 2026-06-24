@@ -5,6 +5,7 @@ from pathlib import Path
 
 from babysteps.cli import build_token_shards as token_shard_builder
 from babysteps.cli import train_causal_lm as train_script
+from babysteps.cli import train_hybrid_lm as hybrid_train_script
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -90,6 +91,30 @@ def test_gpt_bert_train_config_uses_hybrid_defaults(monkeypatch) -> None:
         config["tokenizer"]["name"]
         == "/cache/tokenizers/gpt_bert_baseline_causal_focus"
     )
+
+
+def test_word_interval_eval_step_estimate_uses_global_update_size() -> None:
+    steps = hybrid_train_script.estimate_word_interval_eval_steps(
+        every_words=25,
+        words_per_token=0.5,
+        seq_len=10,
+        batch_size=2,
+        grad_accum=1,
+        world_size=1,
+        total_update_steps=10,
+    )
+
+    assert steps == [3, 5, 8, 10]
+
+
+def test_eval_step_preview_formats_count_preview_and_last_step() -> None:
+    steps = list(range(10, 260, 10))
+
+    assert (
+        hybrid_train_script.format_eval_step_preview(steps, preview=3)
+        == "25 evals at update steps: 10, 20, 30, ... last=250"
+    )
+    assert hybrid_train_script.format_eval_step_preview([]) == "0 evals"
 
 
 def test_pretrained_tokenizer_config_copies_tokenizer_and_manifest(tmp_path, monkeypatch) -> None:

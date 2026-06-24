@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -92,6 +93,66 @@ def format_eval_interval(every_steps: int, every_words: float | None) -> str:
     if every_words is not None:
         pieces.append(f"every {every_words:g} words")
     return " or ".join(pieces) if pieces else "not scheduled"
+
+
+def estimate_word_interval_eval_steps(
+    *,
+    every_words: float | None,
+    words_per_token: float | None,
+    seq_len: int,
+    batch_size: int,
+    grad_accum: int,
+    world_size: int,
+    total_update_steps: int,
+) -> list[int]:
+    """Estimate optimizer-update steps that will cross word-count thresholds."""
+
+    if every_words is None or words_per_token is None or total_update_steps <= 0:
+        return []
+
+    tokens_per_update = (
+        int(seq_len)
+        * int(batch_size)
+        * max(1, int(grad_accum))
+        * max(1, int(world_size))
+    )
+    words_per_update = tokens_per_update * float(words_per_token)
+    if words_per_update <= 0:
+        return []
+
+    threshold_count = int(math.floor(total_update_steps * words_per_update / every_words))
+    steps: list[int] = []
+    for threshold_index in range(1, threshold_count + 1):
+        step = int(math.ceil(threshold_index * every_words / words_per_update))
+        step = min(max(1, step), int(total_update_steps))
+        if not steps or step != steps[-1]:
+            steps.append(step)
+    return steps
+
+
+def estimate_step_interval_eval_steps(every_steps: int, total_update_steps: int) -> list[int]:
+    """Return update steps triggered by a fixed step interval."""
+
+    if every_steps <= 0 or total_update_steps <= 0:
+        return []
+    return list(range(int(every_steps), int(total_update_steps) + 1, int(every_steps)))
+
+
+def merge_eval_steps(*step_lists: list[int]) -> list[int]:
+    """Merge scheduled update-step lists while preserving ascending order."""
+
+    return sorted({step for steps in step_lists for step in steps})
+
+
+def format_eval_step_preview(steps: list[int], *, preview: int = 20) -> str:
+    """Format a concise preview of scheduled evaluation update steps."""
+
+    if not steps:
+        return "0 evals"
+    shown = ", ".join(str(step) for step in steps[:preview])
+    if len(steps) > preview:
+        shown += f", ... last={steps[-1]}"
+    return f"{len(steps)} evals at update steps: {shown}"
 
 
 def resolve_padding_for_gpt_bert(tokenizer: Any) -> None:
@@ -449,6 +510,60 @@ def main() -> None:
     warmup_steps = training_config.get("warmup_steps")
     if warmup_steps is None:
         warmup_steps = int(float(training_config.get("warmup_ratio", 0.016)) * total_update_steps)
+
+    if accelerator.is_main_process:
+        tokens_per_update = (
+            seq_len
+            * batch_size
+            * max(1, grad_accum)
+            * max(1, accelerator.num_processes)
+        )
+        print(
+            "Training schedule estimate: "
+            f"updates_per_epoch={updates_per_epoch:,}, "
+            f"total_update_steps={total_update_steps:,}, "
+            f"tokens/update~={tokens_per_update:,}",
+            flush=True,
+        )
+        if words_per_token is not None:
+            print(
+                "Word-progress estimate: "
+                f"words/update~={tokens_per_update * words_per_token:,.1f}",
+                flush=True,
+            )
+
+        validation_steps = estimate_step_interval_eval_steps(
+            int(logging_config.get("eval_every_steps", 500)),
+            total_update_steps,
+        )
+        print(
+            "Validation loss eval estimate: "
+            f"{format_eval_step_preview(validation_steps)}",
+            flush=True,
+        )
+
+        if mntp_likelihood_enabled:
+            mntp_step_steps = estimate_step_interval_eval_steps(
+                mntp_likelihood_every_steps,
+                total_update_steps,
+            )
+            mntp_word_steps = estimate_word_interval_eval_steps(
+                every_words=mntp_likelihood_every_words,
+                words_per_token=words_per_token,
+                seq_len=seq_len,
+                batch_size=batch_size,
+                grad_accum=grad_accum,
+                world_size=accelerator.num_processes,
+                total_update_steps=total_update_steps,
+            )
+            mntp_eval_steps = merge_eval_steps(mntp_step_steps, mntp_word_steps)
+            startup_eval = bool(logging_config.get("benchmark_eval_at_start", True))
+            suffix = "; plus startup eval at step 0" if startup_eval else ""
+            print(
+                "MNTP benchmark eval estimate: "
+                f"{format_eval_step_preview(mntp_eval_steps)}{suffix}",
+                flush=True,
+            )
 
     scheduler = get_cosine_schedule_with_warmup(
         optimizer,
