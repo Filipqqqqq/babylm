@@ -76,7 +76,7 @@ training:
   eps: 0.00000001
   weight_decay: 0.1
   warmup_ratio: 0.016
-  gradient_accumulation_steps: 2
+  gradient_accumulation_steps: 16
   gradient_clip_norm: 2.0
   mixed_precision: bf16
 
