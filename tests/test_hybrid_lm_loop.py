@@ -10,6 +10,7 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
 import babysteps.training.hybrid_lm_loop as hybrid_lm_loop
+from babysteps.evaluation.ewok_context_sensitivity import EwokContextResult
 from babysteps.evaluation.mntp_likelihood import MntpBenchmarkResult
 from babysteps.training.hybrid_lm_loop import (
     build_special_mask,
@@ -410,3 +411,157 @@ def test_train_hybrid_lm_runs_mntp_benchmarks_on_word_interval(
         / "blimp"
         / "likelihood_items.jsonl"
     ).exists()
+
+
+def test_train_hybrid_lm_runs_both_ewok_backends_on_word_interval(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls = []
+    plot_calls = []
+
+    def make_result(score_reduction: str) -> EwokContextResult:
+        return EwokContextResult(
+            item_records=[
+                {
+                    "item_index": 0,
+                    "item_id": "spatial-relations:1",
+                    "domain": "spatial-relations",
+                    "score_reduction": score_reduction,
+                    "score": 1.0,
+                }
+            ],
+            summary_rows=[
+                {
+                    "group_scope": "overall",
+                    "group_name": "all",
+                    "score_reduction": score_reduction,
+                    "items": 1,
+                    "comparisons": 2,
+                    "correct_comparisons": 2,
+                    "score": 1.0,
+                    "mean_k_margin": 1.0,
+                    "target_token_count_mismatches": 0,
+                    "sum_mean_sign_disagreements": 0,
+                }
+            ],
+        )
+
+    def fake_ewok_context(**kwargs):
+        calls.append(
+            ("causal", kwargs["score_reduction"], kwargs["model"].model.is_causal)
+        )
+        assert kwargs["model"].model.is_causal is True
+        return make_result(kwargs["score_reduction"])
+
+    def fake_ewok_mntp(**kwargs):
+        calls.append(
+            ("mntp", kwargs["score_reduction"], kwargs["model"].model.is_causal)
+        )
+        assert kwargs["model"].model.is_causal is False
+        return make_result(kwargs["score_reduction"])
+
+    def fake_plot_ewok_context_summary(**kwargs):
+        plot_calls.append(kwargs)
+        assert kwargs["summary_csv"].exists()
+        assert kwargs["output_path"].parent.name in {"ewok_full", "ewok_mntp"}
+        assert kwargs["x_axis"] == "words_seen"
+
+    monkeypatch.setattr(
+        hybrid_lm_loop.ewok_context_sensitivity,
+        "evaluate_ewok_context_sensitivity",
+        fake_ewok_context,
+    )
+    monkeypatch.setattr(
+        hybrid_lm_loop.mntp_likelihood,
+        "evaluate_ewok_mntp_context_sensitivity",
+        fake_ewok_mntp,
+    )
+    monkeypatch.setattr(
+        hybrid_lm_loop,
+        "plot_ewok_context_summary",
+        fake_plot_ewok_context_summary,
+    )
+
+    tokenizer = _Tokenizer()
+    model = _TinyGptBert()
+    optimizer, _info = build_optimizer(
+        model,
+        {
+            "optimizer": "lamb",
+            "learning_rate": 1e-3,
+            "betas": [0.9, 0.98],
+            "eps": 1e-8,
+            "weight_decay": 0.0,
+        },
+    )
+    batches = [
+        _batch(torch.tensor([[1, 4, 5, 2], [1, 6, 7, 2]])),
+        _batch(torch.tensor([[1, 5, 4, 2], [1, 7, 6, 2]])),
+    ]
+    train_loader = DataLoader(_BatchDataset(batches), batch_size=None)
+    val_loader = DataLoader(_BatchDataset(batches[:1]), batch_size=None)
+    accelerator = Accelerator(cpu=True)
+    model, optimizer, train_loader, val_loader = accelerator.prepare(
+        model,
+        optimizer,
+        train_loader,
+        val_loader,
+    )
+
+    history = train_hybrid_lm(
+        model=model,
+        tokenizer=tokenizer,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        optimizer=optimizer,
+        scheduler=None,
+        accelerator=accelerator,
+        output_dir=tmp_path,
+        epochs=1,
+        total_update_steps=2,
+        hybrid_config={
+            "causal_steps": 1,
+            "masked_steps": 1,
+            "mask_start": 1.0,
+            "mask_end": 1.0,
+            "random_ratio": 0.0,
+            "keep_ratio": 0.0,
+            "z_loss": 0.0,
+        },
+        benchmark_eval_at_start=False,
+        ewok_context_items=[object()],
+        ewok_context_every_words=10,
+        ewok_context_score_reductions=("sum",),
+        ewok_context_plot=True,
+        ewok_context_run_name="toy_run",
+        ewok_mntp_items=[object()],
+        ewok_mntp_every_words=10,
+        ewok_mntp_score_reductions=("sum",),
+        ewok_mntp_plot=True,
+        ewok_mntp_run_name="toy_run",
+        benchmark_plot_x_axis="words_seen",
+        words_per_token=1.0,
+        log_every_steps=1,
+        eval_every_steps=0,
+        save_every_epochs=0,
+        save_final=False,
+    )
+
+    records = [
+        record
+        for record in history
+        if record["type"] in {
+            "ewok_context_sensitivity_full",
+            "ewok_mntp_context_sensitivity",
+        }
+    ]
+    assert calls == [("causal", "sum", True), ("mntp", "sum", False)]
+    assert len(plot_calls) == 2
+    assert len(records) == 2
+    assert {record["scoring_backend"] for record in records} == {"causal", "mntp"}
+    assert all(record["words_seen"] == 16.0 for record in records)
+    assert (tmp_path / "benchmarks" / "ewok_full" / "context_summary.csv").exists()
+    assert (tmp_path / "benchmarks" / "ewok_full" / "context_items.jsonl").exists()
+    assert (tmp_path / "benchmarks" / "ewok_mntp" / "context_summary.csv").exists()
+    assert (tmp_path / "benchmarks" / "ewok_mntp" / "context_items.jsonl").exists()

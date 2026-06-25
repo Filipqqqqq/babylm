@@ -7,12 +7,14 @@ import torch
 from babysteps.evaluation.blimp_likelihood import BlimpItem
 from babysteps.evaluation.comps_likelihood import CompsItem
 from babysteps.evaluation.entity_tracking_likelihood import EntityTrackingItem
+from babysteps.evaluation.ewok_context_sensitivity import EwokItem
 from babysteps.evaluation.mntp_likelihood import (
     MntpTextSpanRequest,
     encode_mntp_text_span,
     evaluate_blimp_mntp_likelihood,
     evaluate_comps_mntp_likelihood,
     evaluate_entity_tracking_mntp_likelihood,
+    evaluate_ewok_mntp_context_sensitivity,
     score_mntp_text_spans,
 )
 
@@ -109,6 +111,30 @@ class ContextSensitiveMntpModel(torch.nn.Module):
                     and int(input_ids[row, index + 1].item()) == FakeMntpTokenizer.mask_token_id
                 ):
                     logits[row, index, 3] = 5.0
+        return SimpleNamespace(logits=logits)
+
+
+class EwokSensitiveMntpModel(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.dummy = torch.nn.Parameter(torch.zeros(()))
+
+    def forward(self, *, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> SimpleNamespace:
+        del attention_mask
+        logits = torch.zeros((*input_ids.shape, 128), dtype=torch.float32, device=input_ids.device)
+        context_id = 1
+        other_id = 2
+        good_id = 3
+        bad_id = 4
+        for row in range(input_ids.shape[0]):
+            for index in range(input_ids.shape[1] - 1):
+                if int(input_ids[row, index + 1].item()) != FakeMntpTokenizer.mask_token_id:
+                    continue
+                previous_id = int(input_ids[row, index].item())
+                if previous_id == context_id:
+                    logits[row, index, good_id] = 5.0
+                elif previous_id == other_id:
+                    logits[row, index, bad_id] = 5.0
         return SimpleNamespace(logits=logits)
 
 
@@ -213,3 +239,34 @@ def test_evaluate_comps_mntp_likelihood_scores_conditioned_property_phrase() -> 
     record = result.item_records[0]
     assert record["correct"] is True
     assert record["score_acceptable"] > record["score_unacceptable"]
+
+
+def test_evaluate_ewok_mntp_context_sensitivity_uses_four_margins() -> None:
+    item = EwokItem(
+        item_id="spatial-relations:1",
+        source_file="spatial-relations.jsonl",
+        line_number=1,
+        domain="spatial-relations",
+        concept_a="good",
+        concept_b="bad",
+        context_type="direct",
+        context_diff="antonym",
+        target_diff="concept swap",
+        context1="context",
+        context2="other",
+        target1="good",
+        target2="bad",
+    )
+
+    result = evaluate_ewok_mntp_context_sensitivity(
+        model=EwokSensitiveMntpModel(),
+        tokenizer=FakeMntpTokenizer(),
+        items=[item],
+        batch_size=4,
+    )
+
+    record = result.item_records[0]
+    assert record["correct_k1"] is True
+    assert record["correct_k2"] is True
+    assert record["score"] == 1.0
+    assert record["domain"] == "spatial-relations"

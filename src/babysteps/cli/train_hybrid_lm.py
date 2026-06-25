@@ -31,6 +31,7 @@ from babysteps.data.token_shards import build_token_shard_loader
 from babysteps.evaluation.blimp_likelihood import read_blimp_items
 from babysteps.evaluation.comps_likelihood import read_comps_items
 from babysteps.evaluation.entity_tracking_likelihood import read_entity_tracking_items
+from babysteps.evaluation.ewok_context_sensitivity import read_ewok_items
 from babysteps.models import build_causal_lm_model, normalize_model_arch
 from babysteps.models.causal_lm import DEFAULT_GPT_BERT_REPO
 from babysteps.paths import resolve_path, validate_tokenizer_dir
@@ -282,6 +283,21 @@ def read_mntp_likelihood_items(config: dict[str, Any]) -> dict[str, list[Any]]:
     return items_by_benchmark
 
 
+def read_ewok_context_items(config: dict[str, Any]) -> list[Any]:
+    """Load configured EWoK context-sensitivity items."""
+
+    data_dir = resolve_path(
+        config.get(
+            "data_dir",
+            default_babylm_eval_dir("full_eval", "ewok_filtered"),
+        ),
+        base_dir=ROOT,
+    )
+    items = read_ewok_items(data_dir)
+    max_items = config.get("max_items")
+    return items[: int(max_items)] if max_items else items
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -317,8 +333,65 @@ def main() -> None:
     logging_config = config.get("logging", {})
     checkpoint_config = config.get("checkpointing", {})
     progress_config = config.get("progress", {})
+    if "ewok_context_sensitivity" in config:
+        raise ValueError(
+            "ewok_context_sensitivity has been removed from GPT-BERT configs. "
+            "Use ewok_context_sensitivity_full for causal EWoK scoring."
+        )
+    ewok_context_config = config.get("ewok_context_sensitivity_full", {})
+    ewok_mntp_config = config.get("ewok_mntp_context_sensitivity", {})
     mntp_likelihood_config = config.get("mntp_likelihood", {})
     loss_dynamics_config = config.get("loss_dynamics", {})
+
+    ewok_context_every_steps = int(ewok_context_config.get("every_steps", 0) or 0)
+    ewok_context_every_words = read_every_words(
+        ewok_context_config,
+        "ewok_context_sensitivity_full",
+    )
+    ewok_context_enabled = bool(
+        ewok_context_config.get(
+            "enabled",
+            ewok_context_every_steps > 0 or ewok_context_every_words is not None,
+        )
+    )
+    if (
+        ewok_context_enabled
+        and ewok_context_every_steps <= 0
+        and ewok_context_every_words is None
+    ):
+        raise ValueError(
+            "Set ewok_context_sensitivity_full.every_steps or "
+            "ewok_context_sensitivity_full.every_words when EWoK causal benchmarks are enabled."
+        )
+    ewok_context_score_reductions = read_score_reductions(
+        ewok_context_config,
+        "ewok_context_sensitivity_full",
+    )
+
+    ewok_mntp_every_steps = int(ewok_mntp_config.get("every_steps", 0) or 0)
+    ewok_mntp_every_words = read_every_words(
+        ewok_mntp_config,
+        "ewok_mntp_context_sensitivity",
+    )
+    ewok_mntp_enabled = bool(
+        ewok_mntp_config.get(
+            "enabled",
+            ewok_mntp_every_steps > 0 or ewok_mntp_every_words is not None,
+        )
+    )
+    if (
+        ewok_mntp_enabled
+        and ewok_mntp_every_steps <= 0
+        and ewok_mntp_every_words is None
+    ):
+        raise ValueError(
+            "Set ewok_mntp_context_sensitivity.every_steps or "
+            "ewok_mntp_context_sensitivity.every_words when EWoK MNTP benchmarks are enabled."
+        )
+    ewok_mntp_score_reductions = read_score_reductions(
+        ewok_mntp_config,
+        "ewok_mntp_context_sensitivity",
+    )
 
     mntp_likelihood_every_steps = int(mntp_likelihood_config.get("every_steps", 0) or 0)
     mntp_likelihood_every_words = read_every_words(
@@ -365,7 +438,14 @@ def main() -> None:
         if words_per_token <= 0:
             raise ValueError("words_per_token must be positive.")
 
-    word_interval_requested = mntp_likelihood_every_words is not None
+    word_interval_requested = any(
+        value is not None
+        for value in (
+            ewok_context_every_words,
+            ewok_mntp_every_words,
+            mntp_likelihood_every_words,
+        )
+    )
     estimate_words_per_token = bool(
         progress_config.get(
             "estimate_words_per_token",
@@ -393,6 +473,19 @@ def main() -> None:
             logging_config.get("benchmark_plot_x_axis", "step"),
         )
     )
+
+    ewok_context_plot = bool(ewok_context_config.get("plot", False))
+    ewok_context_plot_every_evals = int(
+        ewok_context_config.get("plot_every_evals", 1) or 1
+    )
+    if ewok_context_plot and ewok_context_plot_every_evals <= 0:
+        raise ValueError("ewok_context_sensitivity_full.plot_every_evals must be positive.")
+    ewok_mntp_plot = bool(ewok_mntp_config.get("plot", False))
+    ewok_mntp_plot_every_evals = int(
+        ewok_mntp_config.get("plot_every_evals", 1) or 1
+    )
+    if ewok_mntp_plot and ewok_mntp_plot_every_evals <= 0:
+        raise ValueError("ewok_mntp_context_sensitivity.plot_every_evals must be positive.")
 
     mntp_likelihood_plot = bool(mntp_likelihood_config.get("plot", False))
     mntp_likelihood_plot_every_evals = int(
@@ -508,10 +601,56 @@ def main() -> None:
 
     if words_per_token is None and word_interval_requested:
         raise ValueError(
-            "Word-count MNTP benchmark intervals require words_per_token. Set "
+            "Word-count benchmark intervals require words_per_token. Set "
             "progress.words_per_token, progress.tokens_per_word, or "
             "progress.estimate_words_per_token=true."
         )
+
+    ewok_context_items = None
+    if ewok_context_enabled:
+        ewok_context_items = read_ewok_context_items(ewok_context_config)
+        if accelerator.is_main_process:
+            print(
+                "Full EWoK causal context sensitivity: "
+                f"{len(ewok_context_items):,} items, "
+                + format_eval_interval(
+                    ewok_context_every_steps,
+                    ewok_context_every_words,
+                )
+                + ", "
+                + f"reductions={','.join(ewok_context_score_reductions)}",
+                flush=True,
+            )
+            if ewok_context_plot:
+                print(
+                    "EWoK causal context plots: "
+                    f"enabled every {ewok_context_plot_every_evals} eval(s), "
+                    f"x_axis={benchmark_plot_x_axis}",
+                    flush=True,
+                )
+
+    ewok_mntp_items = None
+    if ewok_mntp_enabled:
+        ewok_mntp_items = read_ewok_context_items(ewok_mntp_config)
+        if accelerator.is_main_process:
+            print(
+                "EWoK MNTP context sensitivity: "
+                f"{len(ewok_mntp_items):,} items, "
+                + format_eval_interval(
+                    ewok_mntp_every_steps,
+                    ewok_mntp_every_words,
+                )
+                + ", "
+                + f"reductions={','.join(ewok_mntp_score_reductions)}",
+                flush=True,
+            )
+            if ewok_mntp_plot:
+                print(
+                    "EWoK MNTP context plots: "
+                    f"enabled every {ewok_mntp_plot_every_evals} eval(s), "
+                    f"x_axis={benchmark_plot_x_axis}",
+                    flush=True,
+                )
 
     mntp_likelihood_items = None
     if mntp_likelihood_enabled:
@@ -604,6 +743,58 @@ def main() -> None:
             flush=True,
         )
 
+        if ewok_context_enabled:
+            ewok_context_step_steps = estimate_step_interval_eval_steps(
+                ewok_context_every_steps,
+                total_update_steps,
+            )
+            ewok_context_word_steps = estimate_word_interval_eval_steps(
+                every_words=ewok_context_every_words,
+                words_per_token=words_per_token,
+                seq_len=seq_len,
+                batch_size=batch_size,
+                grad_accum=grad_accum,
+                world_size=accelerator.num_processes,
+                total_update_steps=total_update_steps,
+            )
+            ewok_context_eval_steps = merge_eval_steps(
+                ewok_context_step_steps,
+                ewok_context_word_steps,
+            )
+            startup_eval = bool(logging_config.get("benchmark_eval_at_start", True))
+            suffix = "; plus startup eval at step 0" if startup_eval else ""
+            print(
+                "EWoK causal eval estimate: "
+                f"{format_eval_step_preview(ewok_context_eval_steps)}{suffix}",
+                flush=True,
+            )
+
+        if ewok_mntp_enabled:
+            ewok_mntp_step_steps = estimate_step_interval_eval_steps(
+                ewok_mntp_every_steps,
+                total_update_steps,
+            )
+            ewok_mntp_word_steps = estimate_word_interval_eval_steps(
+                every_words=ewok_mntp_every_words,
+                words_per_token=words_per_token,
+                seq_len=seq_len,
+                batch_size=batch_size,
+                grad_accum=grad_accum,
+                world_size=accelerator.num_processes,
+                total_update_steps=total_update_steps,
+            )
+            ewok_mntp_eval_steps = merge_eval_steps(
+                ewok_mntp_step_steps,
+                ewok_mntp_word_steps,
+            )
+            startup_eval = bool(logging_config.get("benchmark_eval_at_start", True))
+            suffix = "; plus startup eval at step 0" if startup_eval else ""
+            print(
+                "EWoK MNTP eval estimate: "
+                f"{format_eval_step_preview(ewok_mntp_eval_steps)}{suffix}",
+                flush=True,
+            )
+
         if mntp_likelihood_enabled:
             mntp_step_steps = estimate_step_interval_eval_steps(
                 mntp_likelihood_every_steps,
@@ -662,6 +853,22 @@ def main() -> None:
         save_every_epochs=checkpoint_config.get("save_every_epochs", 1),
         save_final=bool(checkpoint_config.get("save_final", True)),
         benchmark_eval_at_start=bool(logging_config.get("benchmark_eval_at_start", True)),
+        ewok_context_items=ewok_context_items,
+        ewok_context_every_steps=ewok_context_every_steps,
+        ewok_context_every_words=ewok_context_every_words,
+        ewok_context_batch_size=int(ewok_context_config.get("batch_size", 64)),
+        ewok_context_score_reductions=ewok_context_score_reductions,
+        ewok_context_run_name=str(run_config.get("name", "")),
+        ewok_context_plot=ewok_context_plot,
+        ewok_context_plot_every_evals=ewok_context_plot_every_evals,
+        ewok_mntp_items=ewok_mntp_items,
+        ewok_mntp_every_steps=ewok_mntp_every_steps,
+        ewok_mntp_every_words=ewok_mntp_every_words,
+        ewok_mntp_batch_size=int(ewok_mntp_config.get("batch_size", 64)),
+        ewok_mntp_score_reductions=ewok_mntp_score_reductions,
+        ewok_mntp_run_name=str(run_config.get("name", "")),
+        ewok_mntp_plot=ewok_mntp_plot,
+        ewok_mntp_plot_every_evals=ewok_mntp_plot_every_evals,
         mntp_likelihood_items=mntp_likelihood_items,
         mntp_likelihood_every_steps=mntp_likelihood_every_steps,
         mntp_likelihood_every_words=mntp_likelihood_every_words,

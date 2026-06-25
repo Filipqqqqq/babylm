@@ -18,8 +18,10 @@ from babysteps.analysis.blimp_likelihood_dynamics import (
 )
 from babysteps.analysis.comps_dynamics import plot_comps_summary
 from babysteps.analysis.entity_tracking_dynamics import plot_entity_tracking_summary
+from babysteps.analysis.ewok_context_dynamics import plot_ewok_context_summary
 from babysteps.analysis.loss_dynamics import DEFAULT_LOSS_KEYS
 from babysteps.analysis.loss_dynamics import write_training_loss_plots
+from babysteps.evaluation import ewok_context_sensitivity
 from babysteps.evaluation import mntp_likelihood
 from babysteps.models.causal_lm import DEFAULT_GPT_BERT_REPO
 from babysteps.training.causal_lm_loop import save_json_atomic
@@ -540,6 +542,28 @@ def train_hybrid_lm(
     save_every_epochs: int | None = 1,
     save_final: bool = True,
     benchmark_eval_at_start: bool = True,
+    ewok_context_items: list[ewok_context_sensitivity.EwokItem] | None = None,
+    ewok_context_every_steps: int = 0,
+    ewok_context_every_words: float | None = None,
+    ewok_context_batch_size: int = 64,
+    ewok_context_score_reductions: tuple[
+        ewok_context_sensitivity.ScoreReduction,
+        ...,
+    ] = ("sum",),
+    ewok_context_run_name: str | None = None,
+    ewok_context_plot: bool = False,
+    ewok_context_plot_every_evals: int = 1,
+    ewok_mntp_items: list[ewok_context_sensitivity.EwokItem] | None = None,
+    ewok_mntp_every_steps: int = 0,
+    ewok_mntp_every_words: float | None = None,
+    ewok_mntp_batch_size: int = 64,
+    ewok_mntp_score_reductions: tuple[
+        ewok_context_sensitivity.ScoreReduction,
+        ...,
+    ] = ("sum",),
+    ewok_mntp_run_name: str | None = None,
+    ewok_mntp_plot: bool = False,
+    ewok_mntp_plot_every_evals: int = 1,
     mntp_likelihood_items: dict[str, list[Any]] | None = None,
     mntp_likelihood_every_steps: int = 0,
     mntp_likelihood_every_words: float | None = None,
@@ -563,12 +587,17 @@ def train_hybrid_lm(
             "benchmark_plot_x_axis must be one of "
             f"{sorted(BENCHMARK_X_AXES)}, got {benchmark_plot_x_axis!r}."
         )
+    any_benchmark_plot = ewok_context_plot or ewok_mntp_plot or mntp_likelihood_plot
     if (
-        mntp_likelihood_plot
+        any_benchmark_plot
         and benchmark_plot_x_axis == "words_seen"
         and words_per_token is None
     ):
-        raise ValueError("MNTP likelihood plots with x_axis='words_seen' require words_per_token.")
+        raise ValueError("Benchmark plots with x_axis='words_seen' require words_per_token.")
+    if ewok_context_plot and ewok_context_plot_every_evals <= 0:
+        raise ValueError("ewok_context_plot_every_evals must be positive.")
+    if ewok_mntp_plot and ewok_mntp_plot_every_evals <= 0:
+        raise ValueError("ewok_mntp_plot_every_evals must be positive.")
     if mntp_likelihood_plot and mntp_likelihood_plot_every_evals <= 0:
         raise ValueError("mntp_likelihood_plot_every_evals must be positive.")
     if loss_dynamics_x_axis not in BENCHMARK_X_AXES:
@@ -582,9 +611,27 @@ def train_hybrid_lm(
         raise ValueError("loss_dynamics_plot_every_evals must be positive.")
     if not loss_dynamics_loss_keys:
         raise ValueError("loss_dynamics_loss_keys must not be empty.")
+    if ewok_context_every_words is not None and words_per_token is None:
+        raise ValueError("EWoK causal word-count benchmark intervals require words_per_token.")
+    if ewok_mntp_every_words is not None and words_per_token is None:
+        raise ValueError("EWoK MNTP word-count benchmark intervals require words_per_token.")
+    if mntp_likelihood_every_words is not None and words_per_token is None:
+        raise ValueError("MNTP word-count benchmark intervals require words_per_token.")
+    if not ewok_context_score_reductions:
+        raise ValueError("ewok_context_score_reductions must not be empty.")
+    if not ewok_mntp_score_reductions:
+        raise ValueError("ewok_mntp_score_reductions must not be empty.")
 
     output_dir = Path(output_dir)
     metrics_path = output_dir / "metrics_history.json"
+    ewok_context_dir = output_dir / "benchmarks" / "ewok_full"
+    ewok_context_items_path = ewok_context_dir / "context_items.jsonl"
+    ewok_context_summary_path = ewok_context_dir / "context_summary.csv"
+    ewok_context_plot_path = ewok_context_dir / "context_domain_dynamics.png"
+    ewok_mntp_dir = output_dir / "benchmarks" / "ewok_mntp"
+    ewok_mntp_items_path = ewok_mntp_dir / "context_items.jsonl"
+    ewok_mntp_summary_path = ewok_mntp_dir / "context_summary.csv"
+    ewok_mntp_plot_path = ewok_mntp_dir / "context_domain_dynamics.png"
     benchmark_dir = output_dir / "benchmarks" / "mntp_likelihood"
     loss_dynamics_dir = output_dir / "loss_dynamics"
     mntp_items_path = benchmark_dir / "likelihood_items.jsonl"
@@ -593,14 +640,16 @@ def train_hybrid_lm(
     global_micro_step = 0
     global_update_step = 0
     cumulative_tokens_seen = 0.0
+    next_ewok_context_words = ewok_context_every_words
+    next_ewok_mntp_words = ewok_mntp_every_words
     next_mntp_likelihood_words = mntp_likelihood_every_words
+    ewok_context_eval_count = 0
+    ewok_mntp_eval_count = 0
     mntp_likelihood_eval_count = 0
     vocab_size = int(getattr(accelerator.unwrap_model(model).config, "vocab_size", len(tokenizer)))
     mask_id = tokenizer.mask_token_id
     if mask_id is None:
         raise ValueError("Hybrid GPT-BERT training requires tokenizer.mask_token_id.")
-    if mntp_likelihood_every_words is not None and words_per_token is None:
-        raise ValueError("MNTP word-count benchmark intervals require words_per_token.")
     if not mntp_likelihood_score_reductions:
         raise ValueError("mntp_likelihood_score_reductions must not be empty.")
 
@@ -616,8 +665,165 @@ def train_hybrid_lm(
     if accelerator.is_main_process:
         output_dir.mkdir(parents=True, exist_ok=True)
 
-    def reduction_filter(score_reductions: tuple[str, ...]) -> str | None:
+    def reduction_filter(score_reductions: tuple[Any, ...]) -> Any | None:
         return score_reductions[0] if len(score_reductions) == 1 else None
+
+    def append_ewok_context_outputs(
+        *,
+        result: ewok_context_sensitivity.EwokContextResult,
+        items_path: Path,
+        summary_path: Path,
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        ewok_context_sensitivity.append_item_records_jsonl(
+            result.item_records,
+            items_path,
+            metadata=metadata,
+        )
+        ewok_context_sensitivity.append_summary_csv(
+            result.summary_rows,
+            summary_path,
+            metadata=metadata,
+        )
+        return overall_summary_row(result.summary_rows)
+
+    def run_ewok_context_eval(*, epoch: int, step: int, tokens_seen: float) -> None:
+        nonlocal ewok_context_eval_count
+
+        if ewok_context_items is None:
+            return
+        accelerator.wait_for_everyone()
+        if accelerator.is_main_process:
+            unwrapped_model = accelerator.unwrap_model(model)
+            set_gpt_bert_is_causal(unwrapped_model, True)
+            metadata = progress_metadata(
+                epoch=epoch,
+                step=step,
+                tokens_seen=tokens_seen,
+                words_per_token=words_per_token,
+                run_name=ewok_context_run_name,
+            )
+            for score_reduction in ewok_context_score_reductions:
+                result = ewok_context_sensitivity.evaluate_ewok_context_sensitivity(
+                    model=unwrapped_model,
+                    tokenizer=tokenizer,
+                    items=ewok_context_items,
+                    batch_size=ewok_context_batch_size,
+                    score_reduction=score_reduction,
+                    device=accelerator.device,
+                )
+                overall = append_ewok_context_outputs(
+                    result=result,
+                    items_path=ewok_context_items_path,
+                    summary_path=ewok_context_summary_path,
+                    metadata=metadata,
+                )
+                record = {
+                    "type": "ewok_context_sensitivity_full",
+                    "scoring_backend": "causal",
+                    **metadata,
+                    "score_reduction": score_reduction,
+                    "score": overall["score"],
+                    "mean_k_margin": overall["mean_k_margin"],
+                    "items": overall["items"],
+                    "target_token_count_mismatches": overall[
+                        "target_token_count_mismatches"
+                    ],
+                    "sum_mean_sign_disagreements": overall[
+                        "sum_mean_sign_disagreements"
+                    ],
+                }
+                history.append(record)
+                print(
+                    f"[step {step:06d}] "
+                    f"ewok_context_sensitivity_full_score={overall['score']:.4f} "
+                    f"reduction={score_reduction} "
+                    f"mean_k_margin={overall['mean_k_margin']:.4f}",
+                    flush=True,
+                )
+            ewok_context_eval_count += 1
+            if (
+                ewok_context_plot
+                and ewok_context_eval_count % max(1, ewok_context_plot_every_evals) == 0
+            ):
+                plot_ewok_context_summary(
+                    summary_csv=ewok_context_summary_path,
+                    output_path=ewok_context_plot_path,
+                    run_name=ewok_context_run_name,
+                    score_reduction=reduction_filter(ewok_context_score_reductions),
+                    x_axis=benchmark_plot_x_axis,
+                )
+            save_json_atomic(history, metrics_path)
+        accelerator.wait_for_everyone()
+
+    def run_ewok_mntp_eval(*, epoch: int, step: int, tokens_seen: float) -> None:
+        nonlocal ewok_mntp_eval_count
+
+        if ewok_mntp_items is None:
+            return
+        accelerator.wait_for_everyone()
+        if accelerator.is_main_process:
+            unwrapped_model = accelerator.unwrap_model(model)
+            set_gpt_bert_is_causal(unwrapped_model, False)
+            metadata = progress_metadata(
+                epoch=epoch,
+                step=step,
+                tokens_seen=tokens_seen,
+                words_per_token=words_per_token,
+                run_name=ewok_mntp_run_name,
+            )
+            for score_reduction in ewok_mntp_score_reductions:
+                result = mntp_likelihood.evaluate_ewok_mntp_context_sensitivity(
+                    model=unwrapped_model,
+                    tokenizer=tokenizer,
+                    items=ewok_mntp_items,
+                    batch_size=ewok_mntp_batch_size,
+                    score_reduction=score_reduction,
+                    device=accelerator.device,
+                )
+                overall = append_ewok_context_outputs(
+                    result=result,
+                    items_path=ewok_mntp_items_path,
+                    summary_path=ewok_mntp_summary_path,
+                    metadata=metadata,
+                )
+                record = {
+                    "type": "ewok_mntp_context_sensitivity",
+                    "scoring_backend": "mntp",
+                    **metadata,
+                    "score_reduction": score_reduction,
+                    "score": overall["score"],
+                    "mean_k_margin": overall["mean_k_margin"],
+                    "items": overall["items"],
+                    "target_token_count_mismatches": overall[
+                        "target_token_count_mismatches"
+                    ],
+                    "sum_mean_sign_disagreements": overall[
+                        "sum_mean_sign_disagreements"
+                    ],
+                }
+                history.append(record)
+                print(
+                    f"[step {step:06d}] "
+                    f"ewok_mntp_context_score={overall['score']:.4f} "
+                    f"reduction={score_reduction} "
+                    f"mean_k_margin={overall['mean_k_margin']:.4f}",
+                    flush=True,
+                )
+            ewok_mntp_eval_count += 1
+            if (
+                ewok_mntp_plot
+                and ewok_mntp_eval_count % max(1, ewok_mntp_plot_every_evals) == 0
+            ):
+                plot_ewok_context_summary(
+                    summary_csv=ewok_mntp_summary_path,
+                    output_path=ewok_mntp_plot_path,
+                    run_name=ewok_mntp_run_name,
+                    score_reduction=reduction_filter(ewok_mntp_score_reductions),
+                    x_axis=benchmark_plot_x_axis,
+                )
+            save_json_atomic(history, metrics_path)
+        accelerator.wait_for_everyone()
 
     def run_mntp_likelihood_eval(*, epoch: int, step: int, tokens_seen: float) -> None:
         nonlocal mntp_likelihood_eval_count
@@ -729,6 +935,8 @@ def train_hybrid_lm(
         accelerator.wait_for_everyone()
 
     if benchmark_eval_at_start:
+        run_ewok_context_eval(epoch=0, step=0, tokens_seen=0.0)
+        run_ewok_mntp_eval(epoch=0, step=0, tokens_seen=0.0)
         run_mntp_likelihood_eval(epoch=0, step=0, tokens_seen=0.0)
 
     for epoch in range(1, int(epochs) + 1):
@@ -957,6 +1165,68 @@ def train_hybrid_lm(
                         flush=True,
                     )
                     save_json_atomic(history, metrics_path)
+
+            ewok_context_word_due = (
+                current_words_seen is not None
+                and word_interval_due(
+                    words_seen=current_words_seen,
+                    next_words=next_ewok_context_words,
+                )
+            )
+            should_ewok_context_eval = (
+                ewok_context_items is not None
+                and accelerator.sync_gradients
+                and (
+                    (
+                        ewok_context_every_steps > 0
+                        and global_update_step % int(ewok_context_every_steps) == 0
+                    )
+                    or ewok_context_word_due
+                )
+            )
+            if should_ewok_context_eval:
+                run_ewok_context_eval(
+                    epoch=epoch,
+                    step=global_update_step,
+                    tokens_seen=cumulative_tokens_seen,
+                )
+                if ewok_context_word_due:
+                    next_ewok_context_words = advance_word_interval(
+                        next_words=next_ewok_context_words,
+                        every_words=ewok_context_every_words,
+                        words_seen=current_words_seen or 0.0,
+                    )
+
+            ewok_mntp_word_due = (
+                current_words_seen is not None
+                and word_interval_due(
+                    words_seen=current_words_seen,
+                    next_words=next_ewok_mntp_words,
+                )
+            )
+            should_ewok_mntp_eval = (
+                ewok_mntp_items is not None
+                and accelerator.sync_gradients
+                and (
+                    (
+                        ewok_mntp_every_steps > 0
+                        and global_update_step % int(ewok_mntp_every_steps) == 0
+                    )
+                    or ewok_mntp_word_due
+                )
+            )
+            if should_ewok_mntp_eval:
+                run_ewok_mntp_eval(
+                    epoch=epoch,
+                    step=global_update_step,
+                    tokens_seen=cumulative_tokens_seen,
+                )
+                if ewok_mntp_word_due:
+                    next_ewok_mntp_words = advance_word_interval(
+                        next_words=next_ewok_mntp_words,
+                        every_words=ewok_mntp_every_words,
+                        words_seen=current_words_seen or 0.0,
+                    )
 
             mntp_word_due = (
                 current_words_seen is not None

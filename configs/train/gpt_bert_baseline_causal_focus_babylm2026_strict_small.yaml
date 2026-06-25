@@ -38,6 +38,22 @@ progress:
   estimate_words_per_token: true
   words_per_token_sample_tokens: 4096
 
+ewok_context_sensitivity_full:
+  enabled: true
+  every_words: 10000000
+  batch_size: 64
+  score_reduction: both
+  plot: true
+  plot_every_evals: 1
+
+ewok_mntp_context_sensitivity:
+  enabled: false
+  every_words:
+  batch_size: 64
+  score_reduction: both
+  plot: false
+  plot_every_evals: 1
+
 mntp_likelihood:
   enabled: true
   every_words: 10000000

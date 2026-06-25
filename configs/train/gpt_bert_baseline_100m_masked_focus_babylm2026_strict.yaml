@@ -38,7 +38,7 @@ progress:
   estimate_words_per_token: true
   words_per_token_sample_tokens: 4096
 
-ewok_context_sensitivity:
+ewok_context_sensitivity_full:
   enabled: true
   every_words: 50000000
   batch_size: 64

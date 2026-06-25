@@ -59,6 +59,41 @@ def test_gpt_bert_tokenization_config_uses_cache_roots(monkeypatch) -> None:
     )
 
 
+def test_gpt_bert_100m_masked_focus_tokenization_config_uses_full_strict_dataset(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("BABYSTEPS_GPT_BERT_BASELINE_100M_MASKED_FOCUS_TOKENIZER_DIR", raising=False)
+    monkeypatch.delenv(
+        "BABYSTEPS_BABYLM2026_STRICT_GPT_BERT_BASELINE_100M_MASKED_FOCUS_SHARDS_DIR",
+        raising=False,
+    )
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+
+    config = token_shard_builder.load_yaml_config(
+        ROOT
+        / "configs"
+        / "tokenization"
+        / "babylm2026_strict_gpt_bert_baseline_100m_masked_focus_shards.yaml"
+    )
+
+    assert config["dataset"]["name"] == "BabyLM-community/BabyLM-2026-Strict"
+    assert (
+        config["tokenizer"]["source"]
+        == "BabyLM-community/babylm-baseline-100m-gpt-bert-masked-focus"
+    )
+    assert (
+        config["tokenizer"]["output_dir"]
+        == "/cache/tokenizers/gpt_bert_baseline_100m_masked_focus"
+    )
+    assert (
+        config["shards"]["output_dir"]
+        == "/cache/token_shards/babylm2026_strict_gpt_bert_baseline_100m_masked_focus"
+    )
+    assert config["shards"]["shard_tokens"] == 1_000_000
+    assert config["shards"]["val_shards"] == 1
+    assert config["shards"]["max_shards"] is None
+
+
 def test_gpt_bert_train_config_uses_hybrid_defaults(monkeypatch) -> None:
     monkeypatch.delenv("BABYSTEPS_GPT_BERT_BASELINE_CAUSAL_FOCUS_TOKENIZER_DIR", raising=False)
     monkeypatch.delenv(
@@ -84,6 +119,14 @@ def test_gpt_bert_train_config_uses_hybrid_defaults(monkeypatch) -> None:
     assert config["hybrid"]["mask_end"] == 0.15
     assert config["progress"]["benchmark_plot_x_axis"] == "words_seen"
     assert config["progress"]["estimate_words_per_token"] is True
+    assert config["ewok_context_sensitivity_full"]["enabled"] is True
+    assert config["ewok_context_sensitivity_full"]["every_words"] == 10_000_000
+    assert config["ewok_context_sensitivity_full"]["score_reduction"] == "both"
+    assert config["ewok_context_sensitivity_full"]["plot"] is True
+    assert config["ewok_mntp_context_sensitivity"]["enabled"] is False
+    assert config["ewok_mntp_context_sensitivity"]["every_words"] is None
+    assert config["ewok_mntp_context_sensitivity"]["score_reduction"] == "both"
+    assert config["ewok_mntp_context_sensitivity"]["plot"] is False
     assert config["mntp_likelihood"]["enabled"] is True
     assert config["mntp_likelihood"]["every_words"] == 10_000_000
     assert config["mntp_likelihood"]["score_reduction"] == "sum"
@@ -93,6 +136,82 @@ def test_gpt_bert_train_config_uses_hybrid_defaults(monkeypatch) -> None:
     assert config["loss_dynamics"]["plot_every_evals"] == 1
     assert config["loss_dynamics"]["x_axis"] == "words_seen"
     assert config["logging"]["benchmark_eval_at_start"] is True
+    assert (
+        config["tokenizer"]["name"]
+        == "/cache/tokenizers/gpt_bert_baseline_causal_focus"
+    )
+
+
+def test_gpt_bert_100m_masked_focus_train_config_uses_100m_paths(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("BABYSTEPS_GPT_BERT_BASELINE_100M_MASKED_FOCUS_TOKENIZER_DIR", raising=False)
+    monkeypatch.delenv(
+        "BABYSTEPS_BABYLM2026_STRICT_GPT_BERT_BASELINE_100M_MASKED_FOCUS_SHARDS_DIR",
+        raising=False,
+    )
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+    monkeypatch.setenv("BABYSTEPS_RUNS_DIR", "/runs")
+
+    config = train_script.load_yaml_config(
+        ROOT
+        / "configs"
+        / "train"
+        / "gpt_bert_baseline_100m_masked_focus_babylm2026_strict.yaml"
+    )
+
+    assert config["run"]["name"] == "gpt_bert_baseline_100m_masked_focus_babylm2026_strict"
+    assert config["data"]["data_dir"] == (
+        "/cache/token_shards/babylm2026_strict_gpt_bert_baseline_100m_masked_focus"
+    )
+    assert config["tokenizer"]["name"] == "/cache/tokenizers/gpt_bert_baseline_100m_masked_focus"
+    assert config["model"]["repo"] == "BabyLM-community/babylm-baseline-100m-gpt-bert-masked-focus"
+    assert config["hybrid"]["causal_steps"] == 1
+    assert config["hybrid"]["masked_steps"] == 15
+    assert config["training"]["epochs"] == 10
+    assert config["training"]["batch_size"] == 16
+    assert config["training"]["gradient_accumulation_steps"] == 16
+    assert config["training"]["mixed_precision"] == "bf16"
+    assert config["ewok_context_sensitivity_full"]["every_words"] == config["mntp_likelihood"]["every_words"]
+    assert config["mntp_likelihood"]["every_words"] > 0
+    assert config["logging"]["benchmark_eval_at_start"] is True
+    assert config["loss_dynamics"]["plot"] is True
+
+
+def test_gpt_bert_masked_focus_train_config_uses_masked_schedule(monkeypatch) -> None:
+    monkeypatch.delenv("BABYSTEPS_GPT_BERT_BASELINE_CAUSAL_FOCUS_TOKENIZER_DIR", raising=False)
+    monkeypatch.delenv("BABYSTEPS_GPT_BERT_BASELINE_MASKED_FOCUS_TOKENIZER_DIR", raising=False)
+    monkeypatch.delenv(
+        "BABYSTEPS_BABYLM2026_STRICT_SMALL_GPT_BERT_BASELINE_CAUSAL_FOCUS_SHARDS_DIR",
+        raising=False,
+    )
+    monkeypatch.delenv(
+        "BABYSTEPS_BABYLM2026_STRICT_SMALL_GPT_BERT_BASELINE_MASKED_FOCUS_SHARDS_DIR",
+        raising=False,
+    )
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+    monkeypatch.setenv("BABYSTEPS_RUNS_DIR", "/runs")
+
+    config = train_script.load_yaml_config(
+        ROOT / "configs" / "train" / "gpt_bert_baseline_masked_focus_babylm2026_strict_small.yaml"
+    )
+
+    assert config["run"]["name"] == "gpt_bert_baseline_masked_focus_babylm2026_strict_small"
+    assert config["run"]["output_root"] == "/runs/training"
+    assert config["model"]["architecture"] == "gpt_bert"
+    assert config["model"]["repo"] == "BabyLM-community/babylm-baseline-10m-gpt-bert-masked-focus"
+    assert config["hybrid"]["causal_steps"] == 1
+    assert config["hybrid"]["masked_steps"] == 15
+    assert config["ewok_context_sensitivity_full"]["enabled"] is True
+    assert config["ewok_context_sensitivity_full"]["every_words"] == 10_000_000
+    assert config["ewok_context_sensitivity_full"]["plot"] is True
+    assert config["ewok_mntp_context_sensitivity"]["enabled"] is False
+    assert config["ewok_mntp_context_sensitivity"]["every_words"] is None
+    assert config["ewok_mntp_context_sensitivity"]["plot"] is False
+    assert (
+        config["data"]["data_dir"]
+        == "/cache/token_shards/babylm2026_strict_small_gpt_bert_baseline_causal_focus"
+    )
     assert (
         config["tokenizer"]["name"]
         == "/cache/tokenizers/gpt_bert_baseline_causal_focus"

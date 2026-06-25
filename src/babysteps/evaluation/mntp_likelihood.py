@@ -13,6 +13,7 @@ import torch
 from babysteps.evaluation import blimp_likelihood
 from babysteps.evaluation import comps_likelihood
 from babysteps.evaluation import entity_tracking_likelihood
+from babysteps.evaluation import ewok_context_sensitivity
 
 
 ScoreReduction = Literal["sum", "mean"]
@@ -354,6 +355,49 @@ def score_mntp_entity_tracking_continuations(
     return score_map
 
 
+def score_mntp_ewok_contexts(
+    *,
+    model: torch.nn.Module,
+    tokenizer: Any,
+    requests: list[ewok_context_sensitivity.ScoringRequest],
+    batch_size: int = 64,
+    device: torch.device | str | None = None,
+) -> dict[
+    int,
+    dict[ewok_context_sensitivity.ScoreName, ewok_context_sensitivity.TargetScore],
+]:
+    """Score EWoK target continuations with the MNTP backend."""
+
+    scores = score_mntp_text_spans(
+        model=model,
+        tokenizer=tokenizer,
+        requests=[
+            MntpTextSpanRequest(
+                text=f"{request.context} {request.target}",
+                target_start_char=len(request.context) + 1,
+            )
+            for request in requests
+        ],
+        batch_size=batch_size,
+        device=device,
+    )
+    score_map: dict[
+        int,
+        dict[ewok_context_sensitivity.ScoreName, ewok_context_sensitivity.TargetScore],
+    ] = {}
+    for request, score in zip(requests, scores, strict=True):
+        target_count = int(score.scored_token_count)
+        score_map.setdefault(request.item_index, {})[request.name] = (
+            ewok_context_sensitivity.TargetScore(
+                sum_logprob=score.sum_logprob,
+                mean_logprob=score.sum_logprob / target_count,
+                target_token_count=target_count,
+                input_token_count=score.input_token_count,
+            )
+        )
+    return score_map
+
+
 def evaluate_blimp_mntp_likelihood(
     *,
     model: torch.nn.Module,
@@ -452,6 +496,36 @@ def evaluate_entity_tracking_mntp_likelihood(
     )
 
 
+def evaluate_ewok_mntp_context_sensitivity(
+    *,
+    model: torch.nn.Module,
+    tokenizer: Any,
+    items: list[ewok_context_sensitivity.EwokItem],
+    batch_size: int = 64,
+    device: torch.device | str | None = None,
+    score_reduction: ScoreReduction = "sum",
+) -> ewok_context_sensitivity.EwokContextResult:
+    """Evaluate EWoK context sensitivity with MNTP target-span scores."""
+
+    score_reduction = validate_score_reduction(score_reduction)
+    score_map = score_mntp_ewok_contexts(
+        model=model,
+        tokenizer=tokenizer,
+        requests=ewok_context_sensitivity.make_scoring_requests(items),
+        batch_size=batch_size,
+        device=device,
+    )
+    records = ewok_context_sensitivity.build_item_records(
+        items=items,
+        score_map=score_map,
+        score_reduction=score_reduction,
+    )
+    return ewok_context_sensitivity.EwokContextResult(
+        item_records=records,
+        summary_rows=ewok_context_sensitivity.aggregate_item_records(records),
+    )
+
+
 RUN_METADATA_FIELDNAMES = [
     "run_name",
     "epoch",
@@ -543,9 +617,11 @@ __all__ = [
     "evaluate_blimp_mntp_likelihood",
     "evaluate_comps_mntp_likelihood",
     "evaluate_entity_tracking_mntp_likelihood",
+    "evaluate_ewok_mntp_context_sensitivity",
     "resolve_mask_token_id",
     "score_mntp_comps_continuations",
     "score_mntp_entity_tracking_continuations",
+    "score_mntp_ewok_contexts",
     "score_mntp_sentences",
     "score_mntp_text_spans",
     "validate_score_reduction",
