@@ -439,11 +439,10 @@ def main() -> None:
             raise ValueError("words_per_token must be positive.")
 
     word_interval_requested = any(
-        value is not None
-        for value in (
-            ewok_context_every_words,
-            ewok_mntp_every_words,
-            mntp_likelihood_every_words,
+        (
+            ewok_context_enabled and ewok_context_every_words is not None,
+            ewok_mntp_enabled and ewok_mntp_every_words is not None,
+            mntp_likelihood_enabled and mntp_likelihood_every_words is not None,
         )
     )
     estimate_words_per_token = bool(
@@ -474,26 +473,32 @@ def main() -> None:
         )
     )
 
-    ewok_context_plot = bool(ewok_context_config.get("plot", False))
+    ewok_context_plot = ewok_context_enabled and bool(
+        ewok_context_config.get("plot", False)
+    )
     ewok_context_plot_every_evals = int(
         ewok_context_config.get("plot_every_evals", 1) or 1
     )
     if ewok_context_plot and ewok_context_plot_every_evals <= 0:
         raise ValueError("ewok_context_sensitivity_full.plot_every_evals must be positive.")
-    ewok_mntp_plot = bool(ewok_mntp_config.get("plot", False))
+    ewok_mntp_plot = ewok_mntp_enabled and bool(
+        ewok_mntp_config.get("plot", False)
+    )
     ewok_mntp_plot_every_evals = int(
         ewok_mntp_config.get("plot_every_evals", 1) or 1
     )
     if ewok_mntp_plot and ewok_mntp_plot_every_evals <= 0:
         raise ValueError("ewok_mntp_context_sensitivity.plot_every_evals must be positive.")
 
-    mntp_likelihood_plot = bool(mntp_likelihood_config.get("plot", False))
+    mntp_likelihood_plot = mntp_likelihood_enabled and bool(
+        mntp_likelihood_config.get("plot", False)
+    )
     mntp_likelihood_plot_every_evals = int(
         mntp_likelihood_config.get("plot_every_evals", 1) or 1
     )
     if mntp_likelihood_plot and mntp_likelihood_plot_every_evals <= 0:
         raise ValueError("mntp_likelihood.plot_every_evals must be positive.")
-    loss_dynamics_plot = bool(
+    loss_dynamics_plot = mntp_likelihood_enabled and bool(
         loss_dynamics_config.get("plot", mntp_likelihood_plot)
     )
     loss_dynamics_plot_every_evals = int(
@@ -701,8 +706,18 @@ def main() -> None:
     )
     if accelerator.is_main_process:
         print(f"Optimizer: {optimizer_info.name}", flush=True)
-        print(f"Decayed tensors: {optimizer_info.primary_tensors}", flush=True)
-        print(f"Non-decayed tensors: {optimizer_info.auxiliary_tensors}", flush=True)
+        if optimizer_info.name == "muon_pe":
+            print(f"Muon hidden matrix tensors: {optimizer_info.primary_tensors}", flush=True)
+            print(f"Auxiliary AdamW tensors: {optimizer_info.auxiliary_tensors}", flush=True)
+            print(f"Muon split-QKV tensors: {optimizer_info.qkv_split_tensors}", flush=True)
+            print(
+                "Muon batch same-shape updates: "
+                f"{bool(training_config.get('muon_batch_updates', True))}",
+                flush=True,
+            )
+        else:
+            print(f"Decayed tensors: {optimizer_info.primary_tensors}", flush=True)
+            print(f"Non-decayed tensors: {optimizer_info.auxiliary_tensors}", flush=True)
 
     epochs = int(training_config.get("epochs", 1))
     grad_accum = int(training_config.get("gradient_accumulation_steps", 1))

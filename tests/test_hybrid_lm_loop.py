@@ -254,6 +254,68 @@ def test_train_hybrid_lm_smoke_logs_validation_and_saves(tmp_path: Path) -> None
     assert (tmp_path / "final" / "pytorch_model.bin").exists()
 
 
+def test_disabled_benchmarks_do_not_require_words_per_token(tmp_path: Path) -> None:
+    tokenizer = _Tokenizer()
+    model = _TinyGptBert()
+    optimizer, _info = build_optimizer(
+        model,
+        {
+            "optimizer": "lamb",
+            "learning_rate": 1e-3,
+            "betas": [0.9, 0.98],
+            "eps": 1e-8,
+            "weight_decay": 0.0,
+        },
+    )
+    batches = [_batch(torch.tensor([[1, 4, 5, 2], [1, 6, 7, 2]]))]
+    train_loader = DataLoader(_BatchDataset(batches), batch_size=None)
+    accelerator = Accelerator(cpu=True)
+    model, optimizer, train_loader = accelerator.prepare(model, optimizer, train_loader)
+
+    history = train_hybrid_lm(
+        model=model,
+        tokenizer=tokenizer,
+        train_loader=train_loader,
+        val_loader=None,
+        optimizer=optimizer,
+        scheduler=None,
+        accelerator=accelerator,
+        output_dir=tmp_path,
+        epochs=1,
+        total_update_steps=1,
+        hybrid_config={
+            "causal_steps": 1,
+            "masked_steps": 1,
+            "mask_start": 1.0,
+            "mask_end": 1.0,
+            "random_ratio": 0.0,
+            "keep_ratio": 0.0,
+            "z_loss": 0.0,
+        },
+        benchmark_eval_at_start=False,
+        ewok_context_items=None,
+        ewok_context_every_words=10,
+        ewok_context_plot=True,
+        ewok_mntp_items=None,
+        ewok_mntp_every_words=10,
+        ewok_mntp_plot=True,
+        mntp_likelihood_items=None,
+        mntp_likelihood_every_words=10,
+        mntp_likelihood_plot=True,
+        benchmark_plot_x_axis="words_seen",
+        loss_dynamics_plot=True,
+        loss_dynamics_x_axis="words_seen",
+        words_per_token=None,
+        log_every_steps=1,
+        eval_every_steps=0,
+        save_every_epochs=0,
+        save_final=False,
+    )
+
+    assert any(record["type"] == "train" for record in history)
+    assert not any("words_seen" in record for record in history)
+
+
 def test_train_hybrid_lm_runs_mntp_benchmarks_on_word_interval(
     tmp_path: Path,
     monkeypatch,

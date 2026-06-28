@@ -587,35 +587,61 @@ def train_hybrid_lm(
             "benchmark_plot_x_axis must be one of "
             f"{sorted(BENCHMARK_X_AXES)}, got {benchmark_plot_x_axis!r}."
         )
-    any_benchmark_plot = ewok_context_plot or ewok_mntp_plot or mntp_likelihood_plot
+    ewok_context_word_interval = (
+        ewok_context_items is not None and ewok_context_every_words is not None
+    )
+    ewok_mntp_word_interval = (
+        ewok_mntp_items is not None and ewok_mntp_every_words is not None
+    )
+    mntp_likelihood_word_interval = (
+        bool(mntp_likelihood_items) and mntp_likelihood_every_words is not None
+    )
+    active_ewok_context_plot = ewok_context_items is not None and ewok_context_plot
+    active_ewok_mntp_plot = ewok_mntp_items is not None and ewok_mntp_plot
+    active_mntp_likelihood_plot = bool(mntp_likelihood_items) and mntp_likelihood_plot
+    active_loss_dynamics_plot = bool(mntp_likelihood_items) and loss_dynamics_plot
+
+    any_benchmark_plot = (
+        active_ewok_context_plot
+        or active_ewok_mntp_plot
+        or active_mntp_likelihood_plot
+    )
     if (
         any_benchmark_plot
         and benchmark_plot_x_axis == "words_seen"
         and words_per_token is None
     ):
-        raise ValueError("Benchmark plots with x_axis='words_seen' require words_per_token.")
-    if ewok_context_plot and ewok_context_plot_every_evals <= 0:
+        raise ValueError(
+            "Benchmark plots with x_axis='words_seen' require words_per_token."
+        )
+    if active_ewok_context_plot and ewok_context_plot_every_evals <= 0:
         raise ValueError("ewok_context_plot_every_evals must be positive.")
-    if ewok_mntp_plot and ewok_mntp_plot_every_evals <= 0:
+    if active_ewok_mntp_plot and ewok_mntp_plot_every_evals <= 0:
         raise ValueError("ewok_mntp_plot_every_evals must be positive.")
-    if mntp_likelihood_plot and mntp_likelihood_plot_every_evals <= 0:
+    if active_mntp_likelihood_plot and mntp_likelihood_plot_every_evals <= 0:
         raise ValueError("mntp_likelihood_plot_every_evals must be positive.")
     if loss_dynamics_x_axis not in BENCHMARK_X_AXES:
         raise ValueError(
             "loss_dynamics_x_axis must be one of "
             f"{sorted(BENCHMARK_X_AXES)}, got {loss_dynamics_x_axis!r}."
         )
-    if loss_dynamics_plot and loss_dynamics_x_axis == "words_seen" and words_per_token is None:
-        raise ValueError("Loss dynamics plots with x_axis='words_seen' require words_per_token.")
-    if loss_dynamics_plot and loss_dynamics_plot_every_evals <= 0:
+    if (
+        active_loss_dynamics_plot
+        and loss_dynamics_x_axis == "words_seen"
+        and words_per_token is None
+    ):
+        raise ValueError(
+            "Loss dynamics plots with x_axis='words_seen' require words_per_token."
+        )
+    if active_loss_dynamics_plot and loss_dynamics_plot_every_evals <= 0:
         raise ValueError("loss_dynamics_plot_every_evals must be positive.")
     if not loss_dynamics_loss_keys:
         raise ValueError("loss_dynamics_loss_keys must not be empty.")
-    if ewok_context_every_words is not None and words_per_token is None:
+    if ewok_context_word_interval and words_per_token is None:
         raise ValueError("EWoK causal word-count benchmark intervals require words_per_token.")
-    if ewok_mntp_every_words is not None and words_per_token is None:
+    if ewok_mntp_word_interval and words_per_token is None:
         raise ValueError("EWoK MNTP word-count benchmark intervals require words_per_token.")
-    if mntp_likelihood_every_words is not None and words_per_token is None:
+    if mntp_likelihood_word_interval and words_per_token is None:
         raise ValueError("MNTP word-count benchmark intervals require words_per_token.")
     if not ewok_context_score_reductions:
         raise ValueError("ewok_context_score_reductions must not be empty.")

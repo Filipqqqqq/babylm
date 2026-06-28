@@ -59,6 +59,33 @@ def test_gpt_bert_tokenization_config_uses_cache_roots(monkeypatch) -> None:
     )
 
 
+def test_gpt_bert_mixed_tokenization_config_uses_cache_roots(monkeypatch) -> None:
+    monkeypatch.delenv("BABYSTEPS_GPT_BERT_BASELINE_MIXED_TOKENIZER_DIR", raising=False)
+    monkeypatch.delenv(
+        "BABYSTEPS_BABYLM2026_STRICT_SMALL_GPT_BERT_BASELINE_MIXED_SHARDS_DIR",
+        raising=False,
+    )
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+
+    config = token_shard_builder.load_yaml_config(
+        ROOT
+        / "configs"
+        / "tokenization"
+        / "babylm2026_strict_small_gpt_bert_baseline_mixed_shards.yaml"
+    )
+
+    assert config["tokenizer"]["kind"] == "pretrained"
+    assert config["tokenizer"]["source"] == "BabyLM-community/babylm-baseline-10m-gpt-bert-mixed"
+    assert (
+        config["tokenizer"]["output_dir"]
+        == "/cache/tokenizers/gpt_bert_baseline_mixed"
+    )
+    assert (
+        config["shards"]["output_dir"]
+        == "/cache/token_shards/babylm2026_strict_small_gpt_bert_baseline_mixed"
+    )
+
+
 def test_gpt_bert_100m_masked_focus_tokenization_config_uses_full_strict_dataset(
     monkeypatch,
 ) -> None:
@@ -139,6 +166,78 @@ def test_gpt_bert_train_config_uses_hybrid_defaults(monkeypatch) -> None:
     assert (
         config["tokenizer"]["name"]
         == "/cache/tokenizers/gpt_bert_baseline_causal_focus"
+    )
+
+
+def test_gpt_bert_muon_train_config_reuses_hybrid_defaults(monkeypatch) -> None:
+    monkeypatch.delenv("BABYSTEPS_GPT_BERT_BASELINE_CAUSAL_FOCUS_TOKENIZER_DIR", raising=False)
+    monkeypatch.delenv(
+        "BABYSTEPS_BABYLM2026_STRICT_SMALL_GPT_BERT_BASELINE_CAUSAL_FOCUS_SHARDS_DIR",
+        raising=False,
+    )
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+    monkeypatch.setenv("BABYSTEPS_RUNS_DIR", "/runs")
+
+    config = train_script.load_yaml_config(
+        ROOT
+        / "configs"
+        / "train"
+        / "gpt_bert_baseline_causal_focus_babylm2026_strict_small_muon.yaml"
+    )
+
+    assert config["run"]["name"] == "gpt_bert_baseline_causal_focus_babylm2026_strict_small_muon"
+    assert config["run"]["output_root"] == "/runs/training"
+    assert config["model"]["architecture"] == "gpt_bert"
+    assert config["model"]["repo"] == "BabyLM-community/babylm-baseline-10m-gpt-bert-causal-focus"
+    assert config["training"]["optimizer"] == "muon_pe"
+    assert config["training"]["learning_rate"] == 0.00005
+    assert config["training"]["muon_lr"] == 0.01
+    assert config["training"]["muon_weight_decay"] == 0.1
+    assert config["training"]["muon_split_qkv"] is False
+    assert config["training"]["muon_batch_updates"] is True
+    assert config["hybrid"]["causal_steps"] == 15
+    assert config["hybrid"]["masked_steps"] == 1
+    assert (
+        config["data"]["data_dir"]
+        == "/cache/token_shards/babylm2026_strict_small_gpt_bert_baseline_causal_focus"
+    )
+    assert (
+        config["tokenizer"]["name"]
+        == "/cache/tokenizers/gpt_bert_baseline_causal_focus"
+    )
+
+
+def test_gpt_bert_mixed_train_config_uses_even_hybrid_schedule(monkeypatch) -> None:
+    monkeypatch.delenv("BABYSTEPS_GPT_BERT_BASELINE_MIXED_TOKENIZER_DIR", raising=False)
+    monkeypatch.delenv(
+        "BABYSTEPS_BABYLM2026_STRICT_SMALL_GPT_BERT_BASELINE_MIXED_SHARDS_DIR",
+        raising=False,
+    )
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+    monkeypatch.setenv("BABYSTEPS_RUNS_DIR", "/runs")
+
+    config = train_script.load_yaml_config(
+        ROOT
+        / "configs"
+        / "train"
+        / "gpt_bert_baseline_mixed_babylm2026_strict_small.yaml"
+    )
+
+    assert config["run"]["name"] == "gpt_bert_baseline_mixed_babylm2026_strict_small"
+    assert config["run"]["output_root"] == "/runs/training"
+    assert config["model"]["architecture"] == "gpt_bert"
+    assert config["model"]["repo"] == "BabyLM-community/babylm-baseline-10m-gpt-bert-mixed"
+    assert config["training"]["optimizer"] == "lamb"
+    assert config["training"]["learning_rate"] == 0.007
+    assert config["hybrid"]["causal_steps"] == 1
+    assert config["hybrid"]["masked_steps"] == 1
+    assert (
+        config["data"]["data_dir"]
+        == "/cache/token_shards/babylm2026_strict_small_gpt_bert_baseline_mixed"
+    )
+    assert (
+        config["tokenizer"]["name"]
+        == "/cache/tokenizers/gpt_bert_baseline_mixed"
     )
 
 
