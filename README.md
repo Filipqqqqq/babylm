@@ -111,6 +111,61 @@ conda run --no-capture-output -n babylm python scripts/data/build_token_shards.p
   --config configs/tokenization/babylm2026_strict_byte_bpe_16384_shards.yaml
 ```
 
+## Spatial Auxiliary Ranking Loss
+
+The causal LM trainer can add a small spatial-relation ranking objective on top
+of next-token prediction. The main path uses EWoK-style `context_rank` rows:
+the model should score each target higher in its matching context than in the
+mismatched context.
+
+Generate the default synthetic spatial-relation JSONL first:
+
+```bash
+python scripts/data/generate_spatial_relations.py \
+  --config configs/data/spatial_relations_synth_context_rank.yaml
+```
+
+That writes to:
+
+```text
+${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/synthetic/spatial_relations/spatial_relations_synth_context_rank.jsonl
+```
+
+Then enable the `spatial_auxiliary` block in a causal-LM config. The LLaMA
+100M config already includes the block with `enabled: false`; flip it on or
+copy this shape into another causal-LM config:
+
+```yaml
+spatial_auxiliary:
+  enabled: true
+  path: ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/synthetic/spatial_relations/spatial_relations_synth_context_rank.jsonl
+  objective: context_rank
+  batch_size: 16
+  loss_weight: 0.03
+  temperature: 1.0
+  score_reduction: mean
+  every_steps: 1
+  eval_items: 300
+  eval_every_steps: 50
+  eval_batch_size: 64
+```
+
+Train with the normal causal-LM entrypoint:
+
+```bash
+python scripts/train/train_causal_lm.py \
+  --config configs/train/llama_12l896_bpe16384_babylm2026_strict_muon_liger.yaml \
+  --set spatial_auxiliary.enabled=true
+```
+
+For a short continuation probe, use
+`configs/train/probes/llama_12l896_spatial_context_rank_probe_400.yaml` and set
+`BABYSTEPS_LLAMA_PROBE_INIT_FROM` to the checkpoint to continue from.
+
+Training logs include `spatial_auxiliary_loss`,
+`spatial_auxiliary_weighted_loss`, and optional `spatial_auxiliary_eval`
+records in `metrics_history.json`.
+
 ## Quick Modern Smoke Train
 
 The default smoke config uses BabyLM 2026 Strict-Small token shards and the
