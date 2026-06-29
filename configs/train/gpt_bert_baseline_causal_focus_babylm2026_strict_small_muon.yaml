@@ -71,7 +71,7 @@ training:
   epochs: 10
   batch_size: 32
   optimizer: muon_pe
-  learning_rate: 0.00005
+  learning_rate: 0.001
   betas: [0.9, 0.999]
   eps: 0.00000001
   weight_decay: 0.0
