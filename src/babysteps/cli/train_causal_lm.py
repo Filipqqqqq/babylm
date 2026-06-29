@@ -36,9 +36,15 @@ from babysteps.models import (
     resolve_model_vocab_size,
 )
 from babysteps.training.causal_lm_loop import (
+    EwokContextEvalSpec,
     save_json_atomic,
     set_all_seeds,
     train_causal_lm,
+)
+from babysteps.training.spatial_auxiliary import (
+    SpatialAuxiliarySampler,
+    read_spatial_auxiliary_examples,
+    split_spatial_auxiliary_examples,
 )
 from babysteps.training.liger import apply_liger_kernel_if_requested
 from babysteps.training.optimizers import build_optimizer
@@ -51,6 +57,7 @@ from babysteps.paths import (
 
 
 WORD_RE = re.compile(r"[A-Za-z0-9]+(?:['-][A-Za-z0-9]+)*")
+DEFAULT_WORDS_PER_TOKEN_SAMPLE_TOKENS = 4096
 
 
 def load_yaml_config(path: str | Path) -> dict[str, Any]:
@@ -131,6 +138,75 @@ def apply_config_override(config: dict[str, Any], override: str) -> None:
 def apply_config_overrides(config: dict[str, Any], overrides: list[str]) -> None:
     for override in overrides:
         apply_config_override(config, override)
+
+
+VALID_SCORE_REDUCTIONS = ("sum", "mean")
+
+
+def read_score_reductions(config: dict[str, Any], section_name: str) -> tuple[str, ...]:
+    """Read benchmark score reductions from config."""
+
+    raw_value = config.get("score_reduction", "sum")
+    if isinstance(raw_value, str):
+        value = raw_value.strip().lower()
+        raw_reductions = VALID_SCORE_REDUCTIONS if value == "both" else (value,)
+    elif isinstance(raw_value, (list, tuple)):
+        raw_reductions = tuple(str(value).strip().lower() for value in raw_value)
+    else:
+        raise ValueError(
+            f"{section_name}.score_reduction must be 'sum', 'mean', 'both', "
+            "or a list of those reductions."
+        )
+
+    reductions: list[str] = []
+    for score_reduction in raw_reductions:
+        if score_reduction not in VALID_SCORE_REDUCTIONS:
+            raise ValueError(
+                f"{section_name}.score_reduction must contain only 'sum' or 'mean', "
+                f"got {score_reduction!r}."
+            )
+        if score_reduction not in reductions:
+            reductions.append(score_reduction)
+    if not reductions:
+        raise ValueError(f"{section_name}.score_reduction must not be empty.")
+    return tuple(reductions)
+
+
+def read_optional_positive_float(
+    config: dict[str, Any],
+    key: str,
+    setting_name: str,
+) -> float | None:
+    """Read an optional positive float config value."""
+
+    raw_value = config.get(key)
+    if raw_value is None or raw_value == "":
+        return None
+    value = float(raw_value)
+    if value <= 0:
+        raise ValueError(f"{setting_name} must be positive when set.")
+    return value
+
+
+def read_every_words(config: dict[str, Any], section_name: str) -> float | None:
+    """Read an optional benchmark word-count evaluation interval from config."""
+
+    return read_optional_positive_float(
+        config,
+        "every_words",
+        f"{section_name}.every_words",
+    )
+
+
+def format_eval_interval(every_steps: int, every_words: float | None) -> str:
+    """Return a compact human-readable evaluation interval."""
+
+    pieces: list[str] = []
+    if every_steps > 0:
+        pieces.append(f"every {every_steps} steps")
+    if every_words is not None:
+        pieces.append(f"every {every_words:g} words")
+    return " or ".join(pieces) if pieces else "not scheduled"
 
 
 def resolve_output_dir(config: dict[str, Any]) -> Path:
@@ -375,10 +451,17 @@ def main() -> None:
     training_config = config["training"]
     logging_config = config.get("logging", {})
     checkpoint_config = config.get("checkpointing", {})
-    ewok_context_config = config.get("ewok_context_sensitivity", {})
+    if "ewok_context_sensitivity" in config:
+        raise ValueError(
+            "ewok_context_sensitivity has been removed from causal LM configs. "
+            "Use ewok_context_sensitivity_spatial or ewok_context_sensitivity_full."
+        )
+    ewok_context_spatial_config = config.get("ewok_context_sensitivity_spatial", {})
+    ewok_context_full_config = config.get("ewok_context_sensitivity_full", {})
     blimp_likelihood_config = config.get("blimp_likelihood", {})
     entity_tracking_config = config.get("entity_tracking_likelihood", {})
     comps_config = config.get("comps_likelihood", {})
+    spatial_auxiliary_config = config.get("spatial_auxiliary", {})
     progress_config = config.get("progress", {})
 
     words_per_token = progress_config.get(
@@ -401,6 +484,40 @@ def main() -> None:
         if words_per_token <= 0:
             raise ValueError("words_per_token must be positive.")
 
+    eval_every_words = read_optional_positive_float(
+        logging_config,
+        "eval_every_words",
+        "logging.eval_every_words",
+    )
+    ewok_context_spatial_every_words = read_every_words(
+        ewok_context_spatial_config,
+        "ewok_context_sensitivity_spatial",
+    )
+    ewok_context_full_every_words = read_every_words(
+        ewok_context_full_config,
+        "ewok_context_sensitivity_full",
+    )
+    blimp_likelihood_every_words = read_every_words(
+        blimp_likelihood_config,
+        "blimp_likelihood",
+    )
+    entity_tracking_every_words = read_every_words(
+        entity_tracking_config,
+        "entity_tracking_likelihood",
+    )
+    comps_every_words = read_every_words(comps_config, "comps_likelihood")
+    word_interval_requested = any(
+        value is not None
+        for value in (
+            eval_every_words,
+            ewok_context_spatial_every_words,
+            ewok_context_full_every_words,
+            blimp_likelihood_every_words,
+            entity_tracking_every_words,
+            comps_every_words,
+        )
+    )
+
     benchmark_plot_x_axis = str(
         progress_config.get(
             "benchmark_plot_x_axis",
@@ -412,16 +529,23 @@ def main() -> None:
             "estimate_words_per_token",
             logging_config.get(
                 "estimate_words_per_token",
-                benchmark_plot_x_axis == "words_seen" and words_per_token is None,
+                (
+                    benchmark_plot_x_axis == "words_seen"
+                    or word_interval_requested
+                )
+                and words_per_token is None,
             ),
         )
     )
     words_per_token_sample_tokens = int(
         progress_config.get(
             "words_per_token_sample_tokens",
-            logging_config.get("words_per_token_sample_tokens", 2048),
+            logging_config.get(
+                "words_per_token_sample_tokens",
+                DEFAULT_WORDS_PER_TOKEN_SAMPLE_TOKENS,
+            ),
         )
-        or 2048
+        or DEFAULT_WORDS_PER_TOKEN_SAMPLE_TOKENS
     )
     if words_per_token_sample_tokens <= 0:
         raise ValueError("words_per_token_sample_tokens must be positive.")
@@ -450,77 +574,215 @@ def main() -> None:
                 f"Words/token conversion: words_per_token={words_per_token:.6f}",
                 flush=True,
             )
+    benchmark_eval_at_start = bool(logging_config.get("benchmark_eval_at_start", True))
 
-    ewok_context_items = None
-    ewok_context_every_steps = int(
-        ewok_context_config.get(
-            "every_steps",
-            ewok_context_config.get("ewok_every_steps", 0),
+    extra_ewok_context_evals: list[EwokContextEvalSpec] = []
+    ewok_context_spatial_every_steps = int(
+        ewok_context_spatial_config.get("every_steps", 0) or 0
+    )
+    ewok_context_spatial_enabled = bool(
+        ewok_context_spatial_config.get(
+            "enabled",
+            ewok_context_spatial_every_steps > 0
+            or ewok_context_spatial_every_words is not None,
         )
-        or 0
     )
-    ewok_context_enabled = bool(
-        ewok_context_config.get("enabled", ewok_context_every_steps > 0)
-    )
-    if ewok_context_enabled and ewok_context_every_steps <= 0:
+    if (
+        ewok_context_spatial_enabled
+        and ewok_context_spatial_every_steps <= 0
+        and ewok_context_spatial_every_words is None
+    ):
         raise ValueError(
-            "ewok_context_sensitivity.every_steps must be positive when diagnostics "
-            "are enabled."
+            "Set ewok_context_sensitivity_spatial.every_steps or "
+            "ewok_context_sensitivity_spatial.every_words when diagnostics are enabled."
         )
-    ewok_context_score_reduction = str(
-        ewok_context_config.get("score_reduction", "sum")
-    ).strip().lower()
-    if ewok_context_score_reduction not in {"sum", "mean"}:
-        raise ValueError(
-            "ewok_context_sensitivity.score_reduction must be 'sum' or 'mean', "
-            f"got {ewok_context_score_reduction!r}."
-        )
-    ewok_context_plot = bool(ewok_context_config.get("plot", False))
-    ewok_context_plot_every_evals = int(
-        ewok_context_config.get("plot_every_evals", 1) or 1
+    ewok_context_spatial_score_reductions = read_score_reductions(
+        ewok_context_spatial_config,
+        "ewok_context_sensitivity_spatial",
     )
-    if ewok_context_plot and ewok_context_plot_every_evals <= 0:
-        raise ValueError("ewok_context_sensitivity.plot_every_evals must be positive.")
-    if ewok_context_enabled:
-        default_ewok_data_dir = default_babylm_eval_dir(
+    ewok_context_spatial_plot = bool(
+        ewok_context_spatial_config.get("plot", False)
+    )
+    ewok_context_spatial_metric_name = str(
+        ewok_context_spatial_config.get(
+            "metric_name",
+            "ewok_context_sensitivity_spatial",
+        )
+    ).strip()
+    if not ewok_context_spatial_metric_name:
+        raise ValueError(
+            "ewok_context_sensitivity_spatial.metric_name must not be empty."
+        )
+    ewok_context_spatial_plot_every_evals = int(
+        ewok_context_spatial_config.get("plot_every_evals", 1) or 1
+    )
+    if ewok_context_spatial_plot and ewok_context_spatial_plot_every_evals <= 0:
+        raise ValueError(
+            "ewok_context_sensitivity_spatial.plot_every_evals must be positive."
+        )
+    if ewok_context_spatial_enabled:
+        default_ewok_spatial_data_dir = default_babylm_eval_dir(
             "full_eval",
             "ewok_filtered",
+            "spatial-relations.jsonl",
         )
-        ewok_data_dir = resolve_path(
-            ewok_context_config.get(
+        ewok_spatial_data_dir = resolve_path(
+            ewok_context_spatial_config.get(
                 "data_dir",
-                default_ewok_data_dir,
+                default_ewok_spatial_data_dir,
             ),
             base_dir=ROOT,
         )
-        ewok_context_items = read_ewok_items(ewok_data_dir)
-        max_ewok_items = ewok_context_config.get("max_items")
-        if max_ewok_items:
-            ewok_context_items = ewok_context_items[: int(max_ewok_items)]
+        ewok_context_spatial_items = read_ewok_items(ewok_spatial_data_dir)
+        max_ewok_spatial_items = ewok_context_spatial_config.get("max_items")
+        if max_ewok_spatial_items:
+            ewok_context_spatial_items = ewok_context_spatial_items[
+                : int(max_ewok_spatial_items)
+            ]
+        extra_ewok_context_evals.append(
+            EwokContextEvalSpec(
+                name=ewok_context_spatial_metric_name,
+                items=ewok_context_spatial_items,
+                every_steps=ewok_context_spatial_every_steps,
+                every_words=ewok_context_spatial_every_words,
+                batch_size=int(ewok_context_spatial_config.get("batch_size", 64)),
+                score_reductions=ewok_context_spatial_score_reductions,  # type: ignore[arg-type]
+                run_name=str(run_config.get("name", "")),
+                plot=ewok_context_spatial_plot,
+                plot_every_evals=ewok_context_spatial_plot_every_evals,
+                output_subdir=str(
+                    ewok_context_spatial_config.get(
+                        "output_subdir",
+                        "ewok_spatial",
+                    )
+                ),
+            )
+        )
         if accelerator.is_main_process:
             print(
-                "EWoK context-sensitivity diagnostics: "
-                f"{len(ewok_context_items):,} items, "
-                f"every {ewok_context_every_steps} steps, "
-                f"reduction={ewok_context_score_reduction}",
+                "Spatial EWoK context-sensitivity diagnostics: "
+                f"{len(ewok_context_spatial_items):,} items, "
+                f"{format_eval_interval(ewok_context_spatial_every_steps, ewok_context_spatial_every_words)}, "
+                f"reductions={','.join(ewok_context_spatial_score_reductions)}, "
+                f"metric_name={ewok_context_spatial_metric_name}",
                 flush=True,
             )
-            if ewok_context_plot:
+            if ewok_context_spatial_plot:
                 print(
-                    "EWoK context-sensitivity plot: "
-                    f"enabled every {ewok_context_plot_every_evals} eval(s)",
+                    "Spatial EWoK context-sensitivity plot: "
+                    f"enabled every {ewok_context_spatial_plot_every_evals} eval(s)",
+                    flush=True,
+                )
+
+    ewok_context_full_every_steps = int(
+        ewok_context_full_config.get("every_steps", 0) or 0
+    )
+    ewok_context_full_enabled = bool(
+        ewok_context_full_config.get(
+            "enabled",
+            ewok_context_full_every_steps > 0
+            or ewok_context_full_every_words is not None,
+        )
+    )
+    if (
+        ewok_context_full_enabled
+        and ewok_context_full_every_steps <= 0
+        and ewok_context_full_every_words is None
+    ):
+        raise ValueError(
+            "Set ewok_context_sensitivity_full.every_steps or "
+            "ewok_context_sensitivity_full.every_words when diagnostics are enabled."
+        )
+    ewok_context_full_score_reductions = read_score_reductions(
+        ewok_context_full_config,
+        "ewok_context_sensitivity_full",
+    )
+    ewok_context_full_plot = bool(ewok_context_full_config.get("plot", False))
+    ewok_context_full_metric_name = str(
+        ewok_context_full_config.get(
+            "metric_name",
+            "ewok_context_sensitivity_full",
+        )
+    ).strip()
+    if not ewok_context_full_metric_name:
+        raise ValueError("ewok_context_sensitivity_full.metric_name must not be empty.")
+    ewok_context_full_plot_every_evals = int(
+        ewok_context_full_config.get("plot_every_evals", 1) or 1
+    )
+    if ewok_context_full_plot and ewok_context_full_plot_every_evals <= 0:
+        raise ValueError(
+            "ewok_context_sensitivity_full.plot_every_evals must be positive."
+        )
+    if ewok_context_full_enabled:
+        default_ewok_full_data_dir = default_babylm_eval_dir(
+            "full_eval",
+            "ewok_filtered",
+        )
+        ewok_full_data_dir = resolve_path(
+            ewok_context_full_config.get(
+                "data_dir",
+                default_ewok_full_data_dir,
+            ),
+            base_dir=ROOT,
+        )
+        ewok_context_full_items = read_ewok_items(ewok_full_data_dir)
+        max_ewok_full_items = ewok_context_full_config.get("max_items")
+        if max_ewok_full_items:
+            ewok_context_full_items = ewok_context_full_items[: int(max_ewok_full_items)]
+        extra_ewok_context_evals.append(
+            EwokContextEvalSpec(
+                name=ewok_context_full_metric_name,
+                items=ewok_context_full_items,
+                every_steps=ewok_context_full_every_steps,
+                every_words=ewok_context_full_every_words,
+                batch_size=int(ewok_context_full_config.get("batch_size", 64)),
+                score_reductions=ewok_context_full_score_reductions,  # type: ignore[arg-type]
+                run_name=str(run_config.get("name", "")),
+                plot=ewok_context_full_plot,
+                plot_every_evals=ewok_context_full_plot_every_evals,
+                output_subdir=str(
+                    ewok_context_full_config.get("output_subdir", "ewok_full")
+                ),
+            )
+        )
+        if accelerator.is_main_process:
+            print(
+                "Full EWoK context-sensitivity diagnostics: "
+                f"{len(ewok_context_full_items):,} items, "
+                f"{format_eval_interval(ewok_context_full_every_steps, ewok_context_full_every_words)}, "
+                f"reductions={','.join(ewok_context_full_score_reductions)}, "
+                f"metric_name={ewok_context_full_metric_name}",
+                flush=True,
+            )
+            if ewok_context_full_plot:
+                print(
+                    "Full EWoK context-sensitivity plot: "
+                    f"enabled every {ewok_context_full_plot_every_evals} eval(s)",
                     flush=True,
                 )
 
     blimp_likelihood_items = None
     blimp_likelihood_every_steps = int(blimp_likelihood_config.get("every_steps", 0) or 0)
     blimp_likelihood_enabled = bool(
-        blimp_likelihood_config.get("enabled", blimp_likelihood_every_steps > 0)
-    )
-    if blimp_likelihood_enabled and blimp_likelihood_every_steps <= 0:
-        raise ValueError(
-            "blimp_likelihood.every_steps must be positive when diagnostics are enabled."
+        blimp_likelihood_config.get(
+            "enabled",
+            blimp_likelihood_every_steps > 0
+            or blimp_likelihood_every_words is not None,
         )
+    )
+    if (
+        blimp_likelihood_enabled
+        and blimp_likelihood_every_steps <= 0
+        and blimp_likelihood_every_words is None
+    ):
+        raise ValueError(
+            "Set blimp_likelihood.every_steps or blimp_likelihood.every_words "
+            "when diagnostics are enabled."
+        )
+    blimp_likelihood_score_reductions = read_score_reductions(
+        blimp_likelihood_config,
+        "blimp_likelihood",
+    )
     blimp_likelihood_plot = bool(blimp_likelihood_config.get("plot", False))
     blimp_likelihood_plot_every_evals = int(
         blimp_likelihood_config.get("plot_every_evals", 1) or 1
@@ -604,7 +866,13 @@ def main() -> None:
                     f"{name}={len(items):,} items"
                     for name, items in blimp_likelihood_items.items()
                 )
-                + f", every {blimp_likelihood_every_steps} steps",
+                + ", "
+                + format_eval_interval(
+                    blimp_likelihood_every_steps,
+                    blimp_likelihood_every_words,
+                )
+                + ", "
+                + f"reductions={','.join(blimp_likelihood_score_reductions)}",
                 flush=True,
             )
             if blimp_likelihood_plot:
@@ -617,13 +885,24 @@ def main() -> None:
     entity_tracking_items = None
     entity_tracking_every_steps = int(entity_tracking_config.get("every_steps", 0) or 0)
     entity_tracking_enabled = bool(
-        entity_tracking_config.get("enabled", entity_tracking_every_steps > 0)
-    )
-    if entity_tracking_enabled and entity_tracking_every_steps <= 0:
-        raise ValueError(
-            "entity_tracking_likelihood.every_steps must be positive when diagnostics "
-            "are enabled."
+        entity_tracking_config.get(
+            "enabled",
+            entity_tracking_every_steps > 0 or entity_tracking_every_words is not None,
         )
+    )
+    if (
+        entity_tracking_enabled
+        and entity_tracking_every_steps <= 0
+        and entity_tracking_every_words is None
+    ):
+        raise ValueError(
+            "Set entity_tracking_likelihood.every_steps or "
+            "entity_tracking_likelihood.every_words when diagnostics are enabled."
+        )
+    entity_tracking_score_reductions = read_score_reductions(
+        entity_tracking_config,
+        "entity_tracking_likelihood",
+    )
     entity_tracking_plot = bool(entity_tracking_config.get("plot", False))
     entity_tracking_plot_every_evals = int(
         entity_tracking_config.get("plot_every_evals", 1) or 1
@@ -652,7 +931,8 @@ def main() -> None:
             print(
                 "Entity Tracking likelihood diagnostics: "
                 f"{len(entity_tracking_items):,} items, "
-                f"every {entity_tracking_every_steps} steps",
+                f"{format_eval_interval(entity_tracking_every_steps, entity_tracking_every_words)}, "
+                f"reductions={','.join(entity_tracking_score_reductions)}",
                 flush=True,
             )
             if entity_tracking_plot:
@@ -664,11 +944,18 @@ def main() -> None:
 
     comps_items = None
     comps_every_steps = int(comps_config.get("every_steps", 0) or 0)
-    comps_enabled = bool(comps_config.get("enabled", comps_every_steps > 0))
-    if comps_enabled and comps_every_steps <= 0:
-        raise ValueError(
-            "comps_likelihood.every_steps must be positive when diagnostics are enabled."
+    comps_enabled = bool(
+        comps_config.get(
+            "enabled",
+            comps_every_steps > 0 or comps_every_words is not None,
         )
+    )
+    if comps_enabled and comps_every_steps <= 0 and comps_every_words is None:
+        raise ValueError(
+            "Set comps_likelihood.every_steps or comps_likelihood.every_words "
+            "when diagnostics are enabled."
+        )
+    comps_score_reductions = read_score_reductions(comps_config, "comps_likelihood")
     comps_plot = bool(comps_config.get("plot", False))
     comps_plot_every_evals = int(comps_config.get("plot_every_evals", 1) or 1)
     if comps_plot and comps_plot_every_evals <= 0:
@@ -693,7 +980,8 @@ def main() -> None:
             print(
                 "COMPS likelihood diagnostics: "
                 f"{len(comps_items):,} items, "
-                f"every {comps_every_steps} steps",
+                f"{format_eval_interval(comps_every_steps, comps_every_words)}, "
+                f"reductions={','.join(comps_score_reductions)}",
                 flush=True,
             )
             if comps_plot:
@@ -702,6 +990,126 @@ def main() -> None:
                     f"enabled every {comps_plot_every_evals} eval(s)",
                     flush=True,
                 )
+
+    spatial_auxiliary_sampler = None
+    spatial_auxiliary_eval_items = None
+    spatial_auxiliary_enabled = bool(spatial_auxiliary_config.get("enabled", False))
+    spatial_auxiliary_objective = str(
+        spatial_auxiliary_config.get("objective", "context_rank")
+    ).strip()
+    if spatial_auxiliary_objective not in {"completion_rank", "context_rank"}:
+        raise ValueError(
+            "spatial_auxiliary.objective must be 'completion_rank' or 'context_rank'."
+        )
+    spatial_auxiliary_loss_weight = float(
+        spatial_auxiliary_config.get("loss_weight", 0.03)
+    )
+    if spatial_auxiliary_loss_weight < 0.0:
+        raise ValueError("spatial_auxiliary.loss_weight must be non-negative.")
+    spatial_auxiliary_temperature = float(
+        spatial_auxiliary_config.get("temperature", 1.0)
+    )
+    if spatial_auxiliary_temperature <= 0.0:
+        raise ValueError("spatial_auxiliary.temperature must be positive.")
+    spatial_auxiliary_score_reduction = str(
+        spatial_auxiliary_config.get("score_reduction", "mean")
+    ).strip()
+    if spatial_auxiliary_score_reduction not in VALID_SCORE_REDUCTIONS:
+        raise ValueError("spatial_auxiliary.score_reduction must be 'sum' or 'mean'.")
+    spatial_auxiliary_batch_size = int(spatial_auxiliary_config.get("batch_size", 16))
+    if spatial_auxiliary_batch_size <= 0:
+        raise ValueError("spatial_auxiliary.batch_size must be positive.")
+    spatial_auxiliary_every_steps = int(spatial_auxiliary_config.get("every_steps", 1))
+    if spatial_auxiliary_enabled and spatial_auxiliary_every_steps <= 0:
+        raise ValueError("spatial_auxiliary.every_steps must be positive when enabled.")
+    spatial_auxiliary_eval_every_steps = int(
+        spatial_auxiliary_config.get("eval_every_steps", 0) or 0
+    )
+    if spatial_auxiliary_eval_every_steps < 0:
+        raise ValueError("spatial_auxiliary.eval_every_steps must be non-negative.")
+    spatial_auxiliary_eval_batch_size = int(
+        spatial_auxiliary_config.get(
+            "eval_batch_size",
+            spatial_auxiliary_config.get("batch_size", 64),
+        )
+    )
+    if spatial_auxiliary_eval_batch_size <= 0:
+        raise ValueError("spatial_auxiliary.eval_batch_size must be positive.")
+    spatial_auxiliary_eval_at_start = bool(
+        spatial_auxiliary_config.get("eval_at_start", True)
+    )
+
+    if spatial_auxiliary_enabled:
+        if not spatial_auxiliary_config.get("path"):
+            raise ValueError("Set spatial_auxiliary.path when spatial auxiliary is enabled.")
+        spatial_auxiliary_path = resolve_path(
+            spatial_auxiliary_config["path"],
+            base_dir=ROOT,
+        )
+        max_spatial_auxiliary_items = spatial_auxiliary_config.get("max_items")
+        spatial_auxiliary_examples = read_spatial_auxiliary_examples(
+            spatial_auxiliary_path,
+            objective=spatial_auxiliary_objective,  # type: ignore[arg-type]
+            max_items=(
+                int(max_spatial_auxiliary_items)
+                if max_spatial_auxiliary_items is not None
+                else None
+            ),
+        )
+        if not spatial_auxiliary_examples:
+            raise ValueError("spatial_auxiliary loaded zero examples.")
+
+        eval_path = spatial_auxiliary_config.get("eval_path")
+        if eval_path:
+            spatial_auxiliary_train_items = spatial_auxiliary_examples
+            spatial_auxiliary_eval_items = read_spatial_auxiliary_examples(
+                resolve_path(eval_path, base_dir=ROOT),
+                objective=spatial_auxiliary_objective,  # type: ignore[arg-type]
+                max_items=(
+                    int(spatial_auxiliary_config["max_eval_items"])
+                    if spatial_auxiliary_config.get("max_eval_items") is not None
+                    else None
+                ),
+            )
+        else:
+            spatial_auxiliary_train_items, spatial_auxiliary_eval_items = (
+                split_spatial_auxiliary_examples(
+                    spatial_auxiliary_examples,
+                    eval_items=int(spatial_auxiliary_config.get("eval_items", 0) or 0),
+                    eval_fraction=float(
+                        spatial_auxiliary_config.get("eval_fraction", 0.0) or 0.0
+                    ),
+                    seed=int(spatial_auxiliary_config.get("seed", seed)),
+                )
+            )
+
+        spatial_auxiliary_sampler = SpatialAuxiliarySampler(
+            spatial_auxiliary_train_items,
+            batch_size=spatial_auxiliary_batch_size,
+            seed=int(spatial_auxiliary_config.get("seed", seed)),
+        )
+        if not spatial_auxiliary_eval_items:
+            spatial_auxiliary_eval_items = None
+
+        if accelerator.is_main_process:
+            eval_description = (
+                f", eval_items={len(spatial_auxiliary_eval_items):,}, "
+                f"eval_every_steps={spatial_auxiliary_eval_every_steps}"
+                if spatial_auxiliary_eval_items is not None
+                else ""
+            )
+            print(
+                "Spatial auxiliary loss: "
+                f"objective={spatial_auxiliary_objective}, "
+                f"train_items={len(spatial_auxiliary_train_items):,}, "
+                f"batch_size={spatial_auxiliary_batch_size}, "
+                f"loss_weight={spatial_auxiliary_loss_weight:g}, "
+                f"temperature={spatial_auxiliary_temperature:g}, "
+                f"score_reduction={spatial_auxiliary_score_reduction}, "
+                f"every_steps={spatial_auxiliary_every_steps}"
+                f"{eval_description}",
+                flush=True,
+            )
 
     tokenizer_name = config["tokenizer"].get("name", "gpt2")
     tokenizer_path = validate_tokenizer_dir(tokenizer_name)
@@ -804,6 +1212,13 @@ def main() -> None:
                 flush=True,
             )
 
+    if words_per_token is None and word_interval_requested:
+        raise ValueError(
+            "Word-count evaluation intervals require words_per_token. Set "
+            "logging.words_per_token, logging.tokens_per_word, or "
+            "logging.estimate_words_per_token=true."
+        )
+
     validate_training_inputs(config, tokenizer, train_dataset, val_dataset)
 
     architecture = normalize_model_arch(
@@ -883,33 +1298,44 @@ def main() -> None:
         epochs=epochs,
         log_every_steps=int(logging_config.get("log_every_steps", 50)),
         eval_every_steps=int(logging_config.get("eval_every_steps", 250)),
+        eval_every_words=eval_every_words,
         eval_max_batches=logging_config.get("eval_max_batches", 20),
         gradient_clip_norm=training_config.get("gradient_clip_norm"),
         save_every_epochs=checkpoint_config.get("save_every_epochs", 1),
         save_final=bool(checkpoint_config.get("save_final", True)),
         profile_optimizer_steps=bool(logging_config.get("profile_optimizer_steps", False)),
-        ewok_context_items=ewok_context_items,
-        ewok_context_every_steps=ewok_context_every_steps,
-        ewok_context_batch_size=int(ewok_context_config.get("batch_size", 64)),
-        ewok_context_score_reduction=ewok_context_score_reduction,  # type: ignore[arg-type]
-        ewok_context_run_name=str(run_config.get("name", "")),
-        ewok_context_plot=ewok_context_plot,
-        ewok_context_plot_every_evals=ewok_context_plot_every_evals,
+        spatial_auxiliary_sampler=spatial_auxiliary_sampler,
+        spatial_auxiliary_loss_weight=spatial_auxiliary_loss_weight,
+        spatial_auxiliary_temperature=spatial_auxiliary_temperature,
+        spatial_auxiliary_score_reduction=spatial_auxiliary_score_reduction,  # type: ignore[arg-type]
+        spatial_auxiliary_every_steps=spatial_auxiliary_every_steps,
+        spatial_auxiliary_eval_items=spatial_auxiliary_eval_items,
+        spatial_auxiliary_eval_every_steps=spatial_auxiliary_eval_every_steps,
+        spatial_auxiliary_eval_batch_size=spatial_auxiliary_eval_batch_size,
+        spatial_auxiliary_eval_at_start=spatial_auxiliary_eval_at_start,
+        benchmark_eval_at_start=benchmark_eval_at_start,
+        extra_ewok_context_evals=extra_ewok_context_evals,
         blimp_likelihood_items=blimp_likelihood_items,
         blimp_likelihood_every_steps=blimp_likelihood_every_steps,
+        blimp_likelihood_every_words=blimp_likelihood_every_words,
         blimp_likelihood_batch_size=int(blimp_likelihood_config.get("batch_size", 64)),
+        blimp_likelihood_score_reductions=blimp_likelihood_score_reductions,  # type: ignore[arg-type]
         blimp_likelihood_run_name=str(run_config.get("name", "")),
         blimp_likelihood_plot=blimp_likelihood_plot,
         blimp_likelihood_plot_every_evals=blimp_likelihood_plot_every_evals,
         entity_tracking_items=entity_tracking_items,
         entity_tracking_every_steps=entity_tracking_every_steps,
+        entity_tracking_every_words=entity_tracking_every_words,
         entity_tracking_batch_size=int(entity_tracking_config.get("batch_size", 64)),
+        entity_tracking_score_reductions=entity_tracking_score_reductions,  # type: ignore[arg-type]
         entity_tracking_run_name=str(run_config.get("name", "")),
         entity_tracking_plot=entity_tracking_plot,
         entity_tracking_plot_every_evals=entity_tracking_plot_every_evals,
         comps_items=comps_items,
         comps_every_steps=comps_every_steps,
+        comps_every_words=comps_every_words,
         comps_batch_size=int(comps_config.get("batch_size", 64)),
+        comps_score_reductions=comps_score_reductions,  # type: ignore[arg-type]
         comps_run_name=str(run_config.get("name", "")),
         comps_plot=comps_plot,
         comps_plot_every_evals=comps_plot_every_evals,

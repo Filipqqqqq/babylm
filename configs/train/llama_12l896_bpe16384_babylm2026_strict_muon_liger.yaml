@@ -59,6 +59,19 @@ logging:
   eval_max_batches: 20
   profile_optimizer_steps: true
 
+spatial_auxiliary:
+  enabled: false
+  path: ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/synthetic/spatial_relations/spatial_relations_synth_context_rank.jsonl
+  objective: context_rank
+  batch_size: 16
+  loss_weight: 0.03
+  temperature: 1.0
+  score_reduction: mean
+  every_steps: 1
+  eval_items: 300
+  eval_every_steps: 50
+  eval_batch_size: 64
+
 checkpointing:
   save_every_epochs: 1
   save_final: true

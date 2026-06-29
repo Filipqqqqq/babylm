@@ -1,0 +1,22 @@
+name: spatial_relations_synth_context_rank
+
+generator:
+  objective: context_rank
+  n: 3000
+  seed: 13
+  families:
+    - static_egocentric
+    - absolute_role_swap
+    - cardinal_pass_by
+    - cardinal_rotation_invariance
+    - cardinal_farther_motion
+    - vertical_paraphrase_role_swap
+    - vertical_motion_update
+    - vertical_motion_distractor
+    - egocentric_same_facing_role_swap
+    - close_far_distance
+    - turn_update_basic
+
+output:
+  path: ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/synthetic/spatial_relations/spatial_relations_synth_context_rank.jsonl
+  format: jsonl
