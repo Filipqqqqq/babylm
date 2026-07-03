@@ -39,51 +39,6 @@ ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/training/
 Set `BABYSTEPS_RUNS_DIR` and `BABYSTEPS_CACHE_DIR` to move runs and generated
 caches on another machine.
 
-## Analysis And Lexical Reports
-
-The lexical-analysis implementation lives in
-`src/babysteps/analysis/lexical/`. That folder contains the reusable code for
-target matching, lemmatized word counts, tokenizer fragmentation reports,
-context examples, domain-frequency plots, and evaluation target export.
-
-User-facing entrypoints are under `scripts/analysis/`, and their configs live
-under `configs/analysis/`:
-
-```text
-src/babysteps/analysis/lexical/       reusable lexical-analysis package
-scripts/analysis/report_lexical_analysis.py
-scripts/analysis/export_ewok_lexical_targets.py
-scripts/analysis/export_comps_lexical_targets.py
-scripts/analysis/plot_comps_lexical_frequencies.py
-scripts/analysis/plot_domain_concept_frequencies.py
-scripts/analysis/benchmark_spacy_pipe.py
-configs/analysis/                    dataset/report configs and target lists
-```
-
-Analysis outputs are written outside git by default, under:
-
-```text
-${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/analysis/
-```
-
-See `src/babysteps/analysis/lexical/README.md` for the lexical-analysis guide,
-and `scripts/README.md` for the current command list.
-
-GPT-BERT hybrid runs generate training-loss dynamics plots after benchmark
-evals, under `loss_dynamics/`. To compare optimizer/model learning dynamics
-across completed runs, plot training loss from one or more run
-`metrics_history.json` files. Use `words_seen` when the runs logged a
-words/token estimate:
-
-```bash
-python scripts/analysis/plot_training_loss_dynamics.py \
-  ~/babylm-baby-steps-runs/training/run_a/metrics_history.json \
-  ~/babylm-baby-steps-runs/training/run_b/metrics_history.json \
-  --label llama_muon \
-  --label gpt_bert_lamb \
-  --output-dir ~/babylm-baby-steps-runs/analysis/loss_dynamics
-```
-
 ## Train 100M LLaMA + Muon + Liger
 
 Use this path for the current BabyLM 2026 Strict 100M-track LLaMA default. It
@@ -243,12 +198,33 @@ python scripts/data/build_token_shards.py \
   --config configs/tokenization/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_gptbert_shards_seed42.yaml
 ```
 
-Then train with:
+For a faster training run without the expensive benchmark diagnostics, disable
+the BLIMP/Entity Tracking/COMPS MNTP likelihood evals and EWoK context evals:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
   python -u scripts/train/train_hybrid_lm.py \
-  --config configs/train/gptbert_babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_muon_seed42.yaml
+  --config configs/train/gptbert_babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_muon_seed42.yaml \
+  --set logging.benchmark_eval_at_start=false \
+  --set mntp_likelihood.enabled=false \
+  --set ewok_context_sensitivity_full.enabled=false
+```
+
+This still keeps the lightweight validation pass controlled by
+`logging.eval_every_steps`. To skip that too, add
+`--set logging.eval_every_steps=0`.
+
+To run the benchmark diagnostics during training, keep them enabled and set the
+word interval you want. This example evaluates every 5,000,000 estimated words;
+replace that value with your preferred `M`:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
+  python -u scripts/train/train_hybrid_lm.py \
+  --config configs/train/gptbert_babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_muon_seed42.yaml \
+  --set logging.benchmark_eval_at_start=false \
+  --set mntp_likelihood.every_words=5000000 \
+  --set ewok_context_sensitivity_full.every_words=5000000
 ```
 
 The text mixer treats each non-empty line as a document, uses seeded
@@ -524,6 +500,51 @@ cp manifests/paths.example.yaml manifests/paths.local.yaml
 
 `manifests/paths.local.yaml` is ignored by git so machine-specific paths stay
 local.
+
+## Analysis And Lexical Reports
+
+The lexical-analysis implementation lives in
+`src/babysteps/analysis/lexical/`. That folder contains the reusable code for
+target matching, lemmatized word counts, tokenizer fragmentation reports,
+context examples, domain-frequency plots, and evaluation target export.
+
+User-facing entrypoints are under `scripts/analysis/`, and their configs live
+under `configs/analysis/`:
+
+```text
+src/babysteps/analysis/lexical/       reusable lexical-analysis package
+scripts/analysis/report_lexical_analysis.py
+scripts/analysis/export_ewok_lexical_targets.py
+scripts/analysis/export_comps_lexical_targets.py
+scripts/analysis/plot_comps_lexical_frequencies.py
+scripts/analysis/plot_domain_concept_frequencies.py
+scripts/analysis/benchmark_spacy_pipe.py
+configs/analysis/                    dataset/report configs and target lists
+```
+
+Analysis outputs are written outside git by default, under:
+
+```text
+${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/analysis/
+```
+
+See `src/babysteps/analysis/lexical/README.md` for the lexical-analysis guide,
+and `scripts/README.md` for the current command list.
+
+GPT-BERT hybrid runs generate training-loss dynamics plots after benchmark
+evals, under `loss_dynamics/`. To compare optimizer/model learning dynamics
+across completed runs, plot training loss from one or more run
+`metrics_history.json` files. Use `words_seen` when the runs logged a
+words/token estimate:
+
+```bash
+python scripts/analysis/plot_training_loss_dynamics.py \
+  ~/babylm-baby-steps-runs/training/run_a/metrics_history.json \
+  ~/babylm-baby-steps-runs/training/run_b/metrics_history.json \
+  --label llama_muon \
+  --label gpt_bert_lamb \
+  --output-dir ~/babylm-baby-steps-runs/analysis/loss_dynamics
+```
 
 ## Evaluation Pipeline
 
