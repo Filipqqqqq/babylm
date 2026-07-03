@@ -203,56 +203,58 @@ GPT-BERT checkpoints are saved in the baseline-compatible remote-code format,
 including `pytorch_model.bin`, tokenizer files, `configuration_gpt_bert.py`,
 `modeling_gpt_bert.py`, and `config.json`.
 
-## GPT-BERT 96/2/2 Text-Mix Experiment
+## GPT-BERT BLIMP Supplement Repair Mix
 
-Use this path for the seed-42 strict-small replacement experiment that keeps a
-10,000,000-word cap while mixing approximately 96% BabyLM, 2% slip-bridge
-physical dynamics, and 2% material affordance raw text. The mixer writes a
-plain `train.txt` plus provenance sidecars before tokenization:
+Use this path for the seed-42 strict-small reference mix that keeps a
+10,000,000-word cap while mixing 95% BabyLM, 1% BLIMP Supplement linguistic
+repair data, 2% physical dynamics, and 2% material affordance data. The 1%
+linguistic repair slice is split evenly between QA answer-type examples and
+turn-taking pronoun examples.
+
+The checked-in text artifact is:
+
+```text
+data/text_mixes/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_seed42/train.txt
+```
+
+It is tracked with Git LFS. To regenerate the text mix from source datasets
+instead, run:
 
 ```bash
 python scripts/data/build_text_mix.py \
-  --config configs/data_mixes/babylm2026_strict_small_replace4pct_phys2_mat2_seed42.yaml
+  --config configs/data_mixes/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_seed42.yaml
 ```
 
 That creates:
 
 ```text
-data/text_mixes/babylm2026_strict_small_replace4pct_phys2_mat2_seed42/train.txt
-data/text_mixes/babylm2026_strict_small_replace4pct_phys2_mat2_seed42/mix_config.yaml
-data/text_mixes/babylm2026_strict_small_replace4pct_phys2_mat2_seed42/mix_manifest.json
-data/text_mixes/babylm2026_strict_small_replace4pct_phys2_mat2_seed42/mix_documents.jsonl
-data/text_mixes/babylm2026_strict_small_replace4pct_phys2_mat2_seed42/counts.json
+data/text_mixes/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_seed42/train.txt
+data/text_mixes/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_seed42/counts.json
+data/text_mixes/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_seed42/mix_config.yaml
+data/text_mixes/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_seed42/mix_manifest.json
 ```
 
-Then build GPT-BERT mixed-focus token shards from the mixed raw text:
+The full `mix_documents.jsonl` provenance file is intentionally not checked in;
+it is much larger than the plain text and is not needed for tokenization. Build
+GPT-BERT mixed token shards from the checked-in `train.txt` with:
 
 ```bash
 python scripts/data/build_token_shards.py \
-  --config configs/tokenization/babylm2026_strict_small_replace4pct_phys2_mat2_gpt_bert_mixed_shards.yaml
+  --config configs/tokenization/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_gptbert_shards_seed42.yaml
 ```
 
-The baseline control uses the existing strict-small mixed-focus config:
+Then train with:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
   python -u scripts/train/train_hybrid_lm.py \
-  --config configs/train/gpt_bert_baseline_mixed_babylm2026_strict_small_muon.yaml
-```
-
-Run the 96/2/2 mixed condition with the same model, seed, and optimizer
-settings, changing only the shard path and run name:
-
-```bash
-CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
-  python -u scripts/train/train_hybrid_lm.py \
-  --config configs/train/gpt_bert_mixed_babylm2026_strict_small_replace4pct_phys2_mat2_muon.yaml
+  --config configs/train/gptbert_babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_muon_seed42.yaml
 ```
 
 The text mixer treats each non-empty line as a document, uses seeded
-pseudo-random sampling with `seed: 42`, repeats synthetic corpora before a
-partial repeat, shuffles selected documents deterministically, and only trims
-the final combined corpus if needed to stay under the cap.
+pseudo-random sampling with `seed: 42` and `order_seed: 1`, repeats synthetic
+corpora before a partial repeat, shuffles selected documents deterministically,
+and only trims the final combined corpus if needed to stay under the cap.
 
 ## Synthetic Data Generation
 
