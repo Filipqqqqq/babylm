@@ -39,125 +39,6 @@ ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/training/
 Set `BABYSTEPS_RUNS_DIR` and `BABYSTEPS_CACHE_DIR` to move runs and generated
 caches on another machine.
 
-## Train 100M LLaMA + Muon + Liger
-
-Use this path for the current BabyLM 2026 Strict 100M-track LLaMA default. It
-uses the so-far best local LLaMA shape: 12 layers, hidden size 896, 14 attention
-heads, 14 key/value heads, MLP size 2304, 16k byte-BPE, Muon LR 0.01, bf16,
-Liger kernels, and effective batch size 64 via micro-batch size 16 with 4
-gradient accumulation steps:
-
-```bash
-CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
-  python -u scripts/train/train_causal_lm.py \
-  --config configs/train/llama_12l896_bpe16384_babylm2026_strict_muon_liger.yaml
-```
-
-The 100M launcher points at the same default and keeps the run names consistent
-with the width/depth sweeps:
-
-```bash
-BABYSTEPS_GPUS="0" BABYSTEPS_SEEDS="42" \
-  bash scripts/sweeps/run_llama_babylm2026_muon_lr_seed_sweep.sh
-```
-
-If the BabyLM 2026 Strict token shards are missing, build them first:
-
-```bash
-conda run --no-capture-output -n babylm python scripts/data/build_token_shards.py \
-  --config configs/tokenization/babylm2026_strict_byte_bpe_16384_shards.yaml
-```
-
-## Quick Modern Smoke Train
-
-The default smoke config uses BabyLM 2026 Strict-Small token shards and the
-local 16k byte-BPE tokenizer. It is capped to a small number of shard blocks so
-it is useful for checking the trainer, plotting hooks, and checkpoint writing:
-
-```bash
-python scripts/train/train_causal_lm.py \
-  --config configs/train/smoke/gpt2_bpe16384_babylm2026_strict_small_smoke.yaml
-```
-
-If the Strict-Small shards are missing, build them first:
-
-```bash
-python scripts/data/build_token_shards.py \
-  --config configs/tokenization/babylm2026_strict_small_byte_bpe_16384_shards.yaml
-```
-
-Project note: LLaMA + Muon + Liger was chosen for the 100M track because it
-works well under memory and speed constraints. It may or may not beat a GPT-2
-small model at that scale, but it has been much better than the GPT-2 100M
-baseline in local comparisons.
-
-## Train 2026 Strict-Small GPT-2 + Muon
-
-Use this path for BabyLM 2026 Strict-Small. It trains the 8-layer, 512-hidden
-GPT-2 + Muon shape from prebuilt token shards for
-`BabyLM-community/BabyLM-2026-Strict-Small`, using bf16 mixed precision by
-default:
-
-```bash
-python scripts/data/build_token_shards.py \
-  --config configs/tokenization/babylm2026_strict_small_byte_bpe_16384_shards.yaml
-
-python scripts/train/train_causal_lm.py \
-  --config configs/train/gpt2_8l512_bpe16384_babylm2026_strict_small_muon.yaml
-```
-
-## Train 2026 Strict-Small GPT-BERT Hybrid
-
-Use this path for the GPT-BERT baseline-style hybrid objective. It uses the
-baseline tokenizer from
-`BabyLM-community/babylm-baseline-10m-gpt-bert-causal-focus`, rebuilds
-Strict-Small token shards with that tokenizer, then trains GPT-BERT with a
-15:1 causal-to-MNTP schedule, LAMB, bf16, z-loss, and 10 full epochs by
-default. The objective ratio is set explicitly with `hybrid.causal_steps: 15`
-and `hybrid.masked_steps: 1`:
-
-```bash
-python scripts/data/build_token_shards.py \
-  --config configs/tokenization/babylm2026_strict_small_gpt_bert_baseline_causal_focus_shards.yaml
-
-python scripts/train/train_hybrid_lm.py \
-  --config configs/train/gpt_bert_baseline_causal_focus_babylm2026_strict_small.yaml
-```
-
-The generated tokenizer and shards go under:
-
-```text
-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/tokenizers/gpt_bert_baseline_causal_focus
-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_shards/babylm2026_strict_small_gpt_bert_baseline_causal_focus
-```
-
-The training config uses `seq_len: 512`, `training.batch_size: 32`, and
-`training.gradient_accumulation_steps: 1`, so the default effective batch is
-32 sequences per optimizer update. For a micro-batch size of 16 while keeping
-the same global batch size, run:
-
-```bash
-python scripts/train/train_hybrid_lm.py \
-  --config configs/train/gpt_bert_baseline_causal_focus_babylm2026_strict_small.yaml \
-  --set training.batch_size=16 \
-  --set training.gradient_accumulation_steps=2
-```
-
-MNTP BabyLM benchmark scoring is enabled at training start and then every
-10,000,000 estimated words with `score_reduction: sum`; plots are generated
-after each benchmark eval using `progress.benchmark_plot_x_axis: words_seen`.
-Those diagnostics are written inside the run directory:
-
-```text
-benchmarks/mntp_likelihood/likelihood_items.jsonl
-benchmarks/mntp_likelihood/likelihood_summary.csv
-benchmarks/mntp_likelihood/{blimp,blimp_supplement,entity_tracking,comps}/
-```
-
-GPT-BERT checkpoints are saved in the baseline-compatible remote-code format,
-including `pytorch_model.bin`, tokenizer files, `configuration_gpt_bert.py`,
-`modeling_gpt_bert.py`, and `config.json`.
-
 ## GPT-BERT BLIMP Supplement Repair Mix
 
 Use this path for the seed-42 strict-small reference mix that keeps a
@@ -231,6 +112,125 @@ The text mixer treats each non-empty line as a document, uses seeded
 pseudo-random sampling with `seed: 42` and `order_seed: 1`, repeats synthetic
 corpora before a partial repeat, shuffles selected documents deterministically,
 and only trims the final combined corpus if needed to stay under the cap.
+
+## Train 2026 Strict-Small GPT-BERT Hybrid
+
+Use this path for the GPT-BERT baseline-style hybrid objective. It uses the
+baseline tokenizer from
+`BabyLM-community/babylm-baseline-10m-gpt-bert-causal-focus`, rebuilds
+Strict-Small token shards with that tokenizer, then trains GPT-BERT with a
+15:1 causal-to-MNTP schedule, LAMB, bf16, z-loss, and 10 full epochs by
+default. The objective ratio is set explicitly with `hybrid.causal_steps: 15`
+and `hybrid.masked_steps: 1`:
+
+```bash
+python scripts/data/build_token_shards.py \
+  --config configs/tokenization/babylm2026_strict_small_gpt_bert_baseline_causal_focus_shards.yaml
+
+python scripts/train/train_hybrid_lm.py \
+  --config configs/train/gpt_bert_baseline_causal_focus_babylm2026_strict_small.yaml
+```
+
+The generated tokenizer and shards go under:
+
+```text
+${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/tokenizers/gpt_bert_baseline_causal_focus
+${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_shards/babylm2026_strict_small_gpt_bert_baseline_causal_focus
+```
+
+The training config uses `seq_len: 512`, `training.batch_size: 32`, and
+`training.gradient_accumulation_steps: 1`, so the default effective batch is
+32 sequences per optimizer update. For a micro-batch size of 16 while keeping
+the same global batch size, run:
+
+```bash
+python scripts/train/train_hybrid_lm.py \
+  --config configs/train/gpt_bert_baseline_causal_focus_babylm2026_strict_small.yaml \
+  --set training.batch_size=16 \
+  --set training.gradient_accumulation_steps=2
+```
+
+MNTP BabyLM benchmark scoring is enabled at training start and then every
+10,000,000 estimated words with `score_reduction: sum`; plots are generated
+after each benchmark eval using `progress.benchmark_plot_x_axis: words_seen`.
+Those diagnostics are written inside the run directory:
+
+```text
+benchmarks/mntp_likelihood/likelihood_items.jsonl
+benchmarks/mntp_likelihood/likelihood_summary.csv
+benchmarks/mntp_likelihood/{blimp,blimp_supplement,entity_tracking,comps}/
+```
+
+GPT-BERT checkpoints are saved in the baseline-compatible remote-code format,
+including `pytorch_model.bin`, tokenizer files, `configuration_gpt_bert.py`,
+`modeling_gpt_bert.py`, and `config.json`.
+
+## Train 2026 Strict-Small GPT-2 + Muon
+
+Use this path for BabyLM 2026 Strict-Small. It trains the 8-layer, 512-hidden
+GPT-2 + Muon shape from prebuilt token shards for
+`BabyLM-community/BabyLM-2026-Strict-Small`, using bf16 mixed precision by
+default:
+
+```bash
+python scripts/data/build_token_shards.py \
+  --config configs/tokenization/babylm2026_strict_small_byte_bpe_16384_shards.yaml
+
+python scripts/train/train_causal_lm.py \
+  --config configs/train/gpt2_8l512_bpe16384_babylm2026_strict_small_muon.yaml
+```
+
+## Train 100M LLaMA + Muon + Liger
+
+Use this path for the current BabyLM 2026 Strict 100M-track LLaMA default. It
+uses the so-far best local LLaMA shape: 12 layers, hidden size 896, 14 attention
+heads, 14 key/value heads, MLP size 2304, 16k byte-BPE, Muon LR 0.01, bf16,
+Liger kernels, and effective batch size 64 via micro-batch size 16 with 4
+gradient accumulation steps:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
+  python -u scripts/train/train_causal_lm.py \
+  --config configs/train/llama_12l896_bpe16384_babylm2026_strict_muon_liger.yaml
+```
+
+The 100M launcher points at the same default and keeps the run names consistent
+with the width/depth sweeps:
+
+```bash
+BABYSTEPS_GPUS="0" BABYSTEPS_SEEDS="42" \
+  bash scripts/sweeps/run_llama_babylm2026_muon_lr_seed_sweep.sh
+```
+
+If the BabyLM 2026 Strict token shards are missing, build them first:
+
+```bash
+conda run --no-capture-output -n babylm python scripts/data/build_token_shards.py \
+  --config configs/tokenization/babylm2026_strict_byte_bpe_16384_shards.yaml
+```
+
+Project note: LLaMA + Muon + Liger was chosen for the 100M track because it
+works well under memory and speed constraints. It may or may not beat a GPT-2
+small model at that scale, but it has been much better than the GPT-2 100M
+baseline in local comparisons.
+
+## Quick Modern Smoke Train
+
+The default smoke config uses BabyLM 2026 Strict-Small token shards and the
+local 16k byte-BPE tokenizer. It is capped to a small number of shard blocks so
+it is useful for checking the trainer, plotting hooks, and checkpoint writing:
+
+```bash
+python scripts/train/train_causal_lm.py \
+  --config configs/train/smoke/gpt2_bpe16384_babylm2026_strict_small_smoke.yaml
+```
+
+If the Strict-Small shards are missing, build them first:
+
+```bash
+python scripts/data/build_token_shards.py \
+  --config configs/tokenization/babylm2026_strict_small_byte_bpe_16384_shards.yaml
+```
 
 ## Synthetic Data Generation
 
