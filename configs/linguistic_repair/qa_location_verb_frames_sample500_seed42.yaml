@@ -1,0 +1,15 @@
+name: qa_location_verb_frames_sample500_seed42
+seed: 42
+document_count: 500
+direct_dialogue_ratio: 0.7
+output_dir: data/linguistic_repair/qa_location_verb_frames_sample500_seed42
+
+verb_families:
+  - send_mail_ship_deliver
+  - go_walk_head_return
+  - travel_ride_fly
+  - drive_park
+  - find_discover_spot_notice
+  - leave_drop_hide_store
+  - carry_bring_take
+  - put_place_set

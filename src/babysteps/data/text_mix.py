@@ -76,6 +76,7 @@ class TextMixConfig:
     output_dir: Path
     max_words: int
     seed: int
+    order_seed: int
     strict_max_words: bool
     document_mode: str
     final_order: str
@@ -240,6 +241,87 @@ class RandomWithoutReplacementSampler:
             documents=tuple(selected),
             available_documents=len(documents),
             available_words=sum(document.word_count for document in documents),
+            selected_words=selected_words,
+            full_repeats=0,
+            partial_repeat_documents=0,
+        )
+
+
+class RandomWithoutReplacementExactWordsSampler:
+    """Select a seeded whole-document subset that exactly matches the word target."""
+
+    def sample(
+        self,
+        documents: list[SourceDocument],
+        *,
+        source: TextMixSourceConfig,
+        seed: int,
+    ) -> SampledSource:
+        ordered = list(documents)
+        random.Random(seed).shuffle(ordered)
+        target_words = source.target_words
+        available_words = sum(document.word_count for document in documents)
+        if available_words < target_words:
+            raise ValueError(
+                f"Source {source.name!r} has {available_words:,} available words, "
+                f"below exact target {target_words:,}."
+            )
+
+        limit_mask = (1 << (target_words + 1)) - 1
+        reachable = 1
+        history: list[int] = []
+        last_index = -1
+        for index, document in enumerate(ordered):
+            history.append(reachable)
+            reachable = (reachable | (reachable << document.word_count)) & limit_mask
+            if reachable & (1 << target_words):
+                last_index = index
+                break
+
+        if last_index < 0:
+            raise ValueError(
+                f"Source {source.name!r} cannot form an exact {target_words:,}-word "
+                "whole-document subset."
+            )
+
+        remaining = target_words
+        chosen_indices: list[int] = []
+        for index in range(last_index, -1, -1):
+            word_count = ordered[index].word_count
+            previous_total = remaining - word_count
+            if previous_total >= 0 and (history[index] & (1 << previous_total)):
+                chosen_indices.append(index)
+                remaining = previous_total
+                if remaining == 0:
+                    break
+
+        if remaining != 0:
+            raise RuntimeError(
+                f"Failed to reconstruct exact {target_words:,}-word subset "
+                f"for source {source.name!r}."
+            )
+
+        chosen_indices.reverse()
+        selected = [
+            SelectedDocument(
+                document=ordered[index],
+                repeat_index=0,
+                selection_index=selection_index,
+            )
+            for selection_index, index in enumerate(chosen_indices)
+        ]
+        selected_words = sum(document.word_count for document in selected)
+        if selected_words != target_words:
+            raise RuntimeError(
+                f"Exact sampler selected {selected_words:,} words for source "
+                f"{source.name!r}, expected {target_words:,}."
+            )
+
+        return SampledSource(
+            source=source,
+            documents=tuple(selected),
+            available_documents=len(documents),
+            available_words=available_words,
             selected_words=selected_words,
             full_repeats=0,
             partial_repeat_documents=0,
@@ -432,7 +514,7 @@ class TextMixBuilder:
 
         ordered_documents = self.orderer.order(
             selected_documents,
-            seed=config.seed,
+            seed=config.order_seed,
         )
         written_corpus = self.writer.write_train_text(
             ordered_documents,
@@ -500,6 +582,7 @@ def text_mix_config_from_mapping(
     output_dir = resolve_path(mapping["output_dir"], base_dir=base_dir)
     max_words = int(mapping.get("max_words", 10_000_000))
     seed = int(mapping.get("seed", 42))
+    order_seed = int(mapping.get("order_seed", seed))
     strict_max_words = bool(mapping.get("strict_max_words", True))
     document_mode = str(mapping.get("document_mode", "line"))
     final_order = str(mapping.get("final_order", "deterministic_document_shuffle"))
@@ -543,6 +626,7 @@ def text_mix_config_from_mapping(
         output_dir=output_dir,
         max_words=max_words,
         seed=seed,
+        order_seed=order_seed,
         strict_max_words=strict_max_words,
         document_mode=document_mode,
         final_order=final_order,
@@ -558,6 +642,7 @@ def default_text_mix_builder(word_pattern: str = DEFAULT_WORD_PATTERN) -> TextMi
         reader=LineDocumentReader(counter),
         samplers={
             "random_without_replacement": RandomWithoutReplacementSampler(),
+            "random_without_replacement_exact_words": RandomWithoutReplacementExactWordsSampler(),
             "repeat_then_partial": RepeatThenPartialSampler(),
         },
         orderer=SeededDocumentShuffle(),
@@ -620,6 +705,7 @@ def build_counts(
     return {
         "name": config.name,
         "seed": config.seed,
+        "order_seed": config.order_seed,
         "max_words": config.max_words,
         "strict_max_words": config.strict_max_words,
         "word_count_pattern": config.word_pattern,
@@ -648,6 +734,7 @@ def build_manifest(
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "name": config.name,
         "seed": config.seed,
+        "order_seed": config.order_seed,
         "document_mode": config.document_mode,
         "final_order": config.final_order,
         "trim_policy": config.trim_policy,

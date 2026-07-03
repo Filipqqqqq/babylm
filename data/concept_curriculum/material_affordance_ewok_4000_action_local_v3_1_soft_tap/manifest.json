@@ -1,0 +1,38 @@
+{
+  "version": "concept_curriculum_material_affordance_ewok_v3_1_soft_tap",
+  "created_at": "2026-06-18T23:09:36.207824+00:00",
+  "model_id": "accounts/fireworks/models/qwen3p6-plus",
+  "config_path": "configs/concept_curriculum/material_affordance_ewok_v3_1_soft_tap.json",
+  "output_dir": "/SSD2/babylm-baby-steps/data/concept_curriculum/material_affordance_ewok_4000_action_local_v3_1_soft_tap",
+  "concept_id": "material_affordance_correlations",
+  "profile_id": "material_affordance_correlations",
+  "coverage_packs": [
+    {
+      "id": "ewok_anchor_correlations",
+      "source": "material_class_profile",
+      "document_counts": {
+        "material_affordance_cluster": 1000,
+        "single_material_actions": 1000,
+        "simple_scene_sequence": 1000,
+        "class_action_map": 1000
+      }
+    }
+  ],
+  "counts": {
+    "scenario_plans": 4000,
+    "documents_draft": 4000,
+    "documents_audited": 4000,
+    "train_documents": 3897,
+    "pass": 3318,
+    "warn": 579,
+    "fail": 103
+  },
+  "paths": {
+    "scenario_plans": "/SSD2/babylm-baby-steps/data/concept_curriculum/material_affordance_ewok_4000_action_local_v3_1_soft_tap/scenario_plans.jsonl",
+    "documents_draft": "/SSD2/babylm-baby-steps/data/concept_curriculum/material_affordance_ewok_4000_action_local_v3_1_soft_tap/documents_draft.jsonl",
+    "documents_audited": "/SSD2/babylm-baby-steps/data/concept_curriculum/material_affordance_ewok_4000_action_local_v3_1_soft_tap/documents_audited.jsonl",
+    "audit_report": "/SSD2/babylm-baby-steps/data/concept_curriculum/material_affordance_ewok_4000_action_local_v3_1_soft_tap/audit_report.json",
+    "train": "/SSD2/babylm-baby-steps/data/concept_curriculum/material_affordance_ewok_4000_action_local_v3_1_soft_tap/train.txt",
+    "manifest": "/SSD2/babylm-baby-steps/data/concept_curriculum/material_affordance_ewok_4000_action_local_v3_1_soft_tap/manifest.json"
+  }
+}

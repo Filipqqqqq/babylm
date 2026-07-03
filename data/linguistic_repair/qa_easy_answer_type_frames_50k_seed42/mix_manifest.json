@@ -1,0 +1,84 @@
+{
+  "created_utc": "2026-07-02T22:39:30.107228+00:00",
+  "document_mode": "line",
+  "final_order": "deterministic_document_shuffle",
+  "max_words": 50000,
+  "name": "qa_easy_answer_type_frames_50k_seed42",
+  "outputs": {
+    "counts": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_easy_answer_type_frames_50k_seed42/counts.json",
+    "mix_config": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_easy_answer_type_frames_50k_seed42/mix_config.yaml",
+    "mix_documents": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_easy_answer_type_frames_50k_seed42/mix_documents.jsonl",
+    "mix_manifest": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_easy_answer_type_frames_50k_seed42/mix_manifest.json",
+    "train": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_easy_answer_type_frames_50k_seed42/train.txt"
+  },
+  "seed": 42,
+  "sources": [
+    {
+      "available_documents": 500,
+      "available_words": 6959,
+      "full_repeats": 3,
+      "name": "qa_location_verb_frames",
+      "partial_repeat_documents": 289,
+      "path": "data/linguistic_repair/qa_location_verb_frames_sample500_seed42/train.txt",
+      "role": "synthetic_where_location",
+      "sampling": "repeat_then_partial",
+      "selected_documents": 1789,
+      "selected_words": 25006,
+      "target_words": 25000
+    },
+    {
+      "available_documents": 500,
+      "available_words": 6365,
+      "full_repeats": 1,
+      "name": "qa_who_person_frames",
+      "partial_repeat_documents": 480,
+      "path": "data/linguistic_repair/qa_who_person_frames_sample500_seed42/train.txt",
+      "role": "synthetic_who_person",
+      "sampling": "repeat_then_partial",
+      "selected_documents": 980,
+      "selected_words": 12506,
+      "target_words": 12500
+    },
+    {
+      "available_documents": 500,
+      "available_words": 7107,
+      "full_repeats": 1,
+      "name": "qa_what_object_frames",
+      "partial_repeat_documents": 382,
+      "path": "data/linguistic_repair/qa_what_object_frames_sample500_seed42/train.txt",
+      "role": "synthetic_what_object",
+      "sampling": "repeat_then_partial",
+      "selected_documents": 882,
+      "selected_words": 12509,
+      "target_words": 12500
+    }
+  ],
+  "strict_max_words": true,
+  "totals": {
+    "ordered_documents": 3651,
+    "output_documents": 3649,
+    "output_words": 50000,
+    "selected_documents": 3651,
+    "selected_words": 50021,
+    "skipped_selected_documents": 2,
+    "target_words": 50000
+  },
+  "trim_policy": "trim_final_document_only_if_needed",
+  "trimmed_document": {
+    "line_number": 103,
+    "output_index": 3648,
+    "output_words": 18,
+    "repeat_index": 0,
+    "selection_index": 102,
+    "source_doc_index": 102,
+    "source_name": "qa_location_verb_frames",
+    "source_path": "data/linguistic_repair/qa_location_verb_frames_sample500_seed42/train.txt",
+    "source_role": "synthetic_where_location",
+    "source_words": 20,
+    "trimmed": true
+  },
+  "word_count": {
+    "kind": "regex",
+    "pattern": "[A-Za-z0-9]+(?:['-][A-Za-z0-9]+)*"
+  }
+}

@@ -44,7 +44,7 @@ caches on another machine.
 The lexical-analysis implementation lives in
 `src/babysteps/analysis/lexical/`. That folder contains the reusable code for
 target matching, lemmatized word counts, tokenizer fragmentation reports,
-context examples, domain-frequency plots, and EWoK target export.
+context examples, domain-frequency plots, and evaluation target export.
 
 User-facing entrypoints are under `scripts/analysis/`, and their configs live
 under `configs/analysis/`:
@@ -53,6 +53,8 @@ under `configs/analysis/`:
 src/babysteps/analysis/lexical/       reusable lexical-analysis package
 scripts/analysis/report_lexical_analysis.py
 scripts/analysis/export_ewok_lexical_targets.py
+scripts/analysis/export_comps_lexical_targets.py
+scripts/analysis/plot_comps_lexical_frequencies.py
 scripts/analysis/plot_domain_concept_frequencies.py
 scripts/analysis/benchmark_spacy_pipe.py
 configs/analysis/                    dataset/report configs and target lists
@@ -306,6 +308,34 @@ The text mixer treats each non-empty line as a document, uses seeded
 pseudo-random sampling with `seed: 42`, repeats synthetic corpora before a
 partial repeat, shuffles selected documents deterministically, and only trims
 the final combined corpus if needed to stay under the cap.
+
+## Synthetic Data Generation
+
+Synthetic data generators live under `scripts/synthetic_data_generation/`.
+There are two main branches:
+
+```text
+linguistic_repair/   BLIMP Supplement QA, answer-type, and turn-taking repairs
+concept_curriculum/  EWoK-style physical dynamics and material affordance data
+```
+
+The shared workflow is:
+
+```text
+generate -> audit -> mix into BabyLM -> tokenize -> train -> evaluate
+```
+
+The current reader-facing strict-small GPT-BERT reference path is:
+
+```text
+configs/data_mixes/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_seed42.yaml
+configs/tokenization/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_gptbert_shards_seed42.yaml
+configs/train/gptbert_babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_muon_seed42.yaml
+```
+
+See `scripts/synthetic_data_generation/README.md` for the full synthetic-data
+workflow and `scripts/synthetic_data_generation/linguistic_repair/README.md`
+for the BLIMP Supplement repair notes.
 
 ## Custom Datasets And Tokenizers
 

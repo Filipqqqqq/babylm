@@ -1,0 +1,29 @@
+name: qa_easy_answer_type_frames_50k_seed42
+seed: 42
+max_words: 50000
+strict_max_words: true
+document_mode: line
+final_order: deterministic_document_shuffle
+trim_policy: trim_final_document_only_if_needed
+output_dir: data/linguistic_repair/qa_easy_answer_type_frames_50k_seed42
+
+word_count:
+  kind: regex
+  pattern: "[A-Za-z0-9]+(?:['-][A-Za-z0-9]+)*"
+
+sources:
+  - name: qa_location_verb_frames
+    role: synthetic_where_location
+    path: data/linguistic_repair/qa_location_verb_frames_sample500_seed42/train.txt
+    target_words: 25000
+    sampling: repeat_then_partial
+  - name: qa_who_person_frames
+    role: synthetic_who_person
+    path: data/linguistic_repair/qa_who_person_frames_sample500_seed42/train.txt
+    target_words: 12500
+    sampling: repeat_then_partial
+  - name: qa_what_object_frames
+    role: synthetic_what_object
+    path: data/linguistic_repair/qa_what_object_frames_sample500_seed42/train.txt
+    target_words: 12500
+    sampling: repeat_then_partial

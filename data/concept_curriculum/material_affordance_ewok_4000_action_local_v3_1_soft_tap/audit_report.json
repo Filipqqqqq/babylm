@@ -1,0 +1,12 @@
+{
+  "counts": {
+    "pass": 3318,
+    "warn": 579,
+    "fail": 103
+  },
+  "flag_counts": {
+    "missing_required_affordance": 103,
+    "negative_marker": 79,
+    "too_short": 551
+  }
+}

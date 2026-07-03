@@ -1,0 +1,45 @@
+{
+  "version": "physical_dynamics_ewok_micro_v1_500",
+  "created_at": "2026-06-29T19:48:57.012097+00:00",
+  "model_id": "accounts/fireworks/models/qwen3p7-plus",
+  "config_path": "configs/concept_curriculum/physical_dynamics/physical_dynamics_ewok_micro_500.json",
+  "output_dir": "/home/jorge/snap/babylm-baby-steps/data/concept_curriculum/physical_dynamics_ewok_micro_1000_slip_bridge_qwen",
+  "concept_id": "physical_dynamics",
+  "profile_id": "physical_dynamics",
+  "coverage_packs": [
+    {
+      "id": "physical_dynamics_ewok_micro_v1_500",
+      "canonical_concept_counts": {
+        "fall": 100,
+        "rise": 100,
+        "sink": 100,
+        "float": 100,
+        "speed_up": 100,
+        "slow_down": 100,
+        "roll": 100,
+        "slide": 100,
+        "grow": 100,
+        "shrink": 100
+      }
+    }
+  ],
+  "counts": {
+    "scenario_plans": 1000,
+    "documents_draft": 1000,
+    "documents_audited": 1000,
+    "train_documents": 921,
+    "pass": 920,
+    "warn": 1,
+    "fail": 79
+  },
+  "paths": {
+    "scenario_plans": "/home/jorge/snap/babylm-baby-steps/data/concept_curriculum/physical_dynamics_ewok_micro_1000_slip_bridge_qwen/scenario_plans.jsonl",
+    "render_checkpoints": "/home/jorge/snap/babylm-baby-steps/data/concept_curriculum/physical_dynamics_ewok_micro_1000_slip_bridge_qwen/render_checkpoints",
+    "render_failures": "/home/jorge/snap/babylm-baby-steps/data/concept_curriculum/physical_dynamics_ewok_micro_1000_slip_bridge_qwen/render_failures",
+    "documents_draft": "/home/jorge/snap/babylm-baby-steps/data/concept_curriculum/physical_dynamics_ewok_micro_1000_slip_bridge_qwen/documents_draft.jsonl",
+    "documents_audited": "/home/jorge/snap/babylm-baby-steps/data/concept_curriculum/physical_dynamics_ewok_micro_1000_slip_bridge_qwen/documents_audited.jsonl",
+    "audit_report": "/home/jorge/snap/babylm-baby-steps/data/concept_curriculum/physical_dynamics_ewok_micro_1000_slip_bridge_qwen/audit_report.json",
+    "train": "/home/jorge/snap/babylm-baby-steps/data/concept_curriculum/physical_dynamics_ewok_micro_1000_slip_bridge_qwen/train.txt",
+    "manifest": "/home/jorge/snap/babylm-baby-steps/data/concept_curriculum/physical_dynamics_ewok_micro_1000_slip_bridge_qwen/manifest.json"
+  }
+}

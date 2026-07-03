@@ -1,0 +1,11 @@
+name: qa_who_person_frames_sample500_seed42
+seed: 42
+document_count: 500
+direct_dialogue_ratio: 0.5
+output_dir: data/linguistic_repair/qa_who_person_frames_sample500_seed42
+
+frame_families:
+  - contact_visit_question
+  - assist_care_help
+  - role_action_subject
+  - creation_task_doer

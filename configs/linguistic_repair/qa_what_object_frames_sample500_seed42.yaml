@@ -1,0 +1,14 @@
+name: qa_what_object_frames_sample500_seed42
+seed: 42
+document_count: 500
+direct_dialogue_ratio: 0.5
+second_person_ratio: 0.5
+first_person_echo_answer_ratio: 0.5
+output_dir: data/linguistic_repair/qa_what_object_frames_sample500_seed42
+
+frame_families:
+  - borrow_return_choose
+  - open_lock_unlock
+  - repair_wash_clean
+  - pack_carry_bring
+  - craft_fold_decorate

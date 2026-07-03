@@ -8,6 +8,7 @@ import yaml
 from babysteps.data.text_mix import (
     FinalCorpusWriter,
     LineDocumentReader,
+    RandomWithoutReplacementExactWordsSampler,
     RandomWithoutReplacementSampler,
     RegexWordCounter,
     RepeatThenPartialSampler,
@@ -71,6 +72,29 @@ def test_repeat_then_partial_sampler_uses_full_repeats_before_partial(tmp_path) 
     assert sampled.partial_repeat_documents == 1
     assert sampled.selected_words == 25
     assert [doc.repeat_index for doc in sampled.documents] == [0, 0, 1, 1, 2]
+
+
+def test_random_without_replacement_exact_words_sampler_hits_target_without_trimming(tmp_path) -> None:
+    path = tmp_path / "synthetic.txt"
+    source = source_config(
+        path,
+        target_words=11,
+        sampling="random_without_replacement_exact_words",
+    )
+    docs = [
+        SourceDocument("toy", "synthetic", str(path), 0, 1, "one two three four", 4),
+        SourceDocument("toy", "synthetic", str(path), 1, 2, "five six seven", 3),
+        SourceDocument("toy", "synthetic", str(path), 2, 3, "eight nine ten eleven", 4),
+        SourceDocument("toy", "synthetic", str(path), 3, 4, "twelve thirteen fourteen", 3),
+        SourceDocument("toy", "synthetic", str(path), 4, 5, "fifteen sixteen", 2),
+    ]
+
+    sampled = RandomWithoutReplacementExactWordsSampler().sample(docs, source=source, seed=42)
+
+    assert sampled.selected_words == 11
+    assert sum(document.word_count for document in sampled.documents) == 11
+    assert sampled.full_repeats == 0
+    assert sampled.partial_repeat_documents == 0
 
 
 def test_text_mix_is_deterministic_for_same_seed(tmp_path) -> None:
@@ -183,6 +207,7 @@ def test_builder_components_are_swappable(tmp_path) -> None:
         output_dir=tmp_path / "out",
         max_words=6,
         seed=42,
+        order_seed=42,
         strict_max_words=True,
         document_mode="line",
         final_order="deterministic_document_shuffle",

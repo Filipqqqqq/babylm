@@ -1,0 +1,17 @@
+{
+  "counts": {
+    "pass": 920,
+    "warn": 1,
+    "fail": 79
+  },
+  "flag_counts": {
+    "contrast_verbalization_violation": 2,
+    "missing_expected_outcome": 15,
+    "missing_expected_process": 1,
+    "missing_lexical_target": 21,
+    "missing_physical_cause": 13,
+    "missing_same_sentence_bridge_evidence": 47,
+    "physical_shortcut_only": 28,
+    "too_short": 1
+  }
+}

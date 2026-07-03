@@ -1,0 +1,62 @@
+{
+  "max_words": 50000,
+  "name": "qa_easy_answer_type_frames_50k_seed42",
+  "output_documents_total": 3649,
+  "output_words_total": 50000,
+  "seed": 42,
+  "selected_documents_total": 3651,
+  "selected_words_total": 50021,
+  "skipped_selected_documents": 2,
+  "sources": [
+    {
+      "available_documents": 500,
+      "available_words": 6959,
+      "full_repeats": 3,
+      "name": "qa_location_verb_frames",
+      "output_documents": 1788,
+      "output_fraction": 0.49984,
+      "output_words": 24992,
+      "partial_repeat_documents": 289,
+      "path": "data/linguistic_repair/qa_location_verb_frames_sample500_seed42/train.txt",
+      "role": "synthetic_where_location",
+      "selected_documents": 1789,
+      "selected_words": 25006,
+      "target_words": 25000
+    },
+    {
+      "available_documents": 500,
+      "available_words": 6365,
+      "full_repeats": 1,
+      "name": "qa_who_person_frames",
+      "output_documents": 979,
+      "output_fraction": 0.24998,
+      "output_words": 12499,
+      "partial_repeat_documents": 480,
+      "path": "data/linguistic_repair/qa_who_person_frames_sample500_seed42/train.txt",
+      "role": "synthetic_who_person",
+      "selected_documents": 980,
+      "selected_words": 12506,
+      "target_words": 12500
+    },
+    {
+      "available_documents": 500,
+      "available_words": 7107,
+      "full_repeats": 1,
+      "name": "qa_what_object_frames",
+      "output_documents": 882,
+      "output_fraction": 0.25018,
+      "output_words": 12509,
+      "partial_repeat_documents": 382,
+      "path": "data/linguistic_repair/qa_what_object_frames_sample500_seed42/train.txt",
+      "role": "synthetic_what_object",
+      "selected_documents": 882,
+      "selected_words": 12509,
+      "target_words": 12500
+    }
+  ],
+  "strict_max_words": true,
+  "target_words_total": 50000,
+  "trimmed": true,
+  "trimmed_source": "qa_location_verb_frames",
+  "word_count_pattern": "[A-Za-z0-9]+(?:['-][A-Za-z0-9]+)*"
+}

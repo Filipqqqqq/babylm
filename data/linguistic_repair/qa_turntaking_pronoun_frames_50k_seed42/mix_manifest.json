@@ -1,0 +1,46 @@
+{
+  "created_utc": "2026-07-02T23:55:17.211569+00:00",
+  "document_mode": "line",
+  "final_order": "deterministic_document_shuffle",
+  "max_words": 50000,
+  "name": "qa_turntaking_pronoun_frames_50k_seed42",
+  "outputs": {
+    "counts": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_turntaking_pronoun_frames_50k_seed42/counts.json",
+    "mix_config": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_turntaking_pronoun_frames_50k_seed42/mix_config.yaml",
+    "mix_documents": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_turntaking_pronoun_frames_50k_seed42/mix_documents.jsonl",
+    "mix_manifest": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_turntaking_pronoun_frames_50k_seed42/mix_manifest.json",
+    "train": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_turntaking_pronoun_frames_50k_seed42/train.txt"
+  },
+  "seed": 42,
+  "sources": [
+    {
+      "available_documents": 5000,
+      "available_words": 60418,
+      "full_repeats": 0,
+      "name": "qa_turntaking_pronoun_frames_pool",
+      "partial_repeat_documents": 0,
+      "path": "data/linguistic_repair/qa_turntaking_pronoun_frames_pool5000_seed42/train.txt",
+      "role": "synthetic",
+      "sampling": "random_without_replacement_exact_words",
+      "selected_documents": 4133,
+      "selected_words": 50000,
+      "target_words": 50000
+    }
+  ],
+  "strict_max_words": true,
+  "totals": {
+    "ordered_documents": 4133,
+    "output_documents": 4133,
+    "output_words": 50000,
+    "selected_documents": 4133,
+    "selected_words": 50000,
+    "skipped_selected_documents": 0,
+    "target_words": 50000
+  },
+  "trim_policy": "trim_final_document_only_if_needed",
+  "trimmed_document": null,
+  "word_count": {
+    "kind": "regex",
+    "pattern": "[A-Za-z0-9]+(?:['-][A-Za-z0-9]+)*"
+  }
+}

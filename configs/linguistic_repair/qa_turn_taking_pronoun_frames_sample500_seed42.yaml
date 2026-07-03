@@ -1,0 +1,25 @@
+name: qa_turn_taking_pronoun_frames_sample500_seed42
+seed: 42
+document_count: 500
+direct_dialogue_ratio: 0.5
+yes_ratio: 0.5
+answer_marker_ratio: 0.5
+negative_contraction_ratio: 0.5
+weak_mapping_ratio: 0.7
+output_dir: data/linguistic_repair/qa_turn_taking_pronoun_frames_sample500_seed42
+
+mapping_families:
+  - i_to_you
+  - we_to_you
+  - you_to_we
+  - you_to_i
+  - she_to_she
+  - they_to_they
+
+aux_families:
+  - did
+  - have
+  - can
+  - should
+  - will
+  - be_past
