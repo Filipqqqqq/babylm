@@ -1,17 +1,49 @@
-# Copy this file to manifests/paths.local.yaml and edit for your machine.
+# Copy this file to manifests/paths.local.yaml and edit it for your machine.
 # The local file is gitignored.
+#
+# These values are examples. They show the paths expected by the current
+# GPT-BERT strict-small repair workflow, but they are not meant to be universal.
 
 paths:
-  raw_data_dir: /SSD2/datasets/babylm_100m/train_files/train_100M
-  processed_dir: /SSD2/babylm-baby-steps-cache/processed
-  runs_dir: /SSD2/babylm-baby-steps-runs
-  eval_pipeline_dir: /SSD2/babylm-baby-steps-tools/evaluation-pipeline-2025
-  model_dir: /SSD2/babylm-baby-steps-runs/training/babylm_100m_gpt2_baseline/checkpoints/latest
-  hf_cache_dir: /SSD2/huggingface_cache
+  # Repository checkout.
+  project_dir: /home/YOUR_USER/babylm-baby-steps
+
+  # External BabyLM release data. Keep raw upstream corpora outside git.
+  babylm_data_root: /home/YOUR_USER/babylm-data
+
+  # Local generated artifacts. Token shards, tokenizer caches, and intermediate
+  # preprocessing outputs should live here rather than in the repository.
+  cache_dir: /home/YOUR_USER/babylm-baby-steps-cache
+
+  # Training checkpoints, logs, and benchmark outputs.
+  runs_dir: /home/YOUR_USER/babylm-baby-steps-runs
+
+  # Optional Hugging Face cache root.
+  hf_cache_dir: /home/YOUR_USER/huggingface_cache
+
+  # Checked-in or locally regenerated text inputs.
+  babylm2026_strict_small_base_text: data/analysis/word2vec/base_text/babylm2026_strict_small/train.txt
+  gptbert_blimp_supplement_repair_mix_text: data/text_mixes/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_seed42/train.txt
+
+  # GPT-BERT tokenizer and shard locations used by the reference repair mix.
+  gptbert_baseline_mixed_tokenizer_dir: /home/YOUR_USER/babylm-baby-steps-cache/tokenizers/gpt_bert_baseline_mixed
+  gptbert_blimp_supplement_repair_shards_dir: /home/YOUR_USER/babylm-baby-steps-cache/token_shards/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_gptbert
+
+  # Example run output path. Replace TIMESTAMP with the run subdirectory created
+  # by scripts/train/train_hybrid_lm.py.
+  gptbert_blimp_supplement_repair_run_dir: /home/YOUR_USER/babylm-baby-steps-runs/training/gptbert_babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_muon_seed42/TIMESTAMP
 
 environment:
-  BABYSTEPS_RAW_DATA_DIR: /SSD2/datasets/babylm_100m/train_files/train_100M
-  BABYSTEPS_PROCESSED_DIR: /SSD2/babylm-baby-steps-cache/processed
-  BABYSTEPS_RUNS_DIR: /SSD2/babylm-baby-steps-runs
-  BABYSTEPS_EVAL_PIPELINE_DIR: /SSD2/babylm-baby-steps-tools/evaluation-pipeline-2025
-  BABYSTEPS_MODEL_DIR: /SSD2/babylm-baby-steps-runs/training/babylm_100m_gpt2_baseline/checkpoints/latest
+  # Data roots used by configs and scripts.
+  BABYLM_DATA_ROOT: /home/YOUR_USER/babylm-data
+  BABYSTEPS_CACHE_DIR: /home/YOUR_USER/babylm-baby-steps-cache
+  BABYSTEPS_RUNS_DIR: /home/YOUR_USER/babylm-baby-steps-runs
+  HF_HOME: /home/YOUR_USER/huggingface_cache
+
+  # GPT-BERT strict-small repair workflow.
+  BABYSTEPS_GPT_BERT_BASELINE_MIXED_TOKENIZER_DIR: /home/YOUR_USER/babylm-baby-steps-cache/tokenizers/gpt_bert_baseline_mixed
+
+notes:
+  - The GPT-BERT BLIMP Supplement repair mix text is committed with Git LFS.
+  - Token shards are generated locally from configs/tokenization/.
+  - Training runs, checkpoints, and evaluation outputs are local artifacts.
