@@ -196,6 +196,86 @@ def test_nextlat_topk_kl_matches_renormalized_teacher_topk() -> None:
     torch.testing.assert_close(result.kl_loss, expected)
 
 
+def test_nextlat_topk_kl_supports_tied_embedding_output_head() -> None:
+    hidden_states = torch.tensor(
+        [
+            [
+                [0.0, 0.0, 0.0],
+                [2.0, 1.0, 0.0],
+            ]
+        ]
+    )
+    input_ids = torch.tensor([[1, 3]])
+    attention_mask = torch.ones_like(input_ids, dtype=torch.bool)
+    loss_mask = torch.ones_like(input_ids, dtype=torch.bool)
+    input_embeddings = nn.Embedding(8, 3)
+    output_embeddings = nn.Embedding(3, 3)
+    with torch.no_grad():
+        output_embeddings.weight.copy_(torch.eye(3))
+
+    result = compute_nextlat_loss(
+        dynamics=_ZeroDynamics(),  # type: ignore[arg-type]
+        input_embeddings=input_embeddings,
+        output_embeddings=output_embeddings,
+        hidden_states=hidden_states,
+        input_ids=input_ids,
+        loss_mask=loss_mask,
+        attention_mask=attention_mask,
+        config=NextLatConfig(enabled=True, lambda_kl=0.1, kl_top_k=2),
+        bos_token_id=1,
+        eos_token_id=2,
+        kl_weight=0.1,
+    )
+
+    teacher_top_logits = torch.tensor([[2.0, 1.0]])
+    teacher_log_probs = F.log_softmax(teacher_top_logits, dim=-1)
+    teacher_probs = teacher_log_probs.exp()
+    student_log_probs = F.log_softmax(torch.zeros_like(teacher_top_logits), dim=-1)
+    expected = (teacher_probs * (teacher_log_probs - student_log_probs)).sum()
+
+    assert result.kl_transition_count.item() == 1
+    torch.testing.assert_close(result.kl_loss, expected)
+
+
+def test_nextlat_topk_kl_supports_tied_output_weight_parameter() -> None:
+    hidden_states = torch.tensor(
+        [
+            [
+                [0.0, 0.0, 0.0],
+                [2.0, 1.0, 0.0],
+            ]
+        ]
+    )
+    input_ids = torch.tensor([[1, 3]])
+    attention_mask = torch.ones_like(input_ids, dtype=torch.bool)
+    loss_mask = torch.ones_like(input_ids, dtype=torch.bool)
+    input_embeddings = nn.Embedding(8, 3)
+    output_weight = nn.Parameter(torch.eye(3))
+
+    result = compute_nextlat_loss(
+        dynamics=_ZeroDynamics(),  # type: ignore[arg-type]
+        input_embeddings=input_embeddings,
+        output_embeddings=output_weight,
+        hidden_states=hidden_states,
+        input_ids=input_ids,
+        loss_mask=loss_mask,
+        attention_mask=attention_mask,
+        config=NextLatConfig(enabled=True, lambda_kl=0.1, kl_top_k=2),
+        bos_token_id=1,
+        eos_token_id=2,
+        kl_weight=0.1,
+    )
+
+    teacher_top_logits = torch.tensor([[2.0, 1.0]])
+    teacher_log_probs = F.log_softmax(teacher_top_logits, dim=-1)
+    teacher_probs = teacher_log_probs.exp()
+    student_log_probs = F.log_softmax(torch.zeros_like(teacher_top_logits), dim=-1)
+    expected = (teacher_probs * (teacher_log_probs - student_log_probs)).sum()
+
+    assert result.kl_transition_count.item() == 1
+    torch.testing.assert_close(result.kl_loss, expected)
+
+
 def test_nextlat_kl_warmup_schedule() -> None:
     config = nextlat_config_from_dict(
         {

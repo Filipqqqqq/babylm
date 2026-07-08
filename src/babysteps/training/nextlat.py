@@ -235,11 +235,21 @@ def _masked_smooth_l1(
 
 
 def _output_logits(
-    output_embeddings: nn.Module,
+    output_embeddings: nn.Module | torch.Tensor,
     hidden_states: torch.Tensor,
     *,
     detach_lm_head: bool,
 ) -> torch.Tensor:
+    if isinstance(output_embeddings, torch.Tensor):
+        weight = output_embeddings.detach() if detach_lm_head else output_embeddings
+        return F.linear(hidden_states, weight)
+    if isinstance(output_embeddings, nn.Embedding):
+        weight = (
+            output_embeddings.weight.detach()
+            if detach_lm_head
+            else output_embeddings.weight
+        )
+        return F.linear(hidden_states, weight)
     if detach_lm_head and isinstance(output_embeddings, nn.Linear):
         weight = output_embeddings.weight.detach()
         bias = (
@@ -256,7 +266,7 @@ def _masked_topk_kl(
     pred: torch.Tensor,
     target: torch.Tensor,
     mask: torch.Tensor,
-    output_embeddings: nn.Module,
+    output_embeddings: nn.Module | torch.Tensor,
     top_k: int,
     transition_chunk_size: int,
     detach_lm_head: bool,
@@ -312,7 +322,7 @@ def compute_nextlat_loss(
     *,
     dynamics: LatentDynamicsMLP,
     input_embeddings: nn.Module,
-    output_embeddings: nn.Module | None = None,
+    output_embeddings: nn.Module | torch.Tensor | None = None,
     hidden_states: torch.Tensor,
     input_ids: torch.Tensor,
     loss_mask: torch.Tensor,
