@@ -9,6 +9,14 @@ from babysteps.training.causal_lm_loop import (
 )
 from babysteps.training.hybrid_lm_loop import train_hybrid_lm
 from babysteps.training.liger import apply_liger_kernel_if_requested
+from babysteps.training.nextlat import (
+    LatentDynamicsMLP,
+    NextLatConfig,
+    NextLatLossResult,
+    build_transition_mask,
+    compute_nextlat_loss,
+    nextlat_config_from_dict,
+)
 from babysteps.training.optimizers import build_optimizer
 from babysteps.training.spatial_auxiliary import (
     CompletionRankExample,
@@ -33,6 +41,12 @@ __all__ = [
     "evaluate_spatial_auxiliary",
     "EwokContextEvalSpec",
     "evaluate_causal_lm_loss",
+    "LatentDynamicsMLP",
+    "NextLatConfig",
+    "NextLatLossResult",
+    "build_transition_mask",
+    "compute_nextlat_loss",
+    "nextlat_config_from_dict",
     "read_spatial_auxiliary_examples",
     "set_all_seeds",
     "SpatialAuxiliarySampler",

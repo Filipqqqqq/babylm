@@ -32,6 +32,8 @@ from babysteps.evaluation.ewok_context_sensitivity import read_ewok_items
 from babysteps.models import (
     build_causal_lm_model,
     build_causal_lm_config_from_dict,
+    input_embedding_size,
+    model_hidden_size,
     normalize_model_arch,
     resolve_model_vocab_size,
 )
@@ -47,6 +49,7 @@ from babysteps.training.spatial_auxiliary import (
     split_spatial_auxiliary_examples,
 )
 from babysteps.training.liger import apply_liger_kernel_if_requested
+from babysteps.training.nextlat import LatentDynamicsMLP, nextlat_config_from_dict
 from babysteps.training.optimizers import build_optimizer
 from babysteps.paths import (
     expand_env_string,
@@ -239,21 +242,13 @@ def resolve_output_dir(config: dict[str, Any]) -> Path:
 def default_babylm_eval_dir(
     split: str,
     *relative_parts: str,
-    fallback_split: str | None = None,
-    fallback_relative_parts: tuple[str, ...] | None = None,
     root: Path | None = None,
 ) -> Path:
-    """Return a default BabyLM eval-data path, preferring full eval when present."""
+    """Return a default BabyLM eval-data path."""
 
     root = ROOT if root is None else root
     eval_root = root / "external" / "babylm-eval" / "strict" / "evaluation_data"
-    candidate = eval_root / split / Path(*relative_parts)
-    if candidate.exists() or fallback_split is None:
-        return candidate
-
-    fallback_parts = fallback_relative_parts or relative_parts
-    fallback = eval_root / fallback_split / Path(*fallback_parts)
-    return fallback if fallback.exists() else candidate
+    return eval_root / split / Path(*relative_parts)
 
 
 def build_model_config(config: dict[str, Any], tokenizer):
@@ -462,6 +457,7 @@ def main() -> None:
     entity_tracking_config = config.get("entity_tracking_likelihood", {})
     comps_config = config.get("comps_likelihood", {})
     spatial_auxiliary_config = config.get("spatial_auxiliary", {})
+    nextlat_config = nextlat_config_from_dict(config.get("nextlat", {}))
     progress_config = config.get("progress", {})
 
     words_per_token = progress_config.get(
@@ -801,14 +797,10 @@ def main() -> None:
         default_blimp_data_dir = default_babylm_eval_dir(
             "full_eval",
             "blimp_filtered",
-            fallback_split="fast_eval",
-            fallback_relative_parts=("blimp_fast",),
         )
         default_supplement_data_dir = default_babylm_eval_dir(
             "full_eval",
             "supplement_filtered",
-            fallback_split="fast_eval",
-            fallback_relative_parts=("supplement_fast",),
         )
         raw_benchmarks = blimp_likelihood_config.get("benchmarks")
         if raw_benchmarks is None:
@@ -913,8 +905,6 @@ def main() -> None:
         default_entity_tracking_data_dir = default_babylm_eval_dir(
             "full_eval",
             "entity_tracking",
-            fallback_split="fast_eval",
-            fallback_relative_parts=("entity_tracking_fast",),
         )
         entity_tracking_data_dir = resolve_path(
             entity_tracking_config.get(
@@ -1229,6 +1219,14 @@ def main() -> None:
         model_arch=architecture,
     )
     model = build_causal_lm_model(config, tokenizer)
+    nextlat_dynamics = None
+    if nextlat_config.enabled:
+        nextlat_dynamics = LatentDynamicsMLP(
+            hidden_size=model_hidden_size(model),
+            token_embedding_size=input_embedding_size(model),
+            mlp_hidden_dim=nextlat_config.mlp_hidden_dim,
+            mlp_layers=nextlat_config.mlp_layers,
+        )
     if accelerator.is_main_process:
         print(f"Model architecture: {architecture}", flush=True)
         print(f"Liger kernel applied: {liger_applied}", flush=True)
@@ -1242,11 +1240,32 @@ def main() -> None:
             )
         params = sum(p.numel() for p in model.parameters())
         print(f"Model parameters: {params:,}", flush=True)
+        if nextlat_config.enabled:
+            nextlat_params = (
+                sum(p.numel() for p in nextlat_dynamics.parameters())
+                if nextlat_dynamics is not None
+                else 0
+            )
+            print(
+                "NextLat prototype enabled: "
+                f"horizon={nextlat_config.horizon} "
+                f"lambda_next_h={nextlat_config.lambda_next_h:g} "
+                f"lambda_kl={nextlat_config.lambda_kl:g} "
+                f"kl_mode={nextlat_config.kl_mode} "
+                f"kl_top_k={nextlat_config.kl_top_k} "
+                f"kl_warmup_start_words={nextlat_config.kl_warmup_start_words} "
+                f"kl_warmup_end_words={nextlat_config.kl_warmup_end_words} "
+                f"mlp_hidden_dim={nextlat_config.mlp_hidden_dim} "
+                f"mlp_layers={nextlat_config.mlp_layers} "
+                f"params={nextlat_params:,}",
+                flush=True,
+            )
 
     optimizer, optimizer_info = build_optimizer(
         model,
         training_config,
         device=accelerator.device,
+        extra_modules=((nextlat_dynamics,) if nextlat_dynamics is not None else ()),
     )
     if accelerator.is_main_process:
         print(f"Optimizer: {optimizer_info.name}", flush=True)
@@ -1278,13 +1297,30 @@ def main() -> None:
         num_training_steps=total_steps,
     )
 
-    model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
-        model,
-        optimizer,
-        train_loader,
-        val_loader,
-        scheduler,
-    )
+    if nextlat_dynamics is not None:
+        (
+            model,
+            nextlat_dynamics,
+            optimizer,
+            train_loader,
+            val_loader,
+            scheduler,
+        ) = accelerator.prepare(
+            model,
+            nextlat_dynamics,
+            optimizer,
+            train_loader,
+            val_loader,
+            scheduler,
+        )
+    else:
+        model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
+            model,
+            optimizer,
+            train_loader,
+            val_loader,
+            scheduler,
+        )
 
     train_causal_lm(
         model=model,
@@ -1304,6 +1340,14 @@ def main() -> None:
         save_every_epochs=checkpoint_config.get("save_every_epochs", 1),
         save_final=bool(checkpoint_config.get("save_final", True)),
         profile_optimizer_steps=bool(logging_config.get("profile_optimizer_steps", False)),
+        nextlat_dynamics=nextlat_dynamics,
+        nextlat_config=nextlat_config,
+        nextlat_bos_token_id=(
+            None if tokenizer.bos_token_id is None else int(tokenizer.bos_token_id)
+        ),
+        nextlat_eos_token_id=(
+            None if tokenizer.eos_token_id is None else int(tokenizer.eos_token_id)
+        ),
         spatial_auxiliary_sampler=spatial_auxiliary_sampler,
         spatial_auxiliary_loss_weight=spatial_auxiliary_loss_weight,
         spatial_auxiliary_temperature=spatial_auxiliary_temperature,

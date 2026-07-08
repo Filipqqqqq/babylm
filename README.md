@@ -202,6 +202,9 @@ GPT-BERT checkpoints are saved in the baseline-compatible remote-code format,
 including `pytorch_model.bin`, tokenizer files, `configuration_gpt_bert.py`,
 `modeling_gpt_bert.py`, and `config.json`.
 
+Experimental causal-only NextLat support for GPT-BERT hybrid runs is documented
+under [Experimental Auxiliary Objectives](#experimental-auxiliary-objectives).
+
 ## Train 2026 Strict-Small GPT-2 + Muon
 
 Use this path for BabyLM 2026 Strict-Small. It trains the 8-layer, 512-hidden
@@ -229,6 +232,18 @@ gradient accumulation steps:
 CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
   python -u scripts/train/train_causal_lm.py \
   --config configs/train/llama_12l896_bpe16384_babylm2026_strict_muon_liger.yaml
+```
+
+To mirror the GPT-BERT-style in-training causal diagnostics for LLaMA, use the
+explicit diagnostics recipe. It keeps the same model/training settings, runs
+full EWoK, BLiMP, BLiMP Supplement, Entity Tracking, and COMPS likelihood
+diagnostics every 50,000,000 estimated words, and writes per-item JSONL plus
+summary CSV files under each run's `benchmarks/` directory:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
+  python -u scripts/train/train_causal_lm.py \
+  --config configs/train/llama_12l896_bpe16384_babylm2026_strict_muon_liger_causal_diagnostics.yaml
 ```
 
 The 100M launcher points at the same default and keeps the run names consistent
@@ -433,7 +448,12 @@ GPT-2 chunk pickles. The old 10M chunk smoke recipe now lives under
 `configs/train/legacy/gpt2_small_10m_chunks_smoke.yaml` so the default GPT-2
 smoke path uses the current BabyLM 2026 shard setup.
 
-## Spatial Auxiliary Ranking Loss
+## Experimental Auxiliary Objectives
+
+These objectives are research ablations. They are disabled by default and are
+not part of the recommended baseline recipes.
+
+### Spatial Auxiliary Ranking Loss
 
 The causal LM trainer can add a small spatial-relation ranking objective on top
 of next-token prediction. The main path uses EWoK-style `context_rank` rows:
@@ -487,6 +507,37 @@ For a short continuation probe, use
 Training logs include `spatial_auxiliary_loss`,
 `spatial_auxiliary_weighted_loss`, and optional `spatial_auxiliary_eval`
 records in `metrics_history.json`.
+
+### NextLat Causal Auxiliary Loss
+
+NextLat is an experimental training-only auxiliary objective for next-latent
+prediction. It is disabled by default, does not change the saved Hugging Face
+model architecture, and should be treated as a research ablation rather than a
+recommended recipe.
+
+For GPT-BERT hybrid training, NextLat runs only on causal microsteps. It is not
+applied to MNTP/masked microsteps because bidirectional masked inputs make the
+next-latent target ambiguous.
+
+Enable it with a `nextlat` block in a GPT-BERT hybrid config:
+
+```yaml
+nextlat:
+  enabled: true
+  apply_on: causal
+  horizon: 1
+  lambda_next_h: 0.1
+  lambda_kl: 0.0
+  mlp_hidden_dim: 1024
+  mlp_layers: 3
+  detach_targets: true
+  mask_eos_bos_boundaries: true
+```
+
+Training logs include `nextlat_next_h_loss`,
+`nextlat_weighted_next_h_loss`, `nextlat_persistence_loss`, and
+`nextlat_improvement_over_persistence`. When KL is enabled, logs also include
+`nextlat_kl_weight`, `nextlat_kl_loss`, and `nextlat_weighted_kl_loss`.
 
 ## Layout
 
@@ -604,14 +655,14 @@ configs/eval/                  # configs for model paths, tasks, and outputs
 Evaluation outputs should stay outside git, for example under
 `${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/evaluation/`.
 
-Run fast zero-shot evaluation over every Hugging Face checkpoint in a completed
+Run full zero-shot evaluation over every Hugging Face checkpoint in a completed
 training run:
 
 ```bash
 conda run -n babylm python scripts/eval/eval_babylm_checkpoints.py \
-  --config configs/eval/fast_eval.yaml \
+  --config configs/eval/full_eval.yaml \
   --run-dir ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/training/YOUR_RUN \
-  --output-dir ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/evaluation/YOUR_RUN_fast_eval \
+  --output-dir ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/evaluation/YOUR_RUN_full_eval \
   --device 1
 ```
 

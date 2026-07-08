@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import shutil
 import time
-from itertools import islice
+from itertools import chain, islice
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -18,13 +18,30 @@ from babysteps.analysis.blimp_likelihood_dynamics import (
 )
 from babysteps.analysis.comps_dynamics import plot_comps_summary
 from babysteps.analysis.entity_tracking_dynamics import plot_entity_tracking_summary
-from babysteps.analysis.ewok_context_dynamics import plot_ewok_context_summary
+from babysteps.analysis.ewok_context_dynamics import (
+    plot_ewok_context_summary,
+    plot_full_vs_spatial_summary,
+)
 from babysteps.analysis.loss_dynamics import DEFAULT_LOSS_KEYS
 from babysteps.analysis.loss_dynamics import write_training_loss_plots
 from babysteps.evaluation import ewok_context_sensitivity
 from babysteps.evaluation import mntp_likelihood
 from babysteps.models.causal_lm import DEFAULT_GPT_BERT_REPO
+from babysteps.training.branch_scoring import BranchScoreReduction
 from babysteps.training.causal_lm_loop import save_json_atomic
+from babysteps.training.nextlat import (
+    LatentDynamicsMLP,
+    NextLatConfig,
+    NextLatLossResult,
+    compute_nextlat_loss,
+    nextlat_kl_weight,
+)
+from babysteps.training.spatial_auxiliary import (
+    SpatialAuxiliaryExample,
+    SpatialAuxiliarySampler,
+    compute_spatial_auxiliary_loss,
+    evaluate_spatial_auxiliary,
+)
 
 
 MNTP_LIKELIHOOD_BENCHMARKS = (
@@ -45,6 +62,16 @@ def benchmark_label(benchmark_name: str) -> str:
         "entity_tracking": "Entity Tracking",
         "comps": "COMPS",
     }.get(benchmark_name, benchmark_name.replace("_", " ").title())
+
+
+def benchmark_group_scopes(benchmark_name: str) -> tuple[str, ...]:
+    """Return useful plot groupings for one BabyLM likelihood benchmark."""
+
+    if benchmark_name == "blimp":
+        return ("field", "linguistics_term")
+    if benchmark_name == "blimp_supplement":
+        return ("uid",)
+    return ("uid", "field", "linguistics_term")
 
 
 def word_interval_due(*, words_seen: float, next_words: float | None) -> bool:
@@ -206,7 +233,21 @@ def compute_gpt_bert_loss(
     """Compute selected-token cross-entropy plus optional z-loss."""
 
     outputs = model(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)
-    logits = outputs.logits
+    return compute_gpt_bert_loss_from_logits(
+        logits=outputs.logits,
+        labels=labels,
+        z_loss=z_loss,
+    )
+
+
+def compute_gpt_bert_loss_from_logits(
+    *,
+    logits: torch.Tensor,
+    labels: torch.Tensor,
+    z_loss: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Compute selected-token cross-entropy from precomputed GPT-BERT logits."""
+
     vocab_size = logits.size(-1)
     flat_logits = logits.reshape(-1, vocab_size)
     flat_labels = labels.reshape(-1)
@@ -436,6 +477,24 @@ def overall_summary_row(rows: list[dict[str, Any]]) -> dict[str, Any]:
     )
 
 
+def summary_row_for_group(
+    rows: list[dict[str, Any]],
+    *,
+    group_scope: str,
+    group_name: str,
+) -> dict[str, Any] | None:
+    """Return one grouped summary row when present."""
+
+    return next(
+        (
+            row
+            for row in rows
+            if row["group_scope"] == group_scope and row["group_name"] == group_name
+        ),
+        None,
+    )
+
+
 def add_objective_loss_metrics(
     record: dict[str, Any],
     *,
@@ -489,6 +548,7 @@ def plot_mntp_likelihood_summaries(
                 benchmark_label=label,
                 run_name=run_name,
                 score_reduction=score_reduction,
+                group_scopes=benchmark_group_scopes(benchmark_name),
                 x_axis=x_axis,
             )
             blimp_summary_paths[label] = summary_path
@@ -542,6 +602,11 @@ def train_hybrid_lm(
     save_every_epochs: int | None = 1,
     save_final: bool = True,
     benchmark_eval_at_start: bool = True,
+    nextlat_dynamics: LatentDynamicsMLP | None = None,
+    nextlat_config: NextLatConfig | None = None,
+    nextlat_bos_token_id: int | None = None,
+    nextlat_eos_token_id: int | None = None,
+    nextlat_apply_on: str = "causal",
     ewok_context_items: list[ewok_context_sensitivity.EwokItem] | None = None,
     ewok_context_every_steps: int = 0,
     ewok_context_every_words: float | None = None,
@@ -572,6 +637,16 @@ def train_hybrid_lm(
     mntp_likelihood_run_name: str | None = None,
     mntp_likelihood_plot: bool = False,
     mntp_likelihood_plot_every_evals: int = 1,
+    spatial_auxiliary_sampler: SpatialAuxiliarySampler | None = None,
+    spatial_auxiliary_loss_weight: float = 0.03,
+    spatial_auxiliary_temperature: float = 1.0,
+    spatial_auxiliary_score_reduction: BranchScoreReduction = "mean",
+    spatial_auxiliary_every_steps: int = 1,
+    spatial_auxiliary_apply_on: str = "causal",
+    spatial_auxiliary_eval_items: list[SpatialAuxiliaryExample] | None = None,
+    spatial_auxiliary_eval_every_steps: int = 0,
+    spatial_auxiliary_eval_batch_size: int = 64,
+    spatial_auxiliary_eval_at_start: bool = True,
     benchmark_plot_x_axis: str = "step",
     loss_dynamics_plot: bool = False,
     loss_dynamics_plot_every_evals: int = 1,
@@ -647,6 +722,22 @@ def train_hybrid_lm(
         raise ValueError("ewok_context_score_reductions must not be empty.")
     if not ewok_mntp_score_reductions:
         raise ValueError("ewok_mntp_score_reductions must not be empty.")
+    if spatial_auxiliary_loss_weight < 0.0:
+        raise ValueError("spatial_auxiliary_loss_weight must be non-negative.")
+    if spatial_auxiliary_temperature <= 0.0:
+        raise ValueError("spatial_auxiliary_temperature must be positive.")
+    if spatial_auxiliary_score_reduction not in {"sum", "mean"}:
+        raise ValueError("spatial_auxiliary_score_reduction must be 'sum' or 'mean'.")
+    if spatial_auxiliary_sampler is not None and spatial_auxiliary_every_steps <= 0:
+        raise ValueError("spatial_auxiliary_every_steps must be positive when enabled.")
+    if spatial_auxiliary_apply_on != "causal":
+        raise ValueError("spatial_auxiliary_apply_on currently supports only 'causal'.")
+    if nextlat_apply_on != "causal":
+        raise ValueError("nextlat_apply_on currently supports only 'causal'.")
+    if spatial_auxiliary_eval_every_steps < 0:
+        raise ValueError("spatial_auxiliary_eval_every_steps must be non-negative.")
+    if spatial_auxiliary_eval_batch_size <= 0:
+        raise ValueError("spatial_auxiliary_eval_batch_size must be positive.")
 
     output_dir = Path(output_dir)
     metrics_path = output_dir / "metrics_history.json"
@@ -654,6 +745,9 @@ def train_hybrid_lm(
     ewok_context_items_path = ewok_context_dir / "context_items.jsonl"
     ewok_context_summary_path = ewok_context_dir / "context_summary.csv"
     ewok_context_plot_path = ewok_context_dir / "context_domain_dynamics.png"
+    ewok_context_full_spatial_plot_path = (
+        ewok_context_dir / "full_vs_spatial_over_steps.png"
+    )
     ewok_mntp_dir = output_dir / "benchmarks" / "ewok_mntp"
     ewok_mntp_items_path = ewok_mntp_dir / "context_items.jsonl"
     ewok_mntp_summary_path = ewok_mntp_dir / "context_summary.csv"
@@ -678,6 +772,33 @@ def train_hybrid_lm(
         raise ValueError("Hybrid GPT-BERT training requires tokenizer.mask_token_id.")
     if not mntp_likelihood_score_reductions:
         raise ValueError("mntp_likelihood_score_reductions must not be empty.")
+    nextlat_enabled = (
+        nextlat_dynamics is not None
+        and nextlat_config is not None
+        and nextlat_config.enabled
+        and (nextlat_config.lambda_next_h > 0.0 or nextlat_config.lambda_kl > 0.0)
+    )
+    nextlat_input_embeddings = None
+    nextlat_output_embeddings = None
+    if nextlat_enabled:
+        if nextlat_config is None or nextlat_dynamics is None:
+            raise ValueError("NextLat requires both nextlat_config and nextlat_dynamics.")
+        if (
+            nextlat_config.lambda_kl > 0.0
+            and nextlat_config.kl_warmup_start_words is not None
+            and words_per_token is None
+        ):
+            raise ValueError("NextLat KL word warmup requires words_per_token.")
+        unwrapped_model = accelerator.unwrap_model(model)
+        if not hasattr(unwrapped_model, "get_input_embeddings"):
+            raise ValueError("NextLat requires a model with get_input_embeddings().")
+        nextlat_input_embeddings = unwrapped_model.get_input_embeddings()
+        if nextlat_config.lambda_kl > 0.0:
+            if not hasattr(unwrapped_model, "get_output_embeddings"):
+                raise ValueError("NextLat KL requires a model with get_output_embeddings().")
+            nextlat_output_embeddings = unwrapped_model.get_output_embeddings()
+            if nextlat_output_embeddings is None:
+                raise ValueError("NextLat KL requires output embeddings.")
 
     special_ids = special_token_ids(tokenizer)
     causal_steps, masked_steps = objective_schedule_from_config(hybrid_config)
@@ -744,12 +865,18 @@ def train_hybrid_lm(
                     summary_path=ewok_context_summary_path,
                     metadata=metadata,
                 )
+                spatial_relations = summary_row_for_group(
+                    result.summary_rows,
+                    group_scope="domain",
+                    group_name="spatial-relations",
+                )
                 record = {
                     "type": "ewok_context_sensitivity_full",
                     "scoring_backend": "causal",
                     **metadata,
                     "score_reduction": score_reduction,
                     "score": overall["score"],
+                    "ewok_context_sensitivity_full_score": overall["score"],
                     "mean_k_margin": overall["mean_k_margin"],
                     "items": overall["items"],
                     "target_token_count_mismatches": overall[
@@ -759,14 +886,25 @@ def train_hybrid_lm(
                         "sum_mean_sign_disagreements"
                     ],
                 }
+                if spatial_relations is not None:
+                    record["ewok_spatial_relations_score"] = spatial_relations["score"]
+                    record["ewok_spatial_relations_mean_k_margin"] = spatial_relations[
+                        "mean_k_margin"
+                    ]
+                    record["ewok_spatial_relations_items"] = spatial_relations["items"]
                 history.append(record)
-                print(
+                message = (
                     f"[step {step:06d}] "
                     f"ewok_context_sensitivity_full_score={overall['score']:.4f} "
                     f"reduction={score_reduction} "
-                    f"mean_k_margin={overall['mean_k_margin']:.4f}",
-                    flush=True,
+                    f"mean_k_margin={overall['mean_k_margin']:.4f}"
                 )
+                if spatial_relations is not None:
+                    message += (
+                        " ewok_spatial_relations_score="
+                        f"{float(spatial_relations['score']):.4f}"
+                    )
+                print(message, flush=True)
             ewok_context_eval_count += 1
             if (
                 ewok_context_plot
@@ -777,6 +915,14 @@ def train_hybrid_lm(
                     output_path=ewok_context_plot_path,
                     run_name=ewok_context_run_name,
                     score_reduction=reduction_filter(ewok_context_score_reductions),
+                    x_axis=benchmark_plot_x_axis,
+                )
+                plot_full_vs_spatial_summary(
+                    summary_csv=ewok_context_summary_path,
+                    output_path=ewok_context_full_spatial_plot_path,
+                    run_name=ewok_context_run_name,
+                    score_reduction=reduction_filter(ewok_context_score_reductions),
+                    title="EWoK Full vs Spatial Relations",
                     x_axis=benchmark_plot_x_axis,
                 )
             save_json_atomic(history, metrics_path)
@@ -960,10 +1106,60 @@ def train_hybrid_lm(
                 )
         accelerator.wait_for_everyone()
 
+    def run_spatial_auxiliary_eval(*, epoch: int, step: int, tokens_seen: float) -> None:
+        if spatial_auxiliary_eval_items is None:
+            return
+        accelerator.wait_for_everyone()
+        if accelerator.is_main_process:
+            unwrapped_model = accelerator.unwrap_model(model)
+            set_gpt_bert_is_causal(unwrapped_model, True)
+            metadata = progress_metadata(
+                epoch=epoch,
+                step=step,
+                tokens_seen=tokens_seen,
+                words_per_token=words_per_token,
+                run_name=None,
+            )
+            result = evaluate_spatial_auxiliary(
+                model=unwrapped_model,
+                tokenizer=tokenizer,
+                examples=spatial_auxiliary_eval_items,
+                batch_size=spatial_auxiliary_eval_batch_size,
+                temperature=spatial_auxiliary_temperature,
+                score_reduction=spatial_auxiliary_score_reduction,
+                device=accelerator.device,
+            )
+            record = {
+                "type": "spatial_auxiliary_eval",
+                "scoring_backend": "causal",
+                **metadata,
+                "score_reduction": spatial_auxiliary_score_reduction,
+                "temperature": spatial_auxiliary_temperature,
+                **result,
+            }
+            history.append(record)
+            message = (
+                f"[step {step:06d}] "
+                f"spatial_aux_score={float(result['score']):.4f} "
+                f"loss={float(result['loss']):.4f} "
+                f"objective={result['objective']} "
+                f"mean_margin={float(result['mean_margin']):.4f}"
+            )
+            if result["objective"] == "context_rank":
+                message += (
+                    f" k1={float(result['k1_score']):.4f} "
+                    f"k2={float(result['k2_score']):.4f}"
+                )
+            print(message, flush=True)
+            save_json_atomic(history, metrics_path)
+        accelerator.wait_for_everyone()
+
     if benchmark_eval_at_start:
         run_ewok_context_eval(epoch=0, step=0, tokens_seen=0.0)
         run_ewok_mntp_eval(epoch=0, step=0, tokens_seen=0.0)
         run_mntp_likelihood_eval(epoch=0, step=0, tokens_seen=0.0)
+    if spatial_auxiliary_eval_at_start:
+        run_spatial_auxiliary_eval(epoch=0, step=0, tokens_seen=0.0)
 
     for epoch in range(1, int(epochs) + 1):
         model.train()
@@ -976,6 +1172,15 @@ def train_hybrid_lm(
         epoch_mntp_loss_sum = 0.0
         epoch_mntp_ce_sum = 0.0
         epoch_mntp_tokens = 0.0
+        epoch_nextlat_loss_sum = 0.0
+        epoch_nextlat_transition_count = 0.0
+        epoch_nextlat_persistence_loss_sum = 0.0
+        epoch_nextlat_persistence_transition_count = 0.0
+        epoch_nextlat_kl_loss_sum = 0.0
+        epoch_nextlat_kl_transition_count = 0.0
+        epoch_nextlat_weighted_kl_loss_sum = 0.0
+        epoch_nextlat_kl_weight_sum = 0.0
+        epoch_nextlat_kl_weight_count = 0.0
         window_loss_sum = 0.0
         window_ce_sum = 0.0
         window_tokens = 0.0
@@ -987,6 +1192,17 @@ def train_hybrid_lm(
         window_mntp_tokens = 0.0
         window_causal_microsteps = 0
         window_masked_microsteps = 0
+        window_nextlat_loss_sum = 0.0
+        window_nextlat_transition_count = 0.0
+        window_nextlat_persistence_loss_sum = 0.0
+        window_nextlat_persistence_transition_count = 0.0
+        window_nextlat_kl_loss_sum = 0.0
+        window_nextlat_kl_transition_count = 0.0
+        window_nextlat_weighted_kl_loss_sum = 0.0
+        window_nextlat_kl_weight_sum = 0.0
+        window_nextlat_kl_weight_count = 0.0
+        window_spatial_auxiliary_loss_sum = 0.0
+        window_spatial_auxiliary_batches = 0
         started = time.perf_counter()
 
         progress = tqdm(
@@ -1005,7 +1221,24 @@ def train_hybrid_lm(
             )
             global_micro_step += 1
 
-            with accelerator.accumulate(model):
+            spatial_auxiliary_loss = None
+            nextlat_result: NextLatLossResult | None = None
+            batch_words_seen = (
+                cumulative_tokens_seen * words_per_token
+                if words_per_token is not None
+                else None
+            )
+            batch_nextlat_kl_weight = (
+                nextlat_kl_weight(nextlat_config, words_seen=batch_words_seen)
+                if nextlat_config is not None
+                else 0.0
+            )
+            accumulate_models = (
+                (model, nextlat_dynamics)
+                if nextlat_dynamics is not None
+                else (model,)
+            )
+            with accelerator.accumulate(*accumulate_models):
                 with accelerator.autocast():
                     if objective == "masked":
                         special_mask = build_special_mask(input_ids, special_ids)
@@ -1024,17 +1257,85 @@ def train_hybrid_lm(
                         batch_input_ids, labels = make_causal_batch(input_ids)
                         set_gpt_bert_is_causal(model, True)
 
-                    loss, ce_loss, target_tokens = compute_gpt_bert_loss(
-                        model,
-                        input_ids=batch_input_ids,
-                        labels=labels,
-                        attention_mask=attention_mask,
-                        z_loss=z_loss,
-                    )
+                    should_apply_nextlat = nextlat_enabled and objective == nextlat_apply_on
+                    if should_apply_nextlat:
+                        outputs = model(
+                            input_ids=batch_input_ids,
+                            attention_mask=attention_mask,
+                            return_dict=True,
+                            output_hidden_states=True,
+                        )
+                        loss, ce_loss, target_tokens = compute_gpt_bert_loss_from_logits(
+                            logits=outputs.logits,
+                            labels=labels,
+                            z_loss=z_loss,
+                        )
+                        if outputs.hidden_states is None:
+                            raise RuntimeError(
+                                "NextLat expected hidden states from the GPT-BERT forward."
+                            )
+                        if nextlat_input_embeddings is None or nextlat_config is None:
+                            raise RuntimeError("NextLat was enabled without setup.")
+                        nextlat_result = compute_nextlat_loss(
+                            dynamics=nextlat_dynamics,
+                            input_embeddings=nextlat_input_embeddings,
+                            output_embeddings=nextlat_output_embeddings,
+                            hidden_states=outputs.hidden_states[-1],
+                            input_ids=batch_input_ids,
+                            loss_mask=labels != -100,
+                            attention_mask=attention_mask,
+                            config=nextlat_config,
+                            bos_token_id=nextlat_bos_token_id,
+                            eos_token_id=nextlat_eos_token_id,
+                            kl_weight=batch_nextlat_kl_weight,
+                        )
+                        weighted_nextlat_loss = (
+                            nextlat_config.lambda_next_h * nextlat_result.next_h_loss
+                        )
+                        weighted_nextlat_kl_loss = (
+                            batch_nextlat_kl_weight * nextlat_result.kl_loss
+                        )
+                        loss = loss + weighted_nextlat_loss + weighted_nextlat_kl_loss
+                    else:
+                        loss, ce_loss, target_tokens = compute_gpt_bert_loss(
+                            model,
+                            input_ids=batch_input_ids,
+                            labels=labels,
+                            attention_mask=attention_mask,
+                            z_loss=z_loss,
+                        )
 
                 accelerator.backward(loss)
+                should_apply_spatial_auxiliary = (
+                    objective == spatial_auxiliary_apply_on
+                    and spatial_auxiliary_sampler is not None
+                    and spatial_auxiliary_loss_weight > 0.0
+                    and (global_update_step + 1) % spatial_auxiliary_every_steps == 0
+                )
+                if should_apply_spatial_auxiliary:
+                    with accelerator.autocast():
+                        set_gpt_bert_is_causal(model, True)
+                        spatial_auxiliary_batch = spatial_auxiliary_sampler.next_batch()
+                        spatial_auxiliary_loss = compute_spatial_auxiliary_loss(
+                            model=model,
+                            tokenizer=tokenizer,
+                            examples=spatial_auxiliary_batch,
+                            temperature=spatial_auxiliary_temperature,
+                            score_reduction=spatial_auxiliary_score_reduction,
+                            device=accelerator.device,
+                        )
+                        weighted_spatial_auxiliary_loss = (
+                            spatial_auxiliary_loss_weight * spatial_auxiliary_loss
+                        )
+                    accelerator.backward(weighted_spatial_auxiliary_loss)
                 if gradient_clip_norm and accelerator.sync_gradients:
-                    accelerator.clip_grad_norm_(model.parameters(), gradient_clip_norm)
+                    clip_parameters = model.parameters()
+                    if nextlat_dynamics is not None:
+                        clip_parameters = chain(
+                            clip_parameters,
+                            nextlat_dynamics.parameters(),
+                        )
+                    accelerator.clip_grad_norm_(clip_parameters, gradient_clip_norm)
                 optimizer.step()
                 if scheduler is not None and accelerator.sync_gradients:
                     scheduler.step()
@@ -1044,11 +1345,98 @@ def train_hybrid_lm(
             loss_sum = (loss.detach() * target_tokens_float).float()
             ce_sum = (ce_loss.detach() * target_tokens_float).float()
             input_tokens = torch.tensor(float(input_ids.numel()), device=accelerator.device)
+            nextlat_loss_sum = None
+            nextlat_transition_count = None
+            nextlat_persistence_loss_sum = None
+            nextlat_persistence_transition_count = None
+            nextlat_kl_loss_sum = None
+            nextlat_kl_transition_count = None
+            nextlat_weighted_kl_loss_sum = None
+            nextlat_kl_weight_sum = None
+            nextlat_kl_weight_count = None
+            if nextlat_result is not None:
+                nextlat_transition_count = nextlat_result.transition_count.float()
+                nextlat_loss_sum = (
+                    nextlat_result.next_h_loss.detach().float()
+                    * nextlat_transition_count
+                )
+                nextlat_persistence_transition_count = (
+                    nextlat_result.persistence_transition_count.float()
+                )
+                nextlat_persistence_loss_sum = (
+                    nextlat_result.persistence_loss.detach().float()
+                    * nextlat_persistence_transition_count
+                )
+                if nextlat_config is not None and nextlat_config.lambda_kl > 0.0:
+                    nextlat_kl_transition_count = (
+                        nextlat_result.kl_transition_count.float()
+                    )
+                    nextlat_kl_loss_sum = (
+                        nextlat_result.kl_loss.detach().float()
+                        * nextlat_kl_transition_count
+                    )
+                    nextlat_weighted_kl_loss_sum = (
+                        nextlat_result.kl_weight.float()
+                        * nextlat_result.kl_loss.detach().float()
+                        * nextlat_kl_transition_count
+                    )
+                    nextlat_kl_weight_count = nextlat_transition_count
+                    nextlat_kl_weight_sum = (
+                        nextlat_result.kl_weight.float()
+                        * nextlat_kl_weight_count
+                    )
             if accelerator.num_processes > 1:
                 loss_sum = accelerator.reduce(loss_sum, reduction="sum")
                 ce_sum = accelerator.reduce(ce_sum, reduction="sum")
                 target_tokens_float = accelerator.reduce(target_tokens_float, reduction="sum")
                 input_tokens = accelerator.reduce(input_tokens, reduction="sum")
+                if nextlat_loss_sum is not None and nextlat_transition_count is not None:
+                    nextlat_loss_sum = accelerator.reduce(
+                        nextlat_loss_sum,
+                        reduction="sum",
+                    )
+                    nextlat_transition_count = accelerator.reduce(
+                        nextlat_transition_count,
+                        reduction="sum",
+                    )
+                if (
+                    nextlat_persistence_loss_sum is not None
+                    and nextlat_persistence_transition_count is not None
+                ):
+                    nextlat_persistence_loss_sum = accelerator.reduce(
+                        nextlat_persistence_loss_sum,
+                        reduction="sum",
+                    )
+                    nextlat_persistence_transition_count = accelerator.reduce(
+                        nextlat_persistence_transition_count,
+                        reduction="sum",
+                    )
+                if nextlat_kl_loss_sum is not None and nextlat_kl_transition_count is not None:
+                    nextlat_kl_loss_sum = accelerator.reduce(
+                        nextlat_kl_loss_sum,
+                        reduction="sum",
+                    )
+                    nextlat_kl_transition_count = accelerator.reduce(
+                        nextlat_kl_transition_count,
+                        reduction="sum",
+                    )
+                if (
+                    nextlat_weighted_kl_loss_sum is not None
+                    and nextlat_kl_weight_sum is not None
+                    and nextlat_kl_weight_count is not None
+                ):
+                    nextlat_weighted_kl_loss_sum = accelerator.reduce(
+                        nextlat_weighted_kl_loss_sum,
+                        reduction="sum",
+                    )
+                    nextlat_kl_weight_sum = accelerator.reduce(
+                        nextlat_kl_weight_sum,
+                        reduction="sum",
+                    )
+                    nextlat_kl_weight_count = accelerator.reduce(
+                        nextlat_kl_weight_count,
+                        reduction="sum",
+                    )
 
             if accelerator.sync_gradients:
                 global_update_step += 1
@@ -1068,6 +1456,74 @@ def train_hybrid_lm(
             window_loss_sum += loss_sum_value
             window_ce_sum += ce_sum_value
             window_tokens += target_token_value
+            if nextlat_loss_sum is not None and nextlat_transition_count is not None:
+                nextlat_loss_sum_value = nextlat_loss_sum.item()
+                nextlat_transition_count_value = nextlat_transition_count.item()
+                epoch_nextlat_loss_sum += nextlat_loss_sum_value
+                epoch_nextlat_transition_count += nextlat_transition_count_value
+                window_nextlat_loss_sum += nextlat_loss_sum_value
+                window_nextlat_transition_count += nextlat_transition_count_value
+            if (
+                nextlat_persistence_loss_sum is not None
+                and nextlat_persistence_transition_count is not None
+            ):
+                nextlat_persistence_loss_sum_value = (
+                    nextlat_persistence_loss_sum.item()
+                )
+                nextlat_persistence_transition_count_value = (
+                    nextlat_persistence_transition_count.item()
+                )
+                epoch_nextlat_persistence_loss_sum += (
+                    nextlat_persistence_loss_sum_value
+                )
+                epoch_nextlat_persistence_transition_count += (
+                    nextlat_persistence_transition_count_value
+                )
+                window_nextlat_persistence_loss_sum += (
+                    nextlat_persistence_loss_sum_value
+                )
+                window_nextlat_persistence_transition_count += (
+                    nextlat_persistence_transition_count_value
+                )
+            if (
+                nextlat_kl_loss_sum is not None
+                and nextlat_kl_transition_count is not None
+            ):
+                nextlat_kl_loss_sum_value = nextlat_kl_loss_sum.item()
+                nextlat_kl_transition_count_value = nextlat_kl_transition_count.item()
+                epoch_nextlat_kl_loss_sum += nextlat_kl_loss_sum_value
+                epoch_nextlat_kl_transition_count += nextlat_kl_transition_count_value
+                window_nextlat_kl_loss_sum += nextlat_kl_loss_sum_value
+                window_nextlat_kl_transition_count += nextlat_kl_transition_count_value
+            if (
+                nextlat_weighted_kl_loss_sum is not None
+                and nextlat_kl_weight_sum is not None
+                and nextlat_kl_weight_count is not None
+            ):
+                nextlat_weighted_kl_loss_sum_value = (
+                    nextlat_weighted_kl_loss_sum.item()
+                )
+                nextlat_kl_weight_sum_value = nextlat_kl_weight_sum.item()
+                nextlat_kl_weight_count_value = nextlat_kl_weight_count.item()
+                epoch_nextlat_weighted_kl_loss_sum += (
+                    nextlat_weighted_kl_loss_sum_value
+                )
+                window_nextlat_weighted_kl_loss_sum += (
+                    nextlat_weighted_kl_loss_sum_value
+                )
+                epoch_nextlat_kl_weight_sum += nextlat_kl_weight_sum_value
+                window_nextlat_kl_weight_sum += nextlat_kl_weight_sum_value
+                epoch_nextlat_kl_weight_count += nextlat_kl_weight_count_value
+                window_nextlat_kl_weight_count += nextlat_kl_weight_count_value
+            if spatial_auxiliary_loss is not None:
+                spatial_auxiliary_loss_value = spatial_auxiliary_loss.detach().float()
+                if accelerator.num_processes > 1:
+                    spatial_auxiliary_loss_value = accelerator.reduce(
+                        spatial_auxiliary_loss_value,
+                        reduction="mean",
+                    )
+                window_spatial_auxiliary_loss_sum += spatial_auxiliary_loss_value.item()
+                window_spatial_auxiliary_batches += 1
             if objective == "masked":
                 epoch_mntp_loss_sum += loss_sum_value
                 epoch_mntp_ce_sum += ce_sum_value
@@ -1125,6 +1581,64 @@ def train_hybrid_lm(
                     ce_sum=window_mntp_ce_sum,
                     tokens=window_mntp_tokens,
                 )
+                if window_nextlat_transition_count:
+                    nextlat_window_loss = (
+                        window_nextlat_loss_sum / window_nextlat_transition_count
+                    )
+                    nextlat_weight = (
+                        nextlat_config.lambda_next_h
+                        if nextlat_config is not None
+                        else 0.0
+                    )
+                    record["nextlat_next_h_loss"] = nextlat_window_loss
+                    record["nextlat_weighted_next_h_loss"] = (
+                        nextlat_weight * nextlat_window_loss
+                    )
+                    record["nextlat_transition_count"] = int(
+                        window_nextlat_transition_count
+                    )
+                if window_nextlat_persistence_transition_count:
+                    nextlat_persistence_window_loss = (
+                        window_nextlat_persistence_loss_sum
+                        / window_nextlat_persistence_transition_count
+                    )
+                    record["nextlat_persistence_loss"] = (
+                        nextlat_persistence_window_loss
+                    )
+                    if "nextlat_next_h_loss" in record:
+                        record["nextlat_improvement_over_persistence"] = (
+                            nextlat_persistence_window_loss
+                            - record["nextlat_next_h_loss"]
+                        )
+                if window_nextlat_kl_weight_count:
+                    record["nextlat_kl_weight"] = (
+                        window_nextlat_kl_weight_sum
+                        / window_nextlat_kl_weight_count
+                    )
+                if window_nextlat_kl_transition_count:
+                    nextlat_window_kl_loss = (
+                        window_nextlat_kl_loss_sum
+                        / window_nextlat_kl_transition_count
+                    )
+                    record["nextlat_kl_loss"] = nextlat_window_kl_loss
+                    record["nextlat_weighted_kl_loss"] = (
+                        window_nextlat_weighted_kl_loss_sum
+                        / window_nextlat_kl_transition_count
+                    )
+                    record["nextlat_kl_transition_count"] = int(
+                        window_nextlat_kl_transition_count
+                    )
+                if window_spatial_auxiliary_batches:
+                    spatial_auxiliary_window_loss = (
+                        window_spatial_auxiliary_loss_sum
+                        / window_spatial_auxiliary_batches
+                    )
+                    record["spatial_auxiliary_loss"] = spatial_auxiliary_window_loss
+                    record["spatial_auxiliary_weighted_loss"] = (
+                        spatial_auxiliary_loss_weight * spatial_auxiliary_window_loss
+                    )
+                    record["spatial_auxiliary_loss_weight"] = spatial_auxiliary_loss_weight
+                    record["spatial_auxiliary_batches"] = window_spatial_auxiliary_batches
                 if current_words_seen is not None:
                     record["words_seen"] = current_words_seen
                 history.append(record)
@@ -1133,6 +1647,25 @@ def train_hybrid_lm(
                     objective_pieces.append(f"causal_loss={record['train_causal_loss']:.4f}")
                 if "train_mntp_loss" in record:
                     objective_pieces.append(f"mntp_loss={record['train_mntp_loss']:.4f}")
+                if window_nextlat_transition_count:
+                    objective_pieces.append(
+                        "nextlat_next_h_loss="
+                        f"{record['nextlat_next_h_loss']:.4f}"
+                    )
+                    if "nextlat_kl_weight" in record:
+                        objective_pieces.append(
+                            "nextlat_kl_weight="
+                            f"{record['nextlat_kl_weight']:.4f}"
+                        )
+                    if "nextlat_kl_loss" in record:
+                        objective_pieces.append(
+                            "nextlat_kl_loss="
+                            f"{record['nextlat_kl_loss']:.4f}"
+                        )
+                if window_spatial_auxiliary_batches:
+                    objective_pieces.append(
+                        f"spatial_aux_loss={record['spatial_auxiliary_loss']:.4f}"
+                    )
                 print(
                     f"[step {global_update_step:06d}] "
                     f"train_loss={record['loss']:.4f} "
@@ -1154,6 +1687,17 @@ def train_hybrid_lm(
                 window_mntp_tokens = 0.0
                 window_causal_microsteps = 0
                 window_masked_microsteps = 0
+                window_nextlat_loss_sum = 0.0
+                window_nextlat_transition_count = 0.0
+                window_nextlat_persistence_loss_sum = 0.0
+                window_nextlat_persistence_transition_count = 0.0
+                window_nextlat_kl_loss_sum = 0.0
+                window_nextlat_kl_transition_count = 0.0
+                window_nextlat_weighted_kl_loss_sum = 0.0
+                window_nextlat_kl_weight_sum = 0.0
+                window_nextlat_kl_weight_count = 0.0
+                window_spatial_auxiliary_loss_sum = 0.0
+                window_spatial_auxiliary_batches = 0
 
             should_eval = (
                 val_loader is not None
@@ -1285,6 +1829,19 @@ def train_hybrid_lm(
                         words_seen=current_words_seen or 0.0,
                     )
 
+            should_spatial_auxiliary_eval = (
+                spatial_auxiliary_eval_items is not None
+                and spatial_auxiliary_eval_every_steps > 0
+                and accelerator.sync_gradients
+                and global_update_step % int(spatial_auxiliary_eval_every_steps) == 0
+            )
+            if should_spatial_auxiliary_eval:
+                run_spatial_auxiliary_eval(
+                    epoch=epoch,
+                    step=global_update_step,
+                    tokens_seen=cumulative_tokens_seen,
+                )
+
         epoch_record = {
             "type": "epoch",
             "epoch": epoch,
@@ -1308,16 +1865,68 @@ def train_hybrid_lm(
             ce_sum=epoch_mntp_ce_sum,
             tokens=epoch_mntp_tokens,
         )
+        if epoch_nextlat_transition_count:
+            epoch_nextlat_loss = (
+                epoch_nextlat_loss_sum / epoch_nextlat_transition_count
+            )
+            nextlat_weight = (
+                nextlat_config.lambda_next_h
+                if nextlat_config is not None
+                else 0.0
+            )
+            epoch_record["nextlat_next_h_loss"] = epoch_nextlat_loss
+            epoch_record["nextlat_weighted_next_h_loss"] = (
+                nextlat_weight * epoch_nextlat_loss
+            )
+            epoch_record["nextlat_transition_count"] = int(
+                epoch_nextlat_transition_count
+            )
+        if epoch_nextlat_persistence_transition_count:
+            epoch_nextlat_persistence_loss = (
+                epoch_nextlat_persistence_loss_sum
+                / epoch_nextlat_persistence_transition_count
+            )
+            epoch_record["nextlat_persistence_loss"] = epoch_nextlat_persistence_loss
+            if "nextlat_next_h_loss" in epoch_record:
+                epoch_record["nextlat_improvement_over_persistence"] = (
+                    epoch_nextlat_persistence_loss
+                    - epoch_record["nextlat_next_h_loss"]
+                )
+        if epoch_nextlat_kl_weight_count:
+            epoch_record["nextlat_kl_weight"] = (
+                epoch_nextlat_kl_weight_sum / epoch_nextlat_kl_weight_count
+            )
+        if epoch_nextlat_kl_transition_count:
+            epoch_nextlat_kl_loss = (
+                epoch_nextlat_kl_loss_sum / epoch_nextlat_kl_transition_count
+            )
+            epoch_record["nextlat_kl_loss"] = epoch_nextlat_kl_loss
+            epoch_record["nextlat_weighted_kl_loss"] = (
+                epoch_nextlat_weighted_kl_loss_sum
+                / epoch_nextlat_kl_transition_count
+            )
+            epoch_record["nextlat_kl_transition_count"] = int(
+                epoch_nextlat_kl_transition_count
+            )
         if words_per_token is not None:
             epoch_record["words_seen"] = cumulative_tokens_seen * words_per_token
         if accelerator.is_main_process:
             history.append(epoch_record)
-            print(
+            epoch_message = (
                 f"Hybrid epoch {epoch} "
                 f"train_loss={epoch_record['train_loss']:.4f} "
-                f"train_ce_loss={epoch_record['train_ce_loss']:.4f}",
-                flush=True,
+                f"train_ce_loss={epoch_record['train_ce_loss']:.4f}"
             )
+            if "nextlat_next_h_loss" in epoch_record:
+                epoch_message += (
+                    " nextlat_next_h_loss="
+                    f"{epoch_record['nextlat_next_h_loss']:.4f}"
+                )
+            if "nextlat_kl_loss" in epoch_record:
+                epoch_message += (
+                    f" nextlat_kl_loss={epoch_record['nextlat_kl_loss']:.4f}"
+                )
+            print(epoch_message, flush=True)
             save_json_atomic(history, metrics_path)
 
         if save_every_epochs and epoch % int(save_every_epochs) == 0:
@@ -1347,7 +1956,9 @@ def train_hybrid_lm(
 __all__ = [
     "build_special_mask",
     "add_objective_loss_metrics",
+    "benchmark_group_scopes",
     "compute_gpt_bert_loss",
+    "compute_gpt_bert_loss_from_logits",
     "evaluate_mntp_likelihood_benchmark",
     "evaluate_hybrid_lm_loss",
     "has_training_loss_plot_rows",

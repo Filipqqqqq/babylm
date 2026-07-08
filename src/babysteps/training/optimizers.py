@@ -91,8 +91,31 @@ def _optimizer_settings(training_config: dict[str, Any]) -> tuple[str, dict[str,
     return name, settings
 
 
-def _trainable_named_parameters(model: torch.nn.Module) -> dict[str, torch.nn.Parameter]:
-    return {name: param for name, param in model.named_parameters() if param.requires_grad}
+def _trainable_named_parameters(
+    model: torch.nn.Module,
+    extra_modules: tuple[torch.nn.Module, ...] = (),
+) -> dict[str, torch.nn.Parameter]:
+    params = {
+        name: param
+        for name, param in model.named_parameters()
+        if param.requires_grad
+    }
+    for module_idx, module in enumerate(extra_modules):
+        for name, param in module.named_parameters():
+            if param.requires_grad:
+                params[f"extra_{module_idx}.{name}"] = param
+    return params
+
+
+def _trainable_extra_parameters(
+    extra_modules: tuple[torch.nn.Module, ...] = (),
+) -> list[torch.nn.Parameter]:
+    return [
+        param
+        for module in extra_modules
+        for param in module.parameters()
+        if param.requires_grad
+    ]
 
 
 def build_adamw_optimizer(
@@ -104,10 +127,11 @@ def build_adamw_optimizer(
     eps: float,
     device: torch.device | None = None,
     use_fused_adamw: bool = False,
+    extra_modules: tuple[torch.nn.Module, ...] = (),
 ) -> tuple[AdamW, OptimizerBuildInfo]:
     """Build the AdamW baseline with decay/no-decay parameter groups."""
 
-    param_dict = _trainable_named_parameters(model)
+    param_dict = _trainable_named_parameters(model, extra_modules)
     decay_params = [param for param in param_dict.values() if param.dim() >= 2]
     nodecay_params = [param for param in param_dict.values() if param.dim() < 2]
 
@@ -163,10 +187,11 @@ def build_lamb_optimizer(
     weight_decay: float,
     betas: tuple[float, float],
     eps: float,
+    extra_modules: tuple[torch.nn.Module, ...] = (),
 ) -> tuple[Lamb, OptimizerBuildInfo]:
     """Build LAMB with decayed matrix/tensor params and no-decay vectors."""
 
-    param_dict = _trainable_named_parameters(model)
+    param_dict = _trainable_named_parameters(model, extra_modules)
     decay_params = [param for param in param_dict.values() if param.dim() >= 2]
     nodecay_params = [param for param in param_dict.values() if param.dim() < 2]
 
@@ -219,6 +244,7 @@ def build_muon_pe_optimizer(
     muon_nesterov: bool,
     muon_split_qkv: bool,
     muon_batch_updates: bool,
+    extra_modules: tuple[torch.nn.Module, ...] = (),
 ) -> tuple[MuonWithAuxAdamPE, OptimizerBuildInfo]:
     """Build Muon for hidden matrices plus auxiliary AdamW groups."""
 
@@ -235,6 +261,33 @@ def build_muon_pe_optimizer(
         muon_nesterov=bool(muon_nesterov),
         split_qkv=bool(muon_split_qkv),
     )
+    extra_params = _trainable_extra_parameters(extra_modules)
+    extra_decay_params = [param for param in extra_params if param.dim() >= 2]
+    extra_nodecay_params = [param for param in extra_params if param.dim() < 2]
+    if extra_decay_params:
+        groups.param_groups.append(
+            {
+                "params": extra_decay_params,
+                "use_muon": False,
+                "lr": float(learning_rate),
+                "base_lr": float(learning_rate),
+                "betas": betas,
+                "eps": float(eps),
+                "weight_decay": float(weight_decay),
+            }
+        )
+    if extra_nodecay_params:
+        groups.param_groups.append(
+            {
+                "params": extra_nodecay_params,
+                "use_muon": False,
+                "lr": float(learning_rate),
+                "base_lr": float(learning_rate),
+                "betas": betas,
+                "eps": float(eps),
+                "weight_decay": 0.0,
+            }
+        )
     optimizer = MuonWithAuxAdamPE(
         groups.param_groups,
         qkv_split_dims=groups.qkv_split_dims,
@@ -243,7 +296,7 @@ def build_muon_pe_optimizer(
     info = OptimizerBuildInfo(
         name="muon_pe",
         primary_tensors=groups.muon_tensors,
-        auxiliary_tensors=groups.aux_tensors,
+        auxiliary_tensors=groups.aux_tensors + len(extra_params),
         qkv_split_tensors=groups.qkv_split_tensors,
         use_fused=False,
     )
@@ -255,6 +308,7 @@ def build_optimizer(
     training_config: dict[str, Any],
     *,
     device: torch.device | None = None,
+    extra_modules: tuple[torch.nn.Module, ...] = (),
 ) -> tuple[torch.optim.Optimizer, OptimizerBuildInfo]:
     """Build the optimizer selected by a training config."""
 
@@ -273,6 +327,7 @@ def build_optimizer(
             eps=eps,
             device=device,
             use_fused_adamw=bool(settings.get("use_fused_adamw", False)),
+            extra_modules=extra_modules,
         )
 
     if optimizer_name == "lamb":
@@ -282,6 +337,7 @@ def build_optimizer(
             weight_decay=weight_decay,
             betas=betas,
             eps=eps,
+            extra_modules=extra_modules,
         )
 
     if optimizer_name == "muon_pe":
@@ -299,6 +355,7 @@ def build_optimizer(
             muon_nesterov=bool(settings.get("muon_nesterov", True)),
             muon_split_qkv=bool(settings.get("muon_split_qkv", True)),
             muon_batch_updates=bool(settings.get("muon_batch_updates", True)),
+            extra_modules=extra_modules,
         )
 
     raise ValueError(

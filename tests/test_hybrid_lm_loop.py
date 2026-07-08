@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 import torch
 from accelerate import Accelerator
 from torch import nn
@@ -22,7 +23,9 @@ from babysteps.training.hybrid_lm_loop import (
     set_gpt_bert_is_causal,
     train_hybrid_lm,
 )
+from babysteps.training.nextlat import LatentDynamicsMLP, NextLatConfig
 from babysteps.training.optimizers import build_optimizer
+from babysteps.training.spatial_auxiliary import ContextRankExample, SpatialAuxiliarySampler
 
 
 class _Tokenizer:
@@ -33,9 +36,23 @@ class _Tokenizer:
     bos_token_id = None
     eos_token_id = None
     mask_token_id = 9
+    vocab = {
+        "<pad>": 0,
+        "<cls>": 1,
+        "<sep>": 2,
+        "c1": 4,
+        "c2": 5,
+        "t1": 6,
+        "t2": 7,
+        "<mask>": 9,
+    }
 
     def __len__(self) -> int:
         return 16
+
+    def encode(self, text: str, *, add_special_tokens: bool = False) -> list[int]:
+        assert add_special_tokens is False
+        return [self.vocab[token] for token in text.split()]
 
     def save_pretrained(self, path: str | Path) -> None:
         path = Path(path)
@@ -53,11 +70,33 @@ class _TinyGptBert(nn.Module):
         self.model = SimpleNamespace(is_causal=True)
         self.embedding = nn.Embedding(vocab_size, 8)
         self.lm_head = nn.Linear(8, vocab_size)
+        self.forward_calls: list[dict[str, bool]] = []
 
-    def forward(self, *, input_ids, attention_mask, return_dict=True):
+    def get_input_embeddings(self):
+        return self.embedding
+
+    def get_output_embeddings(self):
+        return self.lm_head
+
+    def forward(
+        self,
+        *,
+        input_ids,
+        attention_mask,
+        return_dict=True,
+        output_hidden_states=False,
+    ):
         del attention_mask, return_dict
-        logits = self.lm_head(self.embedding(input_ids))
-        return SimpleNamespace(logits=logits)
+        self.forward_calls.append(
+            {
+                "is_causal": bool(self.model.is_causal),
+                "output_hidden_states": bool(output_hidden_states),
+            }
+        )
+        hidden = self.embedding(input_ids)
+        logits = self.lm_head(hidden)
+        hidden_states = (hidden,) if output_hidden_states else None
+        return SimpleNamespace(logits=logits, hidden_states=hidden_states)
 
 
 class _BatchDataset(Dataset):
@@ -121,6 +160,47 @@ def test_objective_schedule_config_replaces_causal_per_masked() -> None:
         assert "At least one" in str(exc)
     else:
         raise AssertionError("Expected an empty objective schedule to be rejected.")
+
+
+def test_mntp_likelihood_plots_use_supplement_uid_group_scope(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    blimp_calls = []
+    overall_calls = []
+
+    def fake_plot_blimp_likelihood_summary(**kwargs):
+        blimp_calls.append(kwargs)
+
+    def fake_plot_blimp_overall_accuracy(**kwargs):
+        overall_calls.append(kwargs)
+
+    monkeypatch.setattr(
+        hybrid_lm_loop,
+        "plot_blimp_likelihood_summary",
+        fake_plot_blimp_likelihood_summary,
+    )
+    monkeypatch.setattr(
+        hybrid_lm_loop,
+        "plot_blimp_overall_accuracy",
+        fake_plot_blimp_overall_accuracy,
+    )
+
+    hybrid_lm_loop.plot_mntp_likelihood_summaries(
+        summary_paths={
+            "blimp": tmp_path / "blimp.csv",
+            "blimp_supplement": tmp_path / "supplement.csv",
+        },
+        output_dir=tmp_path,
+        run_name="toy_run",
+        score_reduction="sum",
+        x_axis="words_seen",
+    )
+
+    calls_by_label = {call["benchmark_label"]: call for call in blimp_calls}
+    assert calls_by_label["BLiMP"]["group_scopes"] == ("field", "linguistics_term")
+    assert calls_by_label["BLiMP Supplement"]["group_scopes"] == ("uid",)
+    assert len(overall_calls) == 1
 
 
 def test_make_causal_batch_shifts_labels() -> None:
@@ -252,6 +332,343 @@ def test_train_hybrid_lm_smoke_logs_validation_and_saves(tmp_path: Path) -> None
     assert (tmp_path / "checkpoint-epoch-0001" / "pytorch_model.bin").exists()
     assert (tmp_path / "checkpoint-epoch-0001" / "modeling_gpt_bert.py").exists()
     assert (tmp_path / "final" / "pytorch_model.bin").exists()
+
+
+def test_train_hybrid_lm_trains_nextlat_only_on_causal_steps(
+    tmp_path: Path,
+) -> None:
+    tokenizer = _Tokenizer()
+    model = _TinyGptBert()
+    nextlat_dynamics = LatentDynamicsMLP(
+        hidden_size=8,
+        token_embedding_size=8,
+        mlp_hidden_dim=16,
+        mlp_layers=2,
+    )
+    optimizer, _info = build_optimizer(
+        model,
+        {
+            "optimizer": "lamb",
+            "learning_rate": 1e-3,
+            "betas": [0.9, 0.98],
+            "eps": 1e-8,
+            "weight_decay": 0.0,
+        },
+        extra_modules=(nextlat_dynamics,),
+    )
+    batches = [
+        _batch(torch.tensor([[1, 4, 5, 2], [1, 6, 7, 2]])),
+        _batch(torch.tensor([[1, 5, 4, 2], [1, 7, 6, 2]])),
+        _batch(torch.tensor([[1, 4, 6, 2], [1, 5, 7, 2]])),
+        _batch(torch.tensor([[1, 6, 4, 2], [1, 7, 5, 2]])),
+    ]
+    train_loader = DataLoader(_BatchDataset(batches), batch_size=None)
+    accelerator = Accelerator(cpu=True)
+    base_model = model
+    (
+        model,
+        nextlat_dynamics,
+        optimizer,
+        train_loader,
+    ) = accelerator.prepare(
+        model,
+        nextlat_dynamics,
+        optimizer,
+        train_loader,
+    )
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    for filename in ("configuration_gpt_bert.py", "modeling_gpt_bert.py", "config.json"):
+        (repo_dir / filename).write_text("{}", encoding="utf-8")
+
+    history = train_hybrid_lm(
+        model=model,
+        tokenizer=tokenizer,
+        train_loader=train_loader,
+        val_loader=None,
+        optimizer=optimizer,
+        scheduler=None,
+        accelerator=accelerator,
+        output_dir=tmp_path,
+        epochs=1,
+        total_update_steps=4,
+        hybrid_config={
+            "causal_steps": 1,
+            "masked_steps": 1,
+            "mask_start": 1.0,
+            "mask_end": 1.0,
+            "random_ratio": 0.0,
+            "keep_ratio": 0.0,
+            "z_loss": 0.0,
+        },
+        model_repo=str(repo_dir),
+        benchmark_eval_at_start=False,
+        nextlat_dynamics=nextlat_dynamics,
+        nextlat_config=NextLatConfig(
+            enabled=True,
+            horizon=1,
+            lambda_next_h=0.1,
+            lambda_kl=0.0,
+            mlp_hidden_dim=16,
+            mlp_layers=2,
+        ),
+        nextlat_bos_token_id=tokenizer.cls_token_id,
+        nextlat_eos_token_id=tokenizer.sep_token_id,
+        nextlat_apply_on="causal",
+        log_every_steps=1,
+        eval_every_steps=0,
+        save_every_epochs=0,
+        save_final=True,
+    )
+
+    train_records = [record for record in history if record["type"] == "train"]
+    assert any("nextlat_next_h_loss" in record for record in train_records)
+    assert any("nextlat_persistence_loss" in record for record in train_records)
+    hidden_state_calls = [
+        call for call in base_model.forward_calls if call["output_hidden_states"]
+    ]
+    assert hidden_state_calls
+    assert all(call["is_causal"] is True for call in hidden_state_calls)
+    assert (tmp_path / "final" / "pytorch_model.bin").exists()
+
+
+def test_train_hybrid_lm_rejects_non_causal_nextlat_apply_on(tmp_path: Path) -> None:
+    tokenizer = _Tokenizer()
+    model = _TinyGptBert()
+    optimizer, _info = build_optimizer(
+        model,
+        {
+            "optimizer": "lamb",
+            "learning_rate": 1e-3,
+            "betas": [0.9, 0.98],
+            "eps": 1e-8,
+            "weight_decay": 0.0,
+        },
+    )
+    train_loader = DataLoader(
+        _BatchDataset([_batch(torch.tensor([[1, 4, 5, 2]]))]),
+        batch_size=None,
+    )
+    accelerator = Accelerator(cpu=True)
+    model, optimizer, train_loader = accelerator.prepare(model, optimizer, train_loader)
+
+    with pytest.raises(ValueError, match="nextlat_apply_on"):
+        train_hybrid_lm(
+            model=model,
+            tokenizer=tokenizer,
+            train_loader=train_loader,
+            val_loader=None,
+            optimizer=optimizer,
+            scheduler=None,
+            accelerator=accelerator,
+            output_dir=tmp_path,
+            epochs=1,
+            total_update_steps=1,
+            hybrid_config={
+                "causal_steps": 1,
+                "masked_steps": 0,
+                "mask_start": 1.0,
+                "mask_end": 1.0,
+                "random_ratio": 0.0,
+                "keep_ratio": 0.0,
+                "z_loss": 0.0,
+            },
+            benchmark_eval_at_start=False,
+            nextlat_apply_on="masked",
+            log_every_steps=1,
+            eval_every_steps=0,
+            save_every_epochs=0,
+            save_final=False,
+        )
+
+
+def test_train_hybrid_lm_applies_spatial_auxiliary_only_on_causal_steps(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls = []
+
+    def fake_compute_spatial_auxiliary_loss(**kwargs):
+        calls.append(
+            {
+                "is_causal": kwargs["model"].model.is_causal,
+                "examples": kwargs["examples"],
+                "temperature": kwargs["temperature"],
+                "score_reduction": kwargs["score_reduction"],
+            }
+        )
+        assert kwargs["model"].model.is_causal is True
+        param = next(kwargs["model"].parameters())
+        return param.sum() * 0.0 + torch.tensor(0.25, device=param.device)
+
+    monkeypatch.setattr(
+        hybrid_lm_loop,
+        "compute_spatial_auxiliary_loss",
+        fake_compute_spatial_auxiliary_loss,
+    )
+
+    tokenizer = _Tokenizer()
+    model = _TinyGptBert()
+    optimizer, _info = build_optimizer(
+        model,
+        {
+            "optimizer": "lamb",
+            "learning_rate": 1e-3,
+            "betas": [0.9, 0.98],
+            "eps": 1e-8,
+            "weight_decay": 0.0,
+        },
+    )
+    batches = [
+        _batch(torch.tensor([[1, 4, 6, 2], [1, 5, 7, 2]])),
+        _batch(torch.tensor([[1, 4, 6, 2], [1, 5, 7, 2]])),
+        _batch(torch.tensor([[1, 4, 6, 2], [1, 5, 7, 2]])),
+        _batch(torch.tensor([[1, 4, 6, 2], [1, 5, 7, 2]])),
+    ]
+    train_loader = DataLoader(_BatchDataset(batches), batch_size=None)
+    accelerator = Accelerator(cpu=True)
+    model, optimizer, train_loader = accelerator.prepare(model, optimizer, train_loader)
+    examples = [ContextRankExample("1", "c1", "c2", "t1", "t2")]
+    sampler = SpatialAuxiliarySampler(examples, batch_size=1, seed=0)
+
+    history = train_hybrid_lm(
+        model=model,
+        tokenizer=tokenizer,
+        train_loader=train_loader,
+        val_loader=None,
+        optimizer=optimizer,
+        scheduler=None,
+        accelerator=accelerator,
+        output_dir=tmp_path,
+        epochs=1,
+        total_update_steps=4,
+        hybrid_config={
+            "causal_steps": 1,
+            "masked_steps": 1,
+            "mask_start": 1.0,
+            "mask_end": 1.0,
+            "random_ratio": 0.0,
+            "keep_ratio": 0.0,
+            "z_loss": 0.0,
+        },
+        benchmark_eval_at_start=False,
+        spatial_auxiliary_sampler=sampler,
+        spatial_auxiliary_loss_weight=0.005,
+        spatial_auxiliary_temperature=1.0,
+        spatial_auxiliary_score_reduction="mean",
+        spatial_auxiliary_every_steps=1,
+        spatial_auxiliary_apply_on="causal",
+        log_every_steps=1,
+        eval_every_steps=0,
+        save_every_epochs=0,
+        save_final=False,
+    )
+
+    assert len(calls) == 2
+    assert all(call["is_causal"] is True for call in calls)
+    assert all(call["temperature"] == 1.0 for call in calls)
+    train_records = [record for record in history if record["type"] == "train"]
+    aux_steps = [
+        record["step"]
+        for record in train_records
+        if "spatial_auxiliary_loss" in record
+    ]
+    assert aux_steps == [1, 3]
+    assert all(
+        record["spatial_auxiliary_loss_weight"] == 0.005
+        for record in train_records
+        if "spatial_auxiliary_loss" in record
+    )
+
+
+def test_train_hybrid_lm_logs_spatial_auxiliary_eval(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    eval_calls = []
+
+    def fake_evaluate_spatial_auxiliary(**kwargs):
+        eval_calls.append(kwargs["model"].model.is_causal)
+        assert kwargs["model"].model.is_causal is True
+        return {
+            "objective": "context_rank",
+            "items": len(kwargs["examples"]),
+            "comparisons": 2 * len(kwargs["examples"]),
+            "correct": 2 * len(kwargs["examples"]),
+            "score": 1.0,
+            "loss": 0.1,
+            "mean_margin": 0.5,
+            "k1_correct": len(kwargs["examples"]),
+            "k2_correct": len(kwargs["examples"]),
+            "k1_score": 1.0,
+            "k2_score": 1.0,
+            "mean_k1_margin": 0.5,
+            "mean_k2_margin": 0.5,
+        }
+
+    monkeypatch.setattr(
+        hybrid_lm_loop,
+        "evaluate_spatial_auxiliary",
+        fake_evaluate_spatial_auxiliary,
+    )
+
+    tokenizer = _Tokenizer()
+    model = _TinyGptBert()
+    optimizer, _info = build_optimizer(
+        model,
+        {
+            "optimizer": "lamb",
+            "learning_rate": 1e-3,
+            "betas": [0.9, 0.98],
+            "eps": 1e-8,
+            "weight_decay": 0.0,
+        },
+    )
+    batches = [
+        _batch(torch.tensor([[1, 4, 6, 2], [1, 5, 7, 2]])),
+        _batch(torch.tensor([[1, 4, 6, 2], [1, 5, 7, 2]])),
+    ]
+    train_loader = DataLoader(_BatchDataset(batches), batch_size=None)
+    accelerator = Accelerator(cpu=True)
+    model, optimizer, train_loader = accelerator.prepare(model, optimizer, train_loader)
+    examples = [ContextRankExample("1", "c1", "c2", "t1", "t2")]
+
+    history = train_hybrid_lm(
+        model=model,
+        tokenizer=tokenizer,
+        train_loader=train_loader,
+        val_loader=None,
+        optimizer=optimizer,
+        scheduler=None,
+        accelerator=accelerator,
+        output_dir=tmp_path,
+        epochs=1,
+        total_update_steps=2,
+        hybrid_config={
+            "causal_steps": 1,
+            "masked_steps": 1,
+            "mask_start": 1.0,
+            "mask_end": 1.0,
+            "random_ratio": 0.0,
+            "keep_ratio": 0.0,
+            "z_loss": 0.0,
+        },
+        benchmark_eval_at_start=False,
+        spatial_auxiliary_eval_items=examples,
+        spatial_auxiliary_eval_every_steps=1,
+        spatial_auxiliary_eval_batch_size=1,
+        spatial_auxiliary_eval_at_start=True,
+        log_every_steps=1,
+        eval_every_steps=0,
+        save_every_epochs=0,
+        save_final=False,
+    )
+
+    records = [record for record in history if record["type"] == "spatial_auxiliary_eval"]
+    assert eval_calls == [True, True, True]
+    assert [record["step"] for record in records] == [0, 1, 2]
+    assert all(record["scoring_backend"] == "causal" for record in records)
+    assert all(record["score"] == 1.0 for record in records)
 
 
 def test_disabled_benchmarks_do_not_require_words_per_token(tmp_path: Path) -> None:
@@ -478,9 +895,11 @@ def test_train_hybrid_lm_runs_mntp_benchmarks_on_word_interval(
 def test_train_hybrid_lm_runs_both_ewok_backends_on_word_interval(
     tmp_path: Path,
     monkeypatch,
+    capsys,
 ) -> None:
     calls = []
     plot_calls = []
+    full_spatial_plot_calls = []
 
     def make_result(score_reduction: str) -> EwokContextResult:
         return EwokContextResult(
@@ -503,6 +922,18 @@ def test_train_hybrid_lm_runs_both_ewok_backends_on_word_interval(
                     "correct_comparisons": 2,
                     "score": 1.0,
                     "mean_k_margin": 1.0,
+                    "target_token_count_mismatches": 0,
+                    "sum_mean_sign_disagreements": 0,
+                },
+                {
+                    "group_scope": "domain",
+                    "group_name": "spatial-relations",
+                    "score_reduction": score_reduction,
+                    "items": 1,
+                    "comparisons": 2,
+                    "correct_comparisons": 1,
+                    "score": 0.5,
+                    "mean_k_margin": 0.25,
                     "target_token_count_mismatches": 0,
                     "sum_mean_sign_disagreements": 0,
                 }
@@ -529,6 +960,12 @@ def test_train_hybrid_lm_runs_both_ewok_backends_on_word_interval(
         assert kwargs["output_path"].parent.name in {"ewok_full", "ewok_mntp"}
         assert kwargs["x_axis"] == "words_seen"
 
+    def fake_plot_full_vs_spatial_summary(**kwargs):
+        full_spatial_plot_calls.append(kwargs)
+        assert kwargs["summary_csv"].exists()
+        assert kwargs["output_path"].name == "full_vs_spatial_over_steps.png"
+        assert kwargs["x_axis"] == "words_seen"
+
     monkeypatch.setattr(
         hybrid_lm_loop.ewok_context_sensitivity,
         "evaluate_ewok_context_sensitivity",
@@ -543,6 +980,11 @@ def test_train_hybrid_lm_runs_both_ewok_backends_on_word_interval(
         hybrid_lm_loop,
         "plot_ewok_context_summary",
         fake_plot_ewok_context_summary,
+    )
+    monkeypatch.setattr(
+        hybrid_lm_loop,
+        "plot_full_vs_spatial_summary",
+        fake_plot_full_vs_spatial_summary,
     )
 
     tokenizer = _Tokenizer()
@@ -620,8 +1062,20 @@ def test_train_hybrid_lm_runs_both_ewok_backends_on_word_interval(
     ]
     assert calls == [("causal", "sum", True), ("mntp", "sum", False)]
     assert len(plot_calls) == 2
+    assert len(full_spatial_plot_calls) == 1
     assert len(records) == 2
     assert {record["scoring_backend"] for record in records} == {"causal", "mntp"}
+    causal_record = next(record for record in records if record["scoring_backend"] == "causal")
+    mntp_record = next(record for record in records if record["scoring_backend"] == "mntp")
+    assert causal_record["ewok_context_sensitivity_full_score"] == 1.0
+    assert causal_record["ewok_spatial_relations_score"] == 0.5
+    assert causal_record["ewok_spatial_relations_mean_k_margin"] == 0.25
+    assert causal_record["ewok_spatial_relations_items"] == 1
+    assert "ewok_context_sensitivity_full_score" not in mntp_record
+    assert "ewok_spatial_relations_score" not in mntp_record
+    output = capsys.readouterr().out
+    assert "ewok_context_sensitivity_full_score=1.0000" in output
+    assert "ewok_spatial_relations_score=0.5000" in output
     assert all(record["words_seen"] == 16.0 for record in records)
     assert (tmp_path / "benchmarks" / "ewok_full" / "context_summary.csv").exists()
     assert (tmp_path / "benchmarks" / "ewok_full" / "context_items.jsonl").exists()

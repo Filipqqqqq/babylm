@@ -10,6 +10,7 @@ from babysteps.optim import (
     build_muon_pe_param_groups,
     polar_express_orthogonalize,
 )
+from babysteps.training.nextlat import LatentDynamicsMLP
 from babysteps.training.optimizers import Lamb, build_optimizer
 
 
@@ -260,6 +261,69 @@ def test_build_optimizer_accepts_muon_config() -> None:
     assert info.auxiliary_tensors > 0
     assert optimizer.param_groups[0]["lr"] == 0.03
     assert optimizer.param_groups[0]["base_lr"] == 0.03
+
+
+def test_build_optimizer_includes_extra_module_params() -> None:
+    model = _TinyGPTLike()
+    nextlat = LatentDynamicsMLP(
+        hidden_size=4,
+        token_embedding_size=4,
+        mlp_hidden_dim=8,
+        mlp_layers=2,
+    )
+    optimizer, info = build_optimizer(
+        model,
+        {"optimizer": "adamw", "learning_rate": 5e-5},
+        extra_modules=(nextlat,),
+    )
+
+    assigned_ids = {
+        id(param)
+        for group in optimizer.param_groups
+        for param in group["params"]
+    }
+    nextlat_ids = {id(param) for param in nextlat.parameters()}
+
+    assert nextlat_ids <= assigned_ids
+    assert info.auxiliary_tensors > 0
+
+
+def test_muon_optimizer_keeps_extra_module_params_in_aux_adamw_groups() -> None:
+    model = _TinyGPTLike()
+    nextlat = LatentDynamicsMLP(
+        hidden_size=4,
+        token_embedding_size=4,
+        mlp_hidden_dim=8,
+        mlp_layers=2,
+    )
+    optimizer, info = build_optimizer(
+        model,
+        {
+            "optimizer": "muon_pe",
+            "learning_rate": 5e-5,
+            "muon_lr": 0.03,
+        },
+        extra_modules=(nextlat,),
+    )
+
+    nextlat_ids = {id(param) for param in nextlat.parameters()}
+    muon_ids = {
+        id(param)
+        for group in optimizer.param_groups
+        if group["use_muon"]
+        for param in group["params"]
+    }
+    aux_ids = {
+        id(param)
+        for group in optimizer.param_groups
+        if not group["use_muon"]
+        for param in group["params"]
+    }
+
+    assert isinstance(optimizer, MuonWithAuxAdamPE)
+    assert nextlat_ids.isdisjoint(muon_ids)
+    assert nextlat_ids <= aux_ids
+    assert info.auxiliary_tensors >= len(nextlat_ids)
 
 
 def test_build_optimizer_accepts_lamb_config_and_steps() -> None:

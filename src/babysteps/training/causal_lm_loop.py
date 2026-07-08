@@ -6,7 +6,7 @@ import json
 import random
 import time
 from dataclasses import dataclass
-from itertools import islice
+from itertools import chain, islice
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -48,6 +48,13 @@ from babysteps.evaluation.ewok_context_sensitivity import (
     evaluate_ewok_context_sensitivity,
 )
 from babysteps.training.branch_scoring import BranchScoreReduction
+from babysteps.training.nextlat import (
+    LatentDynamicsMLP,
+    NextLatConfig,
+    NextLatLossResult,
+    compute_nextlat_loss,
+    nextlat_kl_weight,
+)
 from babysteps.training.spatial_auxiliary import (
     SpatialAuxiliaryExample,
     SpatialAuxiliarySampler,
@@ -93,7 +100,21 @@ def compute_causal_lm_loss(
     """Compute next-token cross-entropy over non-padding targets."""
 
     outputs = model(input_ids=input_ids, attention_mask=attention_mask)
-    logits = outputs.logits
+    return compute_causal_lm_loss_from_logits(
+        logits=outputs.logits,
+        labels=labels,
+        loss_mask=loss_mask,
+    )
+
+
+def compute_causal_lm_loss_from_logits(
+    *,
+    logits: torch.Tensor,
+    labels: torch.Tensor,
+    loss_mask: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Compute next-token cross-entropy from precomputed logits."""
+
     vocab_size = logits.size(-1)
 
     # The dataloader has already shifted labels one token to the right, so each
@@ -284,6 +305,10 @@ def train_causal_lm(
     save_every_epochs: int | None = 1,
     save_final: bool = True,
     profile_optimizer_steps: bool = False,
+    nextlat_dynamics: LatentDynamicsMLP | None = None,
+    nextlat_config: NextLatConfig | None = None,
+    nextlat_bos_token_id: int | None = None,
+    nextlat_eos_token_id: int | None = None,
     spatial_auxiliary_sampler: SpatialAuxiliarySampler | None = None,
     spatial_auxiliary_loss_weight: float = 0.03,
     spatial_auxiliary_temperature: float = 1.0,
@@ -424,6 +449,33 @@ def train_causal_lm(
     blimp_eval_count = 0
     entity_tracking_eval_count = 0
     comps_eval_count = 0
+    nextlat_enabled = (
+        nextlat_dynamics is not None
+        and nextlat_config is not None
+        and nextlat_config.enabled
+        and (nextlat_config.lambda_next_h > 0.0 or nextlat_config.lambda_kl > 0.0)
+    )
+    nextlat_input_embeddings = None
+    nextlat_output_embeddings = None
+    if nextlat_enabled:
+        if nextlat_config is None or nextlat_dynamics is None:
+            raise ValueError("NextLat requires both nextlat_config and nextlat_dynamics.")
+        if (
+            nextlat_config.lambda_kl > 0.0
+            and nextlat_config.kl_warmup_start_words is not None
+            and words_per_token is None
+        ):
+            raise ValueError("NextLat KL word warmup requires words_per_token.")
+        unwrapped_model = accelerator.unwrap_model(model)
+        if not hasattr(unwrapped_model, "get_input_embeddings"):
+            raise ValueError("NextLat requires a model with get_input_embeddings().")
+        nextlat_input_embeddings = unwrapped_model.get_input_embeddings()
+        if nextlat_config.lambda_kl > 0.0:
+            if not hasattr(unwrapped_model, "get_output_embeddings"):
+                raise ValueError("NextLat KL requires a model with get_output_embeddings().")
+            nextlat_output_embeddings = unwrapped_model.get_output_embeddings()
+            if nextlat_output_embeddings is None:
+                raise ValueError("NextLat KL requires output embeddings.")
 
     if accelerator.is_main_process:
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -822,9 +874,29 @@ def train_causal_lm(
     for epoch in range(1, epochs + 1):
         model.train()
         epoch_loss_sum = 0.0
+        epoch_total_loss_sum = 0.0
         epoch_tokens = 0.0
+        epoch_nextlat_loss_sum = 0.0
+        epoch_nextlat_transition_count = 0.0
+        epoch_nextlat_persistence_loss_sum = 0.0
+        epoch_nextlat_persistence_transition_count = 0.0
+        epoch_nextlat_kl_loss_sum = 0.0
+        epoch_nextlat_kl_transition_count = 0.0
+        epoch_nextlat_weighted_kl_loss_sum = 0.0
+        epoch_nextlat_kl_weight_sum = 0.0
+        epoch_nextlat_kl_weight_count = 0.0
         window_loss_sum = 0.0
+        window_total_loss_sum = 0.0
         window_tokens = 0.0
+        window_nextlat_loss_sum = 0.0
+        window_nextlat_transition_count = 0.0
+        window_nextlat_persistence_loss_sum = 0.0
+        window_nextlat_persistence_transition_count = 0.0
+        window_nextlat_kl_loss_sum = 0.0
+        window_nextlat_kl_transition_count = 0.0
+        window_nextlat_weighted_kl_loss_sum = 0.0
+        window_nextlat_kl_weight_sum = 0.0
+        window_nextlat_kl_weight_count = 0.0
         window_spatial_auxiliary_loss_sum = 0.0
         window_spatial_auxiliary_batches = 0
         window_optimizer_step_seconds = 0.0
@@ -840,16 +912,74 @@ def train_causal_lm(
             # accelerator.accumulate handles no_sync during gradient
             # accumulation and flips sync_gradients on optimizer-update steps.
             spatial_auxiliary_loss = None
-            with accelerator.accumulate(model):
+            nextlat_result: NextLatLossResult | None = None
+            batch_words_seen = (
+                cumulative_tokens_seen * words_per_token
+                if words_per_token is not None
+                else None
+            )
+            batch_nextlat_kl_weight = (
+                nextlat_kl_weight(nextlat_config, words_seen=batch_words_seen)
+                if nextlat_config is not None
+                else 0.0
+            )
+            accumulate_models = (
+                (model, nextlat_dynamics)
+                if nextlat_dynamics is not None
+                else (model,)
+            )
+            with accelerator.accumulate(*accumulate_models):
                 with accelerator.autocast():
-                    loss, token_count = compute_causal_lm_loss(
-                        model,
-                        input_ids=input_ids,
-                        labels=labels,
-                        loss_mask=loss_mask,
-                        attention_mask=attention_mask,
-                    )
-                accelerator.backward(loss)
+                    if nextlat_enabled:
+                        outputs = model(
+                            input_ids=input_ids,
+                            attention_mask=attention_mask,
+                            output_hidden_states=True,
+                        )
+                        loss, token_count = compute_causal_lm_loss_from_logits(
+                            logits=outputs.logits,
+                            labels=labels,
+                            loss_mask=loss_mask,
+                        )
+                        if outputs.hidden_states is None:
+                            raise RuntimeError(
+                                "NextLat expected hidden states from the model forward."
+                            )
+                        if (
+                            nextlat_input_embeddings is None
+                            or nextlat_config is None
+                        ):
+                            raise RuntimeError("NextLat was enabled without setup.")
+                        nextlat_result = compute_nextlat_loss(
+                            dynamics=nextlat_dynamics,
+                            input_embeddings=nextlat_input_embeddings,
+                            output_embeddings=nextlat_output_embeddings,
+                            hidden_states=outputs.hidden_states[-1],
+                            input_ids=input_ids,
+                            loss_mask=loss_mask,
+                            attention_mask=attention_mask,
+                            config=nextlat_config,
+                            bos_token_id=nextlat_bos_token_id,
+                            eos_token_id=nextlat_eos_token_id,
+                            kl_weight=batch_nextlat_kl_weight,
+                        )
+                        weighted_nextlat_loss = (
+                            nextlat_config.lambda_next_h * nextlat_result.next_h_loss
+                        )
+                        weighted_nextlat_kl_loss = (
+                            batch_nextlat_kl_weight * nextlat_result.kl_loss
+                        )
+                        total_loss = loss + weighted_nextlat_loss + weighted_nextlat_kl_loss
+                    else:
+                        loss, token_count = compute_causal_lm_loss(
+                            model,
+                            input_ids=input_ids,
+                            labels=labels,
+                            loss_mask=loss_mask,
+                            attention_mask=attention_mask,
+                        )
+                        total_loss = loss
+                accelerator.backward(total_loss)
 
                 should_apply_spatial_auxiliary = (
                     spatial_auxiliary_sampler is not None
@@ -876,7 +1006,13 @@ def train_causal_lm(
                     accelerator.backward(weighted_spatial_auxiliary_loss)
 
                 if gradient_clip_norm and accelerator.sync_gradients:
-                    accelerator.clip_grad_norm_(model.parameters(), gradient_clip_norm)
+                    clip_parameters = model.parameters()
+                    if nextlat_dynamics is not None:
+                        clip_parameters = chain(
+                            clip_parameters,
+                            nextlat_dynamics.parameters(),
+                        )
+                    accelerator.clip_grad_norm_(clip_parameters, gradient_clip_norm)
 
                 optimizer_step_start = None
                 if profile_optimizer_steps and accelerator.sync_gradients:
@@ -894,16 +1030,106 @@ def train_causal_lm(
                 optimizer.zero_grad(set_to_none=True)
 
             loss_sum = (loss.detach() * token_count).float()
+            total_loss_sum = (total_loss.detach() * token_count).float()
             token_count = token_count.float()
+            nextlat_loss_sum = None
+            nextlat_transition_count = None
+            nextlat_persistence_loss_sum = None
+            nextlat_persistence_transition_count = None
+            nextlat_kl_loss_sum = None
+            nextlat_kl_transition_count = None
+            nextlat_weighted_kl_loss_sum = None
+            nextlat_kl_weight_sum = None
+            nextlat_kl_weight_count = None
+            if nextlat_result is not None:
+                nextlat_transition_count = nextlat_result.transition_count.float()
+                nextlat_loss_sum = (
+                    nextlat_result.next_h_loss.detach().float()
+                    * nextlat_transition_count
+                )
+                nextlat_persistence_transition_count = (
+                    nextlat_result.persistence_transition_count.float()
+                )
+                nextlat_persistence_loss_sum = (
+                    nextlat_result.persistence_loss.detach().float()
+                    * nextlat_persistence_transition_count
+                )
+                if nextlat_config is not None and nextlat_config.lambda_kl > 0.0:
+                    nextlat_kl_transition_count = (
+                        nextlat_result.kl_transition_count.float()
+                    )
+                    nextlat_kl_loss_sum = (
+                        nextlat_result.kl_loss.detach().float()
+                        * nextlat_kl_transition_count
+                    )
+                    nextlat_weighted_kl_loss_sum = (
+                        nextlat_result.kl_weight.float()
+                        * nextlat_result.kl_loss.detach().float()
+                        * nextlat_kl_transition_count
+                    )
+                    nextlat_kl_weight_count = nextlat_transition_count
+                    nextlat_kl_weight_sum = (
+                        nextlat_result.kl_weight.float()
+                        * nextlat_kl_weight_count
+                    )
             if accelerator.num_processes > 1:
                 loss_sum = accelerator.reduce(loss_sum, reduction="sum")
+                total_loss_sum = accelerator.reduce(total_loss_sum, reduction="sum")
                 token_count = accelerator.reduce(token_count, reduction="sum")
+                if nextlat_loss_sum is not None and nextlat_transition_count is not None:
+                    nextlat_loss_sum = accelerator.reduce(
+                        nextlat_loss_sum,
+                        reduction="sum",
+                    )
+                    nextlat_transition_count = accelerator.reduce(
+                        nextlat_transition_count,
+                        reduction="sum",
+                    )
+                if (
+                    nextlat_persistence_loss_sum is not None
+                    and nextlat_persistence_transition_count is not None
+                ):
+                    nextlat_persistence_loss_sum = accelerator.reduce(
+                        nextlat_persistence_loss_sum,
+                        reduction="sum",
+                    )
+                    nextlat_persistence_transition_count = accelerator.reduce(
+                        nextlat_persistence_transition_count,
+                        reduction="sum",
+                    )
+                if nextlat_kl_loss_sum is not None and nextlat_kl_transition_count is not None:
+                    nextlat_kl_loss_sum = accelerator.reduce(
+                        nextlat_kl_loss_sum,
+                        reduction="sum",
+                    )
+                    nextlat_kl_transition_count = accelerator.reduce(
+                        nextlat_kl_transition_count,
+                        reduction="sum",
+                    )
+                if (
+                    nextlat_weighted_kl_loss_sum is not None
+                    and nextlat_kl_weight_sum is not None
+                    and nextlat_kl_weight_count is not None
+                ):
+                    nextlat_weighted_kl_loss_sum = accelerator.reduce(
+                        nextlat_weighted_kl_loss_sum,
+                        reduction="sum",
+                    )
+                    nextlat_kl_weight_sum = accelerator.reduce(
+                        nextlat_kl_weight_sum,
+                        reduction="sum",
+                    )
+                    nextlat_kl_weight_count = accelerator.reduce(
+                        nextlat_kl_weight_count,
+                        reduction="sum",
+                    )
 
             # Count only optimizer-update steps, not every microbatch.
             if accelerator.sync_gradients:
                 global_step += 1
 
             loss_sum_value = loss_sum.item()
+            total_loss_sum_value = total_loss_sum.item()
             token_count_value = token_count.item()
             cumulative_tokens_seen += token_count_value
             current_words_seen = (
@@ -912,9 +1138,70 @@ def train_causal_lm(
                 else None
             )
             epoch_loss_sum += loss_sum_value
+            epoch_total_loss_sum += total_loss_sum_value
             epoch_tokens += token_count_value
             window_loss_sum += loss_sum_value
+            window_total_loss_sum += total_loss_sum_value
             window_tokens += token_count_value
+            if nextlat_loss_sum is not None and nextlat_transition_count is not None:
+                nextlat_loss_sum_value = nextlat_loss_sum.item()
+                nextlat_transition_count_value = nextlat_transition_count.item()
+                epoch_nextlat_loss_sum += nextlat_loss_sum_value
+                epoch_nextlat_transition_count += nextlat_transition_count_value
+                window_nextlat_loss_sum += nextlat_loss_sum_value
+                window_nextlat_transition_count += nextlat_transition_count_value
+            if (
+                nextlat_persistence_loss_sum is not None
+                and nextlat_persistence_transition_count is not None
+            ):
+                nextlat_persistence_loss_sum_value = (
+                    nextlat_persistence_loss_sum.item()
+                )
+                nextlat_persistence_transition_count_value = (
+                    nextlat_persistence_transition_count.item()
+                )
+                epoch_nextlat_persistence_loss_sum += (
+                    nextlat_persistence_loss_sum_value
+                )
+                epoch_nextlat_persistence_transition_count += (
+                    nextlat_persistence_transition_count_value
+                )
+                window_nextlat_persistence_loss_sum += (
+                    nextlat_persistence_loss_sum_value
+                )
+                window_nextlat_persistence_transition_count += (
+                    nextlat_persistence_transition_count_value
+                )
+            if (
+                nextlat_kl_loss_sum is not None
+                and nextlat_kl_transition_count is not None
+            ):
+                nextlat_kl_loss_sum_value = nextlat_kl_loss_sum.item()
+                nextlat_kl_transition_count_value = nextlat_kl_transition_count.item()
+                epoch_nextlat_kl_loss_sum += nextlat_kl_loss_sum_value
+                epoch_nextlat_kl_transition_count += nextlat_kl_transition_count_value
+                window_nextlat_kl_loss_sum += nextlat_kl_loss_sum_value
+                window_nextlat_kl_transition_count += nextlat_kl_transition_count_value
+            if (
+                nextlat_weighted_kl_loss_sum is not None
+                and nextlat_kl_weight_sum is not None
+                and nextlat_kl_weight_count is not None
+            ):
+                nextlat_weighted_kl_loss_sum_value = (
+                    nextlat_weighted_kl_loss_sum.item()
+                )
+                nextlat_kl_weight_sum_value = nextlat_kl_weight_sum.item()
+                nextlat_kl_weight_count_value = nextlat_kl_weight_count.item()
+                epoch_nextlat_weighted_kl_loss_sum += (
+                    nextlat_weighted_kl_loss_sum_value
+                )
+                window_nextlat_weighted_kl_loss_sum += (
+                    nextlat_weighted_kl_loss_sum_value
+                )
+                epoch_nextlat_kl_weight_sum += nextlat_kl_weight_sum_value
+                window_nextlat_kl_weight_sum += nextlat_kl_weight_sum_value
+                epoch_nextlat_kl_weight_count += nextlat_kl_weight_count_value
+                window_nextlat_kl_weight_count += nextlat_kl_weight_count_value
             if spatial_auxiliary_loss is not None:
                 spatial_auxiliary_loss_value = spatial_auxiliary_loss.detach().float()
                 if accelerator.num_processes > 1:
@@ -926,7 +1213,10 @@ def train_causal_lm(
                 window_spatial_auxiliary_batches += 1
 
             if accelerator.is_local_main_process:
-                progress.set_postfix(loss=f"{loss.item():.4f}", step=global_step)
+                postfix = {"loss": f"{loss.item():.4f}", "step": global_step}
+                if nextlat_result is not None:
+                    postfix["nextlat"] = f"{nextlat_result.next_h_loss.item():.4f}"
+                progress.set_postfix(**postfix)
 
             should_log = (
                 log_every_steps > 0
@@ -942,6 +1232,57 @@ def train_causal_lm(
                     "tokens_seen": int(cumulative_tokens_seen),
                     "loss": window_loss,
                 }
+                if nextlat_enabled:
+                    record["total_loss"] = (
+                        window_total_loss_sum / max(1.0, window_tokens)
+                    )
+                if window_nextlat_transition_count:
+                    nextlat_window_loss = (
+                        window_nextlat_loss_sum / window_nextlat_transition_count
+                    )
+                    nextlat_weight = (
+                        nextlat_config.lambda_next_h
+                        if nextlat_config is not None
+                        else 0.0
+                    )
+                    record["nextlat_next_h_loss"] = nextlat_window_loss
+                    record["nextlat_weighted_next_h_loss"] = (
+                        nextlat_weight * nextlat_window_loss
+                    )
+                    record["nextlat_transition_count"] = int(
+                        window_nextlat_transition_count
+                    )
+                if window_nextlat_persistence_transition_count:
+                    nextlat_persistence_window_loss = (
+                        window_nextlat_persistence_loss_sum
+                        / window_nextlat_persistence_transition_count
+                    )
+                    record["nextlat_persistence_loss"] = (
+                        nextlat_persistence_window_loss
+                    )
+                    if "nextlat_next_h_loss" in record:
+                        record["nextlat_improvement_over_persistence"] = (
+                            nextlat_persistence_window_loss
+                            - record["nextlat_next_h_loss"]
+                        )
+                if window_nextlat_kl_weight_count:
+                    record["nextlat_kl_weight"] = (
+                        window_nextlat_kl_weight_sum
+                        / window_nextlat_kl_weight_count
+                    )
+                if window_nextlat_kl_transition_count:
+                    nextlat_window_kl_loss = (
+                        window_nextlat_kl_loss_sum
+                        / window_nextlat_kl_transition_count
+                    )
+                    record["nextlat_kl_loss"] = nextlat_window_kl_loss
+                    record["nextlat_weighted_kl_loss"] = (
+                        window_nextlat_weighted_kl_loss_sum
+                        / window_nextlat_kl_transition_count
+                    )
+                    record["nextlat_kl_transition_count"] = int(
+                        window_nextlat_kl_transition_count
+                    )
                 if window_spatial_auxiliary_batches:
                     spatial_auxiliary_window_loss = (
                         window_spatial_auxiliary_loss_sum
@@ -955,6 +1296,33 @@ def train_causal_lm(
                 if words_per_token is not None:
                     record["words_seen"] = cumulative_tokens_seen * words_per_token
                 message = f"[step {global_step:06d}] train_loss={window_loss:.4f}"
+                if window_nextlat_transition_count:
+                    message += (
+                        " total_loss="
+                        f"{record['total_loss']:.4f} "
+                        "nextlat_next_h_loss="
+                        f"{record['nextlat_next_h_loss']:.4f}"
+                    )
+                    if "nextlat_persistence_loss" in record:
+                        message += (
+                            " nextlat_persistence_loss="
+                            f"{record['nextlat_persistence_loss']:.4f}"
+                        )
+                    if "nextlat_improvement_over_persistence" in record:
+                        message += (
+                            " nextlat_improvement="
+                            f"{record['nextlat_improvement_over_persistence']:.4f}"
+                        )
+                    if "nextlat_kl_weight" in record:
+                        message += (
+                            " nextlat_kl_weight="
+                            f"{record['nextlat_kl_weight']:.4f}"
+                        )
+                    if "nextlat_kl_loss" in record:
+                        message += (
+                            " nextlat_kl_loss="
+                            f"{record['nextlat_kl_loss']:.4f}"
+                        )
                 if window_spatial_auxiliary_batches:
                     message += (
                         " spatial_aux_loss="
@@ -971,7 +1339,17 @@ def train_causal_lm(
                 history.append(record)
                 save_json_atomic(history, metrics_path)
                 window_loss_sum = 0.0
+                window_total_loss_sum = 0.0
                 window_tokens = 0.0
+                window_nextlat_loss_sum = 0.0
+                window_nextlat_transition_count = 0.0
+                window_nextlat_persistence_loss_sum = 0.0
+                window_nextlat_persistence_transition_count = 0.0
+                window_nextlat_kl_loss_sum = 0.0
+                window_nextlat_kl_transition_count = 0.0
+                window_nextlat_weighted_kl_loss_sum = 0.0
+                window_nextlat_kl_weight_sum = 0.0
+                window_nextlat_kl_weight_count = 0.0
                 window_spatial_auxiliary_loss_sum = 0.0
                 window_spatial_auxiliary_batches = 0
                 window_optimizer_step_seconds = 0.0
@@ -1169,21 +1547,85 @@ def train_causal_lm(
 
         epoch_loss = epoch_loss_sum / max(1.0, epoch_tokens)
         if accelerator.is_main_process:
-            print(f"Epoch {epoch} train_loss={epoch_loss:.4f}", flush=True)
-            history.append(
-                {
-                    "type": "epoch",
-                    "epoch": epoch,
-                    "step": global_step,
-                    "tokens_seen": int(cumulative_tokens_seen),
-                    "train_loss": epoch_loss,
-                    **(
-                        {"words_seen": cumulative_tokens_seen * words_per_token}
-                        if words_per_token is not None
-                        else {}
-                    ),
-                }
-            )
+            epoch_record = {
+                "type": "epoch",
+                "epoch": epoch,
+                "step": global_step,
+                "tokens_seen": int(cumulative_tokens_seen),
+                "train_loss": epoch_loss,
+            }
+            epoch_message = f"Epoch {epoch} train_loss={epoch_loss:.4f}"
+            if nextlat_enabled:
+                epoch_record["train_total_loss"] = (
+                    epoch_total_loss_sum / max(1.0, epoch_tokens)
+                )
+                epoch_message += (
+                    f" train_total_loss={epoch_record['train_total_loss']:.4f}"
+                )
+            if epoch_nextlat_transition_count:
+                epoch_nextlat_loss = (
+                    epoch_nextlat_loss_sum / epoch_nextlat_transition_count
+                )
+                nextlat_weight = (
+                    nextlat_config.lambda_next_h
+                    if nextlat_config is not None
+                    else 0.0
+                )
+                epoch_record["nextlat_next_h_loss"] = epoch_nextlat_loss
+                epoch_record["nextlat_weighted_next_h_loss"] = (
+                    nextlat_weight * epoch_nextlat_loss
+                )
+                epoch_record["nextlat_transition_count"] = int(
+                    epoch_nextlat_transition_count
+                )
+                epoch_message += f" nextlat_next_h_loss={epoch_nextlat_loss:.4f}"
+            if epoch_nextlat_persistence_transition_count:
+                epoch_nextlat_persistence_loss = (
+                    epoch_nextlat_persistence_loss_sum
+                    / epoch_nextlat_persistence_transition_count
+                )
+                epoch_record["nextlat_persistence_loss"] = (
+                    epoch_nextlat_persistence_loss
+                )
+                if "nextlat_next_h_loss" in epoch_record:
+                    epoch_record["nextlat_improvement_over_persistence"] = (
+                        epoch_nextlat_persistence_loss
+                        - epoch_record["nextlat_next_h_loss"]
+                    )
+                epoch_message += (
+                    " nextlat_persistence_loss="
+                    f"{epoch_nextlat_persistence_loss:.4f}"
+                )
+                if "nextlat_improvement_over_persistence" in epoch_record:
+                    epoch_message += (
+                        " nextlat_improvement="
+                        f"{epoch_record['nextlat_improvement_over_persistence']:.4f}"
+                    )
+            if epoch_nextlat_kl_weight_count:
+                epoch_record["nextlat_kl_weight"] = (
+                    epoch_nextlat_kl_weight_sum / epoch_nextlat_kl_weight_count
+                )
+                epoch_message += (
+                    " nextlat_kl_weight="
+                    f"{epoch_record['nextlat_kl_weight']:.4f}"
+                )
+            if epoch_nextlat_kl_transition_count:
+                epoch_nextlat_kl_loss = (
+                    epoch_nextlat_kl_loss_sum / epoch_nextlat_kl_transition_count
+                )
+                epoch_record["nextlat_kl_loss"] = epoch_nextlat_kl_loss
+                epoch_record["nextlat_weighted_kl_loss"] = (
+                    epoch_nextlat_weighted_kl_loss_sum
+                    / epoch_nextlat_kl_transition_count
+                )
+                epoch_record["nextlat_kl_transition_count"] = int(
+                    epoch_nextlat_kl_transition_count
+                )
+                epoch_message += f" nextlat_kl_loss={epoch_nextlat_kl_loss:.4f}"
+            if words_per_token is not None:
+                epoch_record["words_seen"] = cumulative_tokens_seen * words_per_token
+            print(epoch_message, flush=True)
+            history.append(epoch_record)
             save_json_atomic(history, metrics_path)
 
         if save_every_epochs and epoch % save_every_epochs == 0:

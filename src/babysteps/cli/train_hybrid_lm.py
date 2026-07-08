@@ -32,13 +32,24 @@ from babysteps.evaluation.blimp_likelihood import read_blimp_items
 from babysteps.evaluation.comps_likelihood import read_comps_items
 from babysteps.evaluation.entity_tracking_likelihood import read_entity_tracking_items
 from babysteps.evaluation.ewok_context_sensitivity import read_ewok_items
-from babysteps.models import build_causal_lm_model, normalize_model_arch
+from babysteps.models import (
+    build_causal_lm_model,
+    input_embedding_size,
+    model_hidden_size,
+    normalize_model_arch,
+)
 from babysteps.models.causal_lm import DEFAULT_GPT_BERT_REPO
 from babysteps.paths import resolve_path, validate_tokenizer_dir
 from babysteps.training.causal_lm_loop import save_json_atomic, set_all_seeds
 from babysteps.training.hybrid_lm_loop import MNTP_LIKELIHOOD_BENCHMARKS
 from babysteps.training.hybrid_lm_loop import train_hybrid_lm
+from babysteps.training.nextlat import LatentDynamicsMLP, nextlat_config_from_dict
 from babysteps.training.optimizers import build_optimizer
+from babysteps.training.spatial_auxiliary import (
+    SpatialAuxiliarySampler,
+    read_spatial_auxiliary_examples,
+    split_spatial_auxiliary_examples,
+)
 
 
 DEFAULT_WORDS_PER_TOKEN_SAMPLE_TOKENS = 4096
@@ -84,6 +95,16 @@ def read_every_words(config: dict[str, Any], section_name: str) -> float | None:
     if value <= 0:
         raise ValueError(f"{section_name}.every_words must be positive when set.")
     return value
+
+
+def first_token_id(tokenizer: Any, *attrs: str) -> int | None:
+    """Return the first configured tokenizer id from a list of attribute names."""
+
+    for attr in attrs:
+        value = getattr(tokenizer, attr, None)
+        if value is not None:
+            return int(value)
+    return None
 
 
 def format_eval_interval(every_steps: int, every_words: float | None) -> str:
@@ -210,8 +231,6 @@ def default_mntp_benchmark_config(name: str) -> dict[str, Any]:
             "data_dir": default_babylm_eval_dir(
                 "full_eval",
                 "blimp_filtered",
-                fallback_split="fast_eval",
-                fallback_relative_parts=("blimp_fast",),
             )
         }
     if name == "blimp_supplement":
@@ -219,8 +238,6 @@ def default_mntp_benchmark_config(name: str) -> dict[str, Any]:
             "data_dir": default_babylm_eval_dir(
                 "full_eval",
                 "supplement_filtered",
-                fallback_split="fast_eval",
-                fallback_relative_parts=("supplement_fast",),
             )
         }
     if name == "entity_tracking":
@@ -228,8 +245,6 @@ def default_mntp_benchmark_config(name: str) -> dict[str, Any]:
             "data_dir": default_babylm_eval_dir(
                 "full_eval",
                 "entity_tracking",
-                fallback_split="fast_eval",
-                fallback_relative_parts=("entity_tracking_fast",),
             )
         }
     if name == "comps":
@@ -342,6 +357,12 @@ def main() -> None:
     ewok_mntp_config = config.get("ewok_mntp_context_sensitivity", {})
     mntp_likelihood_config = config.get("mntp_likelihood", {})
     loss_dynamics_config = config.get("loss_dynamics", {})
+    spatial_auxiliary_config = config.get("spatial_auxiliary", {})
+    nextlat_raw_config = dict(config.get("nextlat", {}) or {})
+    nextlat_config = nextlat_config_from_dict(nextlat_raw_config)
+    nextlat_apply_on = str(nextlat_raw_config.get("apply_on", "causal")).strip()
+    if nextlat_apply_on != "causal":
+        raise ValueError("nextlat.apply_on currently supports only 'causal'.")
 
     ewok_context_every_steps = int(ewok_context_config.get("every_steps", 0) or 0)
     ewok_context_every_words = read_every_words(
@@ -514,6 +535,57 @@ def main() -> None:
         loss_dynamics_config.get("x_axis", benchmark_plot_x_axis)
     )
     loss_dynamics_loss_keys = read_loss_keys(loss_dynamics_config)
+
+    spatial_auxiliary_enabled = bool(spatial_auxiliary_config.get("enabled", False))
+    spatial_auxiliary_objective = str(
+        spatial_auxiliary_config.get("objective", "context_rank")
+    ).strip()
+    if spatial_auxiliary_objective not in {"completion_rank", "context_rank"}:
+        raise ValueError(
+            "spatial_auxiliary.objective must be 'completion_rank' or 'context_rank'."
+        )
+    spatial_auxiliary_loss_weight = float(
+        spatial_auxiliary_config.get("loss_weight", 0.03)
+    )
+    if spatial_auxiliary_loss_weight < 0.0:
+        raise ValueError("spatial_auxiliary.loss_weight must be non-negative.")
+    spatial_auxiliary_temperature = float(
+        spatial_auxiliary_config.get("temperature", 1.0)
+    )
+    if spatial_auxiliary_temperature <= 0.0:
+        raise ValueError("spatial_auxiliary.temperature must be positive.")
+    spatial_auxiliary_score_reduction = str(
+        spatial_auxiliary_config.get("score_reduction", "mean")
+    ).strip()
+    if spatial_auxiliary_score_reduction not in VALID_SCORE_REDUCTIONS:
+        raise ValueError("spatial_auxiliary.score_reduction must be 'sum' or 'mean'.")
+    spatial_auxiliary_batch_size = int(spatial_auxiliary_config.get("batch_size", 16))
+    if spatial_auxiliary_batch_size <= 0:
+        raise ValueError("spatial_auxiliary.batch_size must be positive.")
+    spatial_auxiliary_every_steps = int(spatial_auxiliary_config.get("every_steps", 1))
+    if spatial_auxiliary_enabled and spatial_auxiliary_every_steps <= 0:
+        raise ValueError("spatial_auxiliary.every_steps must be positive when enabled.")
+    spatial_auxiliary_apply_on = str(
+        spatial_auxiliary_config.get("apply_on", "causal")
+    ).strip()
+    if spatial_auxiliary_apply_on != "causal":
+        raise ValueError("spatial_auxiliary.apply_on currently supports only 'causal'.")
+    spatial_auxiliary_eval_every_steps = int(
+        spatial_auxiliary_config.get("eval_every_steps", 0) or 0
+    )
+    if spatial_auxiliary_eval_every_steps < 0:
+        raise ValueError("spatial_auxiliary.eval_every_steps must be non-negative.")
+    spatial_auxiliary_eval_batch_size = int(
+        spatial_auxiliary_config.get(
+            "eval_batch_size",
+            spatial_auxiliary_config.get("batch_size", 64),
+        )
+    )
+    if spatial_auxiliary_eval_batch_size <= 0:
+        raise ValueError("spatial_auxiliary.eval_batch_size must be positive.")
+    spatial_auxiliary_eval_at_start = bool(
+        spatial_auxiliary_config.get("eval_at_start", True)
+    )
 
     output_dir = resolve_output_dir(config)
     seed = int(run_config.get("seed", 42))
@@ -691,18 +763,123 @@ def main() -> None:
                     flush=True,
                 )
 
+    spatial_auxiliary_sampler = None
+    spatial_auxiliary_eval_items = None
+    if spatial_auxiliary_enabled:
+        if not spatial_auxiliary_config.get("path"):
+            raise ValueError("Set spatial_auxiliary.path when spatial auxiliary is enabled.")
+        spatial_auxiliary_path = resolve_path(
+            spatial_auxiliary_config["path"],
+            base_dir=ROOT,
+        )
+        max_spatial_auxiliary_items = spatial_auxiliary_config.get("max_items")
+        spatial_auxiliary_examples = read_spatial_auxiliary_examples(
+            spatial_auxiliary_path,
+            objective=spatial_auxiliary_objective,  # type: ignore[arg-type]
+            max_items=(
+                int(max_spatial_auxiliary_items)
+                if max_spatial_auxiliary_items is not None
+                else None
+            ),
+        )
+        if not spatial_auxiliary_examples:
+            raise ValueError("spatial_auxiliary loaded zero examples.")
+
+        eval_path = spatial_auxiliary_config.get("eval_path")
+        if eval_path:
+            spatial_auxiliary_train_items = spatial_auxiliary_examples
+            spatial_auxiliary_eval_items = read_spatial_auxiliary_examples(
+                resolve_path(eval_path, base_dir=ROOT),
+                objective=spatial_auxiliary_objective,  # type: ignore[arg-type]
+                max_items=(
+                    int(spatial_auxiliary_config["max_eval_items"])
+                    if spatial_auxiliary_config.get("max_eval_items") is not None
+                    else None
+                ),
+            )
+        else:
+            spatial_auxiliary_train_items, spatial_auxiliary_eval_items = (
+                split_spatial_auxiliary_examples(
+                    spatial_auxiliary_examples,
+                    eval_items=int(spatial_auxiliary_config.get("eval_items", 0) or 0),
+                    eval_fraction=float(
+                        spatial_auxiliary_config.get("eval_fraction", 0.0) or 0.0
+                    ),
+                    seed=int(spatial_auxiliary_config.get("seed", seed)),
+                )
+            )
+
+        spatial_auxiliary_sampler = SpatialAuxiliarySampler(
+            spatial_auxiliary_train_items,
+            batch_size=spatial_auxiliary_batch_size,
+            seed=int(spatial_auxiliary_config.get("seed", seed)),
+        )
+        if not spatial_auxiliary_eval_items:
+            spatial_auxiliary_eval_items = None
+
+        if accelerator.is_main_process:
+            eval_description = (
+                f", eval_items={len(spatial_auxiliary_eval_items):,}, "
+                f"eval_every_steps={spatial_auxiliary_eval_every_steps}"
+                if spatial_auxiliary_eval_items is not None
+                else ""
+            )
+            print(
+                "Spatial auxiliary loss: "
+                f"objective={spatial_auxiliary_objective}, "
+                f"train_items={len(spatial_auxiliary_train_items):,}, "
+                f"batch_size={spatial_auxiliary_batch_size}, "
+                f"loss_weight={spatial_auxiliary_loss_weight:g}, "
+                f"temperature={spatial_auxiliary_temperature:g}, "
+                f"score_reduction={spatial_auxiliary_score_reduction}, "
+                f"every_steps={spatial_auxiliary_every_steps}, "
+                f"apply_on={spatial_auxiliary_apply_on}"
+                f"{eval_description}",
+                flush=True,
+            )
+
     model = build_causal_lm_model(config, tokenizer)
+    nextlat_dynamics = None
+    if nextlat_config.enabled:
+        nextlat_dynamics = LatentDynamicsMLP(
+            hidden_size=model_hidden_size(model),
+            token_embedding_size=input_embedding_size(model),
+            mlp_hidden_dim=nextlat_config.mlp_hidden_dim,
+            mlp_layers=nextlat_config.mlp_layers,
+        )
     if accelerator.is_main_process:
         params = sum(param.numel() for param in model.parameters())
         print("Model architecture: gpt_bert", flush=True)
         print(f"Model parameters: {params:,}", flush=True)
         print(f"Train shard blocks: {len(train_dataset):,}", flush=True)
         print(f"Val shard blocks: {len(val_dataset):,}", flush=True)
+        if nextlat_config.enabled:
+            nextlat_params = (
+                sum(param.numel() for param in nextlat_dynamics.parameters())
+                if nextlat_dynamics is not None
+                else 0
+            )
+            print(
+                "NextLat prototype enabled: "
+                f"apply_on={nextlat_apply_on} "
+                f"horizon={nextlat_config.horizon} "
+                f"lambda_next_h={nextlat_config.lambda_next_h:g} "
+                f"lambda_kl={nextlat_config.lambda_kl:g} "
+                f"kl_mode={nextlat_config.kl_mode} "
+                f"kl_top_k={nextlat_config.kl_top_k} "
+                f"kl_warmup_start_words={nextlat_config.kl_warmup_start_words} "
+                f"kl_warmup_end_words={nextlat_config.kl_warmup_end_words} "
+                f"mlp_hidden_dim={nextlat_config.mlp_hidden_dim} "
+                f"mlp_layers={nextlat_config.mlp_layers} "
+                f"params={nextlat_params:,}",
+                flush=True,
+            )
 
     optimizer, optimizer_info = build_optimizer(
         model,
         training_config,
         device=accelerator.device,
+        extra_modules=((nextlat_dynamics,) if nextlat_dynamics is not None else ()),
     )
     if accelerator.is_main_process:
         print(f"Optimizer: {optimizer_info.name}", flush=True)
@@ -832,6 +1009,18 @@ def main() -> None:
                 f"{format_eval_step_preview(mntp_eval_steps)}{suffix}",
                 flush=True,
             )
+        if spatial_auxiliary_enabled and spatial_auxiliary_eval_items is not None:
+            spatial_auxiliary_eval_steps = estimate_step_interval_eval_steps(
+                spatial_auxiliary_eval_every_steps,
+                total_update_steps,
+            )
+            startup_eval = spatial_auxiliary_eval_at_start
+            suffix = "; plus startup eval at step 0" if startup_eval else ""
+            print(
+                "Spatial auxiliary eval estimate: "
+                f"{format_eval_step_preview(spatial_auxiliary_eval_steps)}{suffix}",
+                flush=True,
+            )
 
     scheduler = get_cosine_schedule_with_warmup(
         optimizer,
@@ -839,13 +1028,30 @@ def main() -> None:
         num_training_steps=total_update_steps,
     )
 
-    model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
-        model,
-        optimizer,
-        train_loader,
-        val_loader,
-        scheduler,
-    )
+    if nextlat_dynamics is not None:
+        (
+            model,
+            nextlat_dynamics,
+            optimizer,
+            train_loader,
+            val_loader,
+            scheduler,
+        ) = accelerator.prepare(
+            model,
+            nextlat_dynamics,
+            optimizer,
+            train_loader,
+            val_loader,
+            scheduler,
+        )
+    else:
+        model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
+            model,
+            optimizer,
+            train_loader,
+            val_loader,
+            scheduler,
+        )
 
     train_hybrid_lm(
         model=model,
@@ -868,6 +1074,11 @@ def main() -> None:
         save_every_epochs=checkpoint_config.get("save_every_epochs", 1),
         save_final=bool(checkpoint_config.get("save_final", True)),
         benchmark_eval_at_start=bool(logging_config.get("benchmark_eval_at_start", True)),
+        nextlat_dynamics=nextlat_dynamics,
+        nextlat_config=nextlat_config,
+        nextlat_bos_token_id=first_token_id(tokenizer, "bos_token_id", "cls_token_id"),
+        nextlat_eos_token_id=first_token_id(tokenizer, "eos_token_id", "sep_token_id"),
+        nextlat_apply_on=nextlat_apply_on,
         ewok_context_items=ewok_context_items,
         ewok_context_every_steps=ewok_context_every_steps,
         ewok_context_every_words=ewok_context_every_words,
@@ -892,6 +1103,16 @@ def main() -> None:
         mntp_likelihood_run_name=str(run_config.get("name", "")),
         mntp_likelihood_plot=mntp_likelihood_plot,
         mntp_likelihood_plot_every_evals=mntp_likelihood_plot_every_evals,
+        spatial_auxiliary_sampler=spatial_auxiliary_sampler,
+        spatial_auxiliary_loss_weight=spatial_auxiliary_loss_weight,
+        spatial_auxiliary_temperature=spatial_auxiliary_temperature,
+        spatial_auxiliary_score_reduction=spatial_auxiliary_score_reduction,  # type: ignore[arg-type]
+        spatial_auxiliary_every_steps=spatial_auxiliary_every_steps,
+        spatial_auxiliary_apply_on=spatial_auxiliary_apply_on,
+        spatial_auxiliary_eval_items=spatial_auxiliary_eval_items,
+        spatial_auxiliary_eval_every_steps=spatial_auxiliary_eval_every_steps,
+        spatial_auxiliary_eval_batch_size=spatial_auxiliary_eval_batch_size,
+        spatial_auxiliary_eval_at_start=spatial_auxiliary_eval_at_start,
         benchmark_plot_x_axis=benchmark_plot_x_axis,
         loss_dynamics_plot=loss_dynamics_plot,
         loss_dynamics_plot_every_evals=loss_dynamics_plot_every_evals,
