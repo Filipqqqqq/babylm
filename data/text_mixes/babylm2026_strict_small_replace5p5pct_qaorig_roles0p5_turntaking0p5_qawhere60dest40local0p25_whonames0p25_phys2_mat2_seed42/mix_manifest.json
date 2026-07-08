@@ -1,0 +1,150 @@
+{
+  "created_utc": "2026-07-05T23:02:42.123460+00:00",
+  "document_mode": "line",
+  "final_order": "deterministic_document_shuffle",
+  "max_words": 10000000,
+  "name": "babylm2026_strict_small_replace5p5pct_qaorig_roles0p5_turntaking0p5_qawhere60dest40local0p25_whonames0p25_phys2_mat2_seed42",
+  "order_seed": 1,
+  "outputs": {
+    "counts": "/home/jorge/snap/babylm-baby-steps/data/text_mixes/babylm2026_strict_small_replace5p5pct_qaorig_roles0p5_turntaking0p5_qawhere60dest40local0p25_whonames0p25_phys2_mat2_seed42/counts.json",
+    "mix_config": "/home/jorge/snap/babylm-baby-steps/data/text_mixes/babylm2026_strict_small_replace5p5pct_qaorig_roles0p5_turntaking0p5_qawhere60dest40local0p25_whonames0p25_phys2_mat2_seed42/mix_config.yaml",
+    "mix_documents": "/home/jorge/snap/babylm-baby-steps/data/text_mixes/babylm2026_strict_small_replace5p5pct_qaorig_roles0p5_turntaking0p5_qawhere60dest40local0p25_whonames0p25_phys2_mat2_seed42/mix_documents.jsonl",
+    "mix_manifest": "/home/jorge/snap/babylm-baby-steps/data/text_mixes/babylm2026_strict_small_replace5p5pct_qaorig_roles0p5_turntaking0p5_qawhere60dest40local0p25_whonames0p25_phys2_mat2_seed42/mix_manifest.json",
+    "train": "/home/jorge/snap/babylm-baby-steps/data/text_mixes/babylm2026_strict_small_replace5p5pct_qaorig_roles0p5_turntaking0p5_qawhere60dest40local0p25_whonames0p25_phys2_mat2_seed42/train.txt"
+  },
+  "seed": 42,
+  "sources": [
+    {
+      "available_documents": 1101973,
+      "available_words": 9894420,
+      "full_repeats": 0,
+      "name": "babylm2026_strict_small",
+      "partial_repeat_documents": 0,
+      "path": "data/analysis/word2vec/base_text/babylm2026_strict_small/train.txt",
+      "role": "base",
+      "sampling": "random_without_replacement",
+      "selected_documents": 1052866,
+      "selected_words": 9450016,
+      "target_words": 9450000
+    },
+    {
+      "available_documents": 1000,
+      "available_words": 51821,
+      "full_repeats": 0,
+      "name": "qa_congruence_repair_original_roles",
+      "partial_repeat_documents": 968,
+      "path": "data/linguistic_repair/qa_congruence_qwen3p7plus_roles_sample1000_seed42/train.txt",
+      "role": "synthetic",
+      "sampling": "repeat_then_partial",
+      "selected_documents": 968,
+      "selected_words": 50038,
+      "target_words": 50000
+    },
+    {
+      "available_documents": 4133,
+      "available_words": 50000,
+      "full_repeats": 1,
+      "name": "qa_turntaking_pronoun_frames",
+      "partial_repeat_documents": 0,
+      "path": "data/linguistic_repair/qa_turntaking_pronoun_frames_50k_seed42/train.txt",
+      "role": "synthetic",
+      "sampling": "repeat_then_partial",
+      "selected_documents": 4133,
+      "selected_words": 50000,
+      "target_words": 50000
+    },
+    {
+      "available_documents": 500,
+      "available_words": 6336,
+      "full_repeats": 2,
+      "name": "qa_where_destination_frames",
+      "partial_repeat_documents": 183,
+      "path": "data/linguistic_repair/qa_where_destination_frames_named_secondperson_sample500_seed42/train.txt",
+      "role": "synthetic",
+      "sampling": "repeat_then_partial",
+      "selected_documents": 1183,
+      "selected_words": 15006,
+      "target_words": 15000
+    },
+    {
+      "available_documents": 500,
+      "available_words": 9870,
+      "full_repeats": 1,
+      "name": "qa_where_local_prep_frames",
+      "partial_repeat_documents": 7,
+      "path": "data/linguistic_repair/qa_where_local_prep_frames_sample500_seed42/train.txt",
+      "role": "synthetic",
+      "sampling": "repeat_then_partial",
+      "selected_documents": 507,
+      "selected_words": 10009,
+      "target_words": 10000
+    },
+    {
+      "available_documents": 500,
+      "available_words": 5528,
+      "full_repeats": 4,
+      "name": "qa_who_common_name_frames",
+      "partial_repeat_documents": 265,
+      "path": "data/linguistic_repair/qa_who_common_name_frames_sample500_seed42/train.txt",
+      "role": "synthetic",
+      "sampling": "repeat_then_partial",
+      "selected_documents": 2265,
+      "selected_words": 25006,
+      "target_words": 25000
+    },
+    {
+      "available_documents": 921,
+      "available_words": 16847,
+      "full_repeats": 11,
+      "name": "physical_dynamics_slip_bridge",
+      "partial_repeat_documents": 804,
+      "path": "data/concept_curriculum/physical_dynamics_ewok_micro_1000_slip_bridge_qwen/train.txt",
+      "role": "synthetic",
+      "sampling": "repeat_then_partial",
+      "selected_documents": 10935,
+      "selected_words": 200014,
+      "target_words": 200000
+    },
+    {
+      "available_documents": 3897,
+      "available_words": 90129,
+      "full_repeats": 2,
+      "name": "material_affordance",
+      "partial_repeat_documents": 855,
+      "path": "data/concept_curriculum/material_affordance_ewok_4000_action_local_v3_1_soft_tap/train.txt",
+      "role": "synthetic",
+      "sampling": "repeat_then_partial",
+      "selected_documents": 8649,
+      "selected_words": 200019,
+      "target_words": 200000
+    }
+  ],
+  "strict_max_words": true,
+  "totals": {
+    "ordered_documents": 1081506,
+    "output_documents": 1081495,
+    "output_words": 10000000,
+    "selected_documents": 1081506,
+    "selected_words": 10000108,
+    "skipped_selected_documents": 11,
+    "target_words": 10000000
+  },
+  "trim_policy": "trim_final_document_only_if_needed",
+  "trimmed_document": {
+    "line_number": 456542,
+    "output_index": 1081494,
+    "output_words": 11,
+    "repeat_index": 0,
+    "selection_index": 59448,
+    "source_doc_index": 456164,
+    "source_name": "babylm2026_strict_small",
+    "source_path": "data/analysis/word2vec/base_text/babylm2026_strict_small/train.txt",
+    "source_role": "base",
+    "source_words": 12,
+    "trimmed": true
+  },
+  "word_count": {
+    "kind": "regex",
+    "pattern": "[A-Za-z0-9]+(?:['-][A-Za-z0-9]+)*"
+  }
+}

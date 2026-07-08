@@ -39,53 +39,106 @@ ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/training/
 Set `BABYSTEPS_RUNS_DIR` and `BABYSTEPS_CACHE_DIR` to move runs and generated
 caches on another machine.
 
-## GPT-BERT BLIMP Supplement Repair Mix
+## GPT-BERT Synthetic Mixes
 
-Use this path for the seed-42 strict-small reference mix that keeps a
-10,000,000-word cap while mixing 95% BabyLM, 1% BLIMP Supplement linguistic
-repair data, 2% physical dynamics, and 2% material affordance data. The 1%
-linguistic repair slice is split evenly between QA answer-type examples and
-turn-taking pronoun examples.
+The current GPT-BERT synthetic-data recipes keep the same model and training
+setup: `BabyLM-community/babylm-baseline-10m-gpt-bert-mixed`, the
+`gpt_bert_baseline_mixed` tokenizer, 512-token sequences, a 1:1 causal/MNTP
+hybrid objective, Muon PE, bf16, and 10 epochs. The text mixer treats each
+non-empty line as a document, uses `seed: 42` and `order_seed: 1`, repeats
+synthetic corpora before a partial repeat, shuffles selected documents
+deterministically, and trims only the final combined corpus if needed to stay
+under the 10,000,000-word cap.
 
-The checked-in text artifact is:
+### 8.5% COMPS + Targeted QA Mix
+
+This is the current recommended strict-small GPT-BERT synthetic mix. It keeps
+the targeted BLIMP Supplement repair slices, physical dynamics, and material
+affordance data, then adds a COMPS concept-property slice:
 
 ```text
-data/text_mixes/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_seed42/train.txt
+91.524% BabyLM 2026 Strict-Small base
+0.500% QA congruence repair with original roles
+0.500% QA turn-taking pronoun frames
+0.150% QA where destination frames
+0.100% QA where local-preposition frames
+0.250% QA who/common-name frames
+2.000% physical dynamics slip-bridge examples
+2.000% material affordance examples
+2.976% COMPS concept-property examples
 ```
 
-It is tracked with Git LFS. To regenerate the text mix from source datasets
-instead, run:
+Use these configs to build and train it:
 
 ```bash
 python scripts/data/build_text_mix.py \
-  --config configs/data_mixes/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_seed42.yaml
+  --config configs/data_mixes/babylm2026_strict_small_replace8p5pct_qaorig_roles0p5_turntaking0p5_qawhere60dest40local0p25_whonames0p25_phys2_mat2_compscp297k_seed42.yaml
+
+python scripts/data/build_token_shards.py \
+  --config configs/tokenization/babylm2026_strict_small_replace8p5pct_qaorig_roles0p5_turntaking0p5_qawhere60dest40local0p25_whonames0p25_phys2_mat2_compscp297k_gpt_bert_mixed_shards.yaml
+
+CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
+  python -u scripts/train/train_hybrid_lm.py \
+  --config configs/train/gpt_bert_mixed_babylm2026_strict_small_replace8p5pct_qaorig_roles0p5_turntaking0p5_qawhere60dest40local0p25_whonames0p25_phys2_mat2_compscp297k_muon.yaml
 ```
 
-That creates:
+### 5.5% Targeted BLIMP Supplement Repair Mix
+
+This focused variant is useful as the targeted BLIMP Supplement repair
+comparison. It keeps the same physical/material curriculum as the older 5.0%
+reference mix, but replaces the generic easy answer-type QA slice with
+original-role congruence, where, and who/name frames:
 
 ```text
-data/text_mixes/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_seed42/train.txt
-data/text_mixes/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_seed42/counts.json
-data/text_mixes/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_seed42/mix_config.yaml
-data/text_mixes/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_seed42/mix_manifest.json
+94.499% BabyLM 2026 Strict-Small base
+0.500% QA congruence repair with original roles
+0.500% QA turn-taking pronoun frames
+0.150% QA where destination frames
+0.100% QA where local-preposition frames
+0.250% QA who/common-name frames
+2.000% physical dynamics slip-bridge examples
+2.000% material affordance examples
 ```
 
-The full `mix_documents.jsonl` provenance file is intentionally not checked in;
-it is much larger than the plain text and is not needed for tokenization. Build
-GPT-BERT mixed token shards from the checked-in `train.txt` with:
+Use these configs to build and train it:
 
 ```bash
+python scripts/data/build_text_mix.py \
+  --config configs/data_mixes/babylm2026_strict_small_replace5p5pct_qaorig_roles0p5_turntaking0p5_qawhere60dest40local0p25_whonames0p25_phys2_mat2_seed42.yaml
+
 python scripts/data/build_token_shards.py \
-  --config configs/tokenization/babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_gptbert_shards_seed42.yaml
+  --config configs/tokenization/babylm2026_strict_small_replace5p5pct_qaorig_roles0p5_turntaking0p5_qawhere60dest40local0p25_whonames0p25_phys2_mat2_gpt_bert_mixed_shards.yaml
+
+CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
+  python -u scripts/train/train_hybrid_lm.py \
+  --config configs/train/gpt_bert_mixed_babylm2026_strict_small_replace5p5pct_qaorig_roles0p5_turntaking0p5_qawhere60dest40local0p25_whonames0p25_phys2_mat2_muon.yaml
 ```
 
-For a faster training run without the expensive benchmark diagnostics, disable
-the BLIMP/Entity Tracking/COMPS MNTP likelihood evals and EWoK context evals:
+### Local Comparison
+
+The table below compares final epoch in-training diagnostics against the
+earlier 5.0% reference mix with easy QA, turn-taking, physical dynamics, and
+material affordance. Entity Tracking is omitted here while its scoring path is
+under audit.
+
+| Mix | EWoK | EWoK Spatial | BLIMP | BLIMP Supplement | COMPS |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 5.0% reference | 0.5277 | 0.4571 | 0.7254 | 0.6780 | 0.5269 |
+| 5.5% targeted BLIMP repair | 0.5284 | **0.4816** | 0.7261 | **0.7049** | 0.5282 |
+| 8.5% COMPS + targeted QA | **0.5334** | 0.4551 | **0.7331** | 0.7011 | **0.5421** |
+
+Relative to the 5.0% reference, the 5.5% targeted repair improves BLIMP
+Supplement by 2.70 points and EWoK spatial by 2.45 points. The 8.5% COMPS mix
+is the stronger current overall recipe: +1.52 points on COMPS, +0.77 points on
+BLIMP, +2.32 points on BLIMP Supplement, and +0.56 points on EWoK overall.
+
+For fast training runs without the expensive benchmark diagnostics, disable the
+BLIMP/Entity Tracking/COMPS MNTP likelihood evals and EWoK context evals:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
   python -u scripts/train/train_hybrid_lm.py \
-  --config configs/train/gptbert_babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_muon_seed42.yaml \
+  --config configs/train/gpt_bert_mixed_babylm2026_strict_small_replace8p5pct_qaorig_roles0p5_turntaking0p5_qawhere60dest40local0p25_whonames0p25_phys2_mat2_compscp297k_muon.yaml \
   --set logging.benchmark_eval_at_start=false \
   --set mntp_likelihood.enabled=false \
   --set ewok_context_sensitivity_full.enabled=false
@@ -94,24 +147,6 @@ CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
 This still keeps the lightweight validation pass controlled by
 `logging.eval_every_steps`. To skip that too, add
 `--set logging.eval_every_steps=0`.
-
-To run the benchmark diagnostics during training, keep them enabled and set the
-word interval you want. This example evaluates every 5,000,000 estimated words;
-replace that value with your preferred `M`:
-
-```bash
-CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
-  python -u scripts/train/train_hybrid_lm.py \
-  --config configs/train/gptbert_babylm2026_strict_small_blimp_supplement_qa_turn_taking_phys_material_muon_seed42.yaml \
-  --set logging.benchmark_eval_at_start=false \
-  --set mntp_likelihood.every_words=5000000 \
-  --set ewok_context_sensitivity_full.every_words=5000000
-```
-
-The text mixer treats each non-empty line as a document, uses seeded
-pseudo-random sampling with `seed: 42` and `order_seed: 1`, repeats synthetic
-corpora before a partial repeat, shuffles selected documents deterministically,
-and only trims the final combined corpus if needed to stay under the cap.
 
 ## Train 2026 Strict-Small GPT-BERT Hybrid
 

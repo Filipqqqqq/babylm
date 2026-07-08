@@ -1,0 +1,42 @@
+name: comps_concept_properties_toy10_seed42
+seed: 42
+output_dir: data/concept_curriculum/comps_concept_properties_toy10_seed42
+target_words_per_concept: 200
+renderer:
+  type: prompt_only
+  model_id: accounts/fireworks/models/qwen3p7-plus
+  temperature: 0.7
+  max_tokens: 384
+  reasoning_effort: none
+  reasoning_history: disabled
+concepts:
+  - id: sheep
+    concept: sheep
+    contrast_set: [goat, cow, lamb]
+  - id: cow
+    concept: cow
+    contrast_set: [goat, sheep, ox]
+  - id: chipmunk
+    concept: chipmunk
+    contrast_set: [squirrel, hamster, beaver]
+  - id: crocodile
+    concept: crocodile
+    contrast_set: [alligator, lizard, turtle]
+  - id: toaster
+    concept: toaster
+    contrast_set: [oven, microwave, blender]
+  - id: gong
+    concept: gong
+    contrast_set: [bell, drum, banjo]
+  - id: veil
+    concept: veil
+    contrast_set: [scarf, hat, curtain]
+  - id: pineapple
+    concept: pineapple
+    contrast_set: [mango, tomato, coconut]
+  - id: willow_tree
+    concept: willow tree
+    contrast_set: [oak tree, pine tree, bamboo]
+  - id: coffee
+    concept: coffee
+    contrast_set: [tea, lemonade, cocoa]

@@ -1,0 +1,18 @@
+{
+  "counts": {
+    "fail": 0,
+    "pass": 1000,
+    "warn": 0
+  },
+  "name": "qa_congruence_qwen3p7plus_roles_sample50_seed42",
+  "question_type_counts": {
+    "how_many": 582,
+    "what": 585,
+    "when": 563,
+    "where": 579,
+    "who": 572,
+    "why": 595
+  },
+  "total_documents": 1000,
+  "train_documents": 1000
+}

@@ -1,0 +1,3884 @@
+{
+  "concepts": [
+    {
+      "concept": "accordion",
+      "concept_types": [
+        "device",
+        "human_made_object"
+      ],
+      "id": "accordion"
+    },
+    {
+      "concept": "airplane",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "airplane"
+    },
+    {
+      "concept": "alligator",
+      "concept_types": [
+        "reptile",
+        "animal"
+      ],
+      "id": "alligator"
+    },
+    {
+      "concept": "ambulance",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "ambulance"
+    },
+    {
+      "concept": "ant",
+      "concept_types": [
+        "insect",
+        "animal"
+      ],
+      "id": "ant"
+    },
+    {
+      "concept": "apple",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "apple"
+    },
+    {
+      "concept": "apricot",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "apricot"
+    },
+    {
+      "concept": "apron",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "apron"
+    },
+    {
+      "concept": "arm",
+      "concept_types": [
+        "body_part"
+      ],
+      "id": "arm"
+    },
+    {
+      "concept": "armchair",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "armchair"
+    },
+    {
+      "concept": "armor",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "armor"
+    },
+    {
+      "concept": "arrow",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "arrow"
+    },
+    {
+      "concept": "artichoke",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "artichoke"
+    },
+    {
+      "concept": "ashtray",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "ashtray"
+    },
+    {
+      "concept": "asparagus",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "asparagus"
+    },
+    {
+      "concept": "avocado",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "avocado"
+    },
+    {
+      "concept": "axe",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "axe"
+    },
+    {
+      "concept": "bacon",
+      "concept_types": [
+        "food"
+      ],
+      "id": "bacon"
+    },
+    {
+      "concept": "bag",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "bag"
+    },
+    {
+      "concept": "bagpipe",
+      "concept_types": [
+        "device",
+        "human_made_object"
+      ],
+      "id": "bagpipe"
+    },
+    {
+      "concept": "ball",
+      "concept_types": [
+        "toy",
+        "sports_equipment"
+      ],
+      "id": "ball"
+    },
+    {
+      "concept": "balloon",
+      "concept_types": [
+        "toy",
+        "human_made_object"
+      ],
+      "id": "balloon"
+    },
+    {
+      "concept": "banana",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "banana"
+    },
+    {
+      "concept": "banjo",
+      "concept_types": [
+        "device",
+        "human_made_object"
+      ],
+      "id": "banjo"
+    },
+    {
+      "concept": "barge",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "barge"
+    },
+    {
+      "concept": "barrel",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "barrel"
+    },
+    {
+      "concept": "basin",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "basin"
+    },
+    {
+      "concept": "basket",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "basket"
+    },
+    {
+      "concept": "bat",
+      "concept_types": [
+        "animal",
+        "mammal"
+      ],
+      "id": "bat",
+      "sense_hint": "a bat, meaning the flying mammal"
+    },
+    {
+      "concept": "bathtub",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "bathtub"
+    },
+    {
+      "concept": "bayonet",
+      "concept_types": [
+        "tool",
+        "human_made_object"
+      ],
+      "id": "bayonet"
+    },
+    {
+      "concept": "bean",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "bean"
+    },
+    {
+      "concept": "bear",
+      "concept_types": [
+        "animal",
+        "mammal"
+      ],
+      "id": "bear"
+    },
+    {
+      "concept": "beaver",
+      "concept_types": [
+        "animal",
+        "mammal"
+      ],
+      "id": "beaver"
+    },
+    {
+      "concept": "bed",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "bed"
+    },
+    {
+      "concept": "bee",
+      "concept_types": [
+        "insect",
+        "animal"
+      ],
+      "id": "bee"
+    },
+    {
+      "concept": "beer",
+      "concept_types": [
+        "beverage",
+        "drink"
+      ],
+      "id": "beer"
+    },
+    {
+      "concept": "beetle",
+      "concept_types": [
+        "insect",
+        "animal"
+      ],
+      "id": "beetle"
+    },
+    {
+      "concept": "belt",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "belt"
+    },
+    {
+      "concept": "bench",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "bench"
+    },
+    {
+      "concept": "bicycle",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "bicycle"
+    },
+    {
+      "concept": "bikini",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "bikini"
+    },
+    {
+      "concept": "bin",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "bin"
+    },
+    {
+      "concept": "birch",
+      "concept_types": [
+        "tree"
+      ],
+      "id": "birch"
+    },
+    {
+      "concept": "blender",
+      "concept_types": [
+        "device"
+      ],
+      "id": "blender"
+    },
+    {
+      "concept": "blouse",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "blouse"
+    },
+    {
+      "concept": "blueberry",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "blueberry"
+    },
+    {
+      "concept": "boat",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "boat"
+    },
+    {
+      "concept": "bolt",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "bolt"
+    },
+    {
+      "concept": "bomb",
+      "concept_types": [
+        "weapon"
+      ],
+      "id": "bomb"
+    },
+    {
+      "concept": "bone",
+      "concept_types": [
+        "body_part"
+      ],
+      "id": "bone"
+    },
+    {
+      "concept": "bookcase",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "bookcase"
+    },
+    {
+      "concept": "boomerang",
+      "concept_types": [
+        "toy",
+        "sports_equipment"
+      ],
+      "id": "boomerang"
+    },
+    {
+      "concept": "bottle",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "bottle"
+    },
+    {
+      "concept": "bow",
+      "concept_types": [
+        "weapon",
+        "sports_equipment"
+      ],
+      "id": "bow",
+      "sense_hint": "a bow, meaning the flexible archery object used with arrows"
+    },
+    {
+      "concept": "bowl",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "bowl"
+    },
+    {
+      "concept": "box",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "box"
+    },
+    {
+      "concept": "bra",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "bra"
+    },
+    {
+      "concept": "brandy",
+      "concept_types": [
+        "beverage",
+        "drink"
+      ],
+      "id": "brandy"
+    },
+    {
+      "concept": "bread",
+      "concept_types": [
+        "food"
+      ],
+      "id": "bread"
+    },
+    {
+      "concept": "broccoli",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "broccoli"
+    },
+    {
+      "concept": "broom",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "broom"
+    },
+    {
+      "concept": "brussels sprout",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "brussels_sprout"
+    },
+    {
+      "concept": "bucket",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "bucket"
+    },
+    {
+      "concept": "budgie",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "budgie"
+    },
+    {
+      "concept": "buffalo",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "buffalo"
+    },
+    {
+      "concept": "buggy",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "buggy"
+    },
+    {
+      "concept": "bullet",
+      "concept_types": [
+        "weapon"
+      ],
+      "id": "bullet"
+    },
+    {
+      "concept": "bus",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "bus"
+    },
+    {
+      "concept": "butter",
+      "concept_types": [
+        "food",
+        "ingredient"
+      ],
+      "id": "butter"
+    },
+    {
+      "concept": "buttercup",
+      "concept_types": [
+        "flower"
+      ],
+      "id": "buttercup"
+    },
+    {
+      "concept": "butterfly",
+      "concept_types": [
+        "insect"
+      ],
+      "id": "butterfly"
+    },
+    {
+      "concept": "buzzard",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "buzzard"
+    },
+    {
+      "concept": "cabbage",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "cabbage"
+    },
+    {
+      "concept": "cage",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "cage"
+    },
+    {
+      "concept": "cake",
+      "concept_types": [
+        "food"
+      ],
+      "id": "cake"
+    },
+    {
+      "concept": "calf",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "calf"
+    },
+    {
+      "concept": "camel",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "camel"
+    },
+    {
+      "concept": "camera",
+      "concept_types": [
+        "device"
+      ],
+      "id": "camera"
+    },
+    {
+      "concept": "can opener",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "can_opener"
+    },
+    {
+      "concept": "canary",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "canary"
+    },
+    {
+      "concept": "cannon",
+      "concept_types": [
+        "weapon"
+      ],
+      "id": "cannon"
+    },
+    {
+      "concept": "canoe",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "canoe"
+    },
+    {
+      "concept": "cap",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "cap"
+    },
+    {
+      "concept": "cape",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "cape"
+    },
+    {
+      "concept": "car",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "car"
+    },
+    {
+      "concept": "caravan",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "caravan"
+    },
+    {
+      "concept": "carnation",
+      "concept_types": [
+        "flower"
+      ],
+      "id": "carnation"
+    },
+    {
+      "concept": "carp",
+      "concept_types": [
+        "fish"
+      ],
+      "id": "carp"
+    },
+    {
+      "concept": "carriage",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "carriage"
+    },
+    {
+      "concept": "carrot",
+      "concept_types": [
+        "plant",
+        "food"
+      ],
+      "id": "carrot"
+    },
+    {
+      "concept": "cart",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "cart"
+    },
+    {
+      "concept": "castanets",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "castanets"
+    },
+    {
+      "concept": "cat",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "cat"
+    },
+    {
+      "concept": "catapult",
+      "concept_types": [
+        "weapon"
+      ],
+      "id": "catapult"
+    },
+    {
+      "concept": "caterpillar",
+      "concept_types": [
+        "insect"
+      ],
+      "id": "caterpillar"
+    },
+    {
+      "concept": "cauliflower",
+      "concept_types": [
+        "plant",
+        "food"
+      ],
+      "id": "cauliflower"
+    },
+    {
+      "concept": "celery",
+      "concept_types": [
+        "plant",
+        "food"
+      ],
+      "id": "celery"
+    },
+    {
+      "concept": "cello",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "cello"
+    },
+    {
+      "concept": "centipede",
+      "concept_types": [
+        "insect"
+      ],
+      "id": "centipede"
+    },
+    {
+      "concept": "chainsaw",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "chainsaw"
+    },
+    {
+      "concept": "chair",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "chair"
+    },
+    {
+      "concept": "champagne",
+      "concept_types": [
+        "beverage",
+        "drink"
+      ],
+      "id": "champagne"
+    },
+    {
+      "concept": "chandelier",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "chandelier"
+    },
+    {
+      "concept": "cheese",
+      "concept_types": [
+        "food"
+      ],
+      "id": "cheese"
+    },
+    {
+      "concept": "cheetah",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "cheetah"
+    },
+    {
+      "concept": "cherry",
+      "concept_types": [
+        "plant",
+        "food"
+      ],
+      "id": "cherry"
+    },
+    {
+      "concept": "chest of drawers",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "chest_of_drawers"
+    },
+    {
+      "concept": "chestnut",
+      "concept_types": [
+        "plant",
+        "food"
+      ],
+      "id": "chestnut"
+    },
+    {
+      "concept": "chicken",
+      "concept_types": [
+        "bird",
+        "food"
+      ],
+      "id": "chicken"
+    },
+    {
+      "concept": "chipmunk",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "chipmunk"
+    },
+    {
+      "concept": "chisel",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "chisel"
+    },
+    {
+      "concept": "chocolate",
+      "concept_types": [
+        "food"
+      ],
+      "id": "chocolate"
+    },
+    {
+      "concept": "chopping board",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "chopping_board"
+    },
+    {
+      "concept": "cider",
+      "concept_types": [
+        "beverage",
+        "drink"
+      ],
+      "id": "cider"
+    },
+    {
+      "concept": "clam",
+      "concept_types": [
+        "food"
+      ],
+      "id": "clam"
+    },
+    {
+      "concept": "clamp",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "clamp"
+    },
+    {
+      "concept": "clarinet",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "clarinet"
+    },
+    {
+      "concept": "cloak",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "cloak"
+    },
+    {
+      "concept": "clock",
+      "concept_types": [
+        "device"
+      ],
+      "id": "clock"
+    },
+    {
+      "concept": "club",
+      "concept_types": [
+        "sports_equipment",
+        "weapon"
+      ],
+      "id": "club"
+    },
+    {
+      "concept": "coach",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "coach",
+      "sense_hint": "a coach, meaning a long passenger bus used for group travel"
+    },
+    {
+      "concept": "coat",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "coat"
+    },
+    {
+      "concept": "cockerel",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "cockerel"
+    },
+    {
+      "concept": "cockroach",
+      "concept_types": [
+        "insect"
+      ],
+      "id": "cockroach"
+    },
+    {
+      "concept": "coconut",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "coconut"
+    },
+    {
+      "concept": "cod",
+      "concept_types": [
+        "fish",
+        "food"
+      ],
+      "id": "cod"
+    },
+    {
+      "concept": "coffee",
+      "concept_types": [
+        "beverage",
+        "drink"
+      ],
+      "id": "coffee"
+    },
+    {
+      "concept": "coffee maker",
+      "concept_types": [
+        "device",
+        "human_made_object"
+      ],
+      "id": "coffee_maker"
+    },
+    {
+      "concept": "colander",
+      "concept_types": [
+        "tool",
+        "human_made_object"
+      ],
+      "id": "colander"
+    },
+    {
+      "concept": "cookie",
+      "concept_types": [
+        "food"
+      ],
+      "id": "cookie"
+    },
+    {
+      "concept": "corkscrew",
+      "concept_types": [
+        "tool",
+        "human_made_object"
+      ],
+      "id": "corkscrew"
+    },
+    {
+      "concept": "corn",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "corn"
+    },
+    {
+      "concept": "cow",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "cow"
+    },
+    {
+      "concept": "crab",
+      "concept_types": [
+        "animal"
+      ],
+      "id": "crab"
+    },
+    {
+      "concept": "cradle",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "cradle"
+    },
+    {
+      "concept": "crane",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "crane"
+    },
+    {
+      "concept": "crayfish",
+      "concept_types": [
+        "animal",
+        "food"
+      ],
+      "id": "crayfish"
+    },
+    {
+      "concept": "cricket",
+      "concept_types": [
+        "insect"
+      ],
+      "id": "cricket",
+      "sense_hint": "a cricket, meaning the small chirping insect"
+    },
+    {
+      "concept": "crocodile",
+      "concept_types": [
+        "reptile",
+        "animal"
+      ],
+      "id": "crocodile"
+    },
+    {
+      "concept": "crossbow",
+      "concept_types": [
+        "weapon"
+      ],
+      "id": "crossbow"
+    },
+    {
+      "concept": "crowbar",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "crowbar"
+    },
+    {
+      "concept": "cucumber",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "cucumber"
+    },
+    {
+      "concept": "cup",
+      "concept_types": [
+        "object",
+        "human_made_object"
+      ],
+      "id": "cup"
+    },
+    {
+      "concept": "cupboard",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "cupboard"
+    },
+    {
+      "concept": "currant",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "currant"
+    },
+    {
+      "concept": "cymbal",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "cymbal"
+    },
+    {
+      "concept": "daffodil",
+      "concept_types": [
+        "flower",
+        "plant"
+      ],
+      "id": "daffodil"
+    },
+    {
+      "concept": "dagger",
+      "concept_types": [
+        "weapon"
+      ],
+      "id": "dagger"
+    },
+    {
+      "concept": "daisy",
+      "concept_types": [
+        "flower",
+        "plant"
+      ],
+      "id": "daisy"
+    },
+    {
+      "concept": "dandelion",
+      "concept_types": [
+        "flower",
+        "plant"
+      ],
+      "id": "dandelion"
+    },
+    {
+      "concept": "date",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "date"
+    },
+    {
+      "concept": "deckchair",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "deckchair"
+    },
+    {
+      "concept": "deer",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "deer"
+    },
+    {
+      "concept": "desk",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "desk"
+    },
+    {
+      "concept": "dice",
+      "concept_types": [
+        "game",
+        "toy"
+      ],
+      "id": "dice"
+    },
+    {
+      "concept": "dinghy",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "dinghy"
+    },
+    {
+      "concept": "dishwasher",
+      "concept_types": [
+        "device",
+        "human_made_object"
+      ],
+      "id": "dishwasher"
+    },
+    {
+      "concept": "dog",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "dog"
+    },
+    {
+      "concept": "doll",
+      "concept_types": [
+        "toy"
+      ],
+      "id": "doll"
+    },
+    {
+      "concept": "dolphin",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "dolphin"
+    },
+    {
+      "concept": "donkey",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "donkey"
+    },
+    {
+      "concept": "donut",
+      "concept_types": [
+        "food"
+      ],
+      "id": "donut"
+    },
+    {
+      "concept": "dove",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "dove"
+    },
+    {
+      "concept": "dragonfly",
+      "concept_types": [
+        "insect"
+      ],
+      "id": "dragonfly"
+    },
+    {
+      "concept": "dress",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "dress"
+    },
+    {
+      "concept": "dresser",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "dresser"
+    },
+    {
+      "concept": "dressing gown",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "dressing_gown"
+    },
+    {
+      "concept": "drill",
+      "concept_types": [
+        "tool",
+        "device"
+      ],
+      "id": "drill"
+    },
+    {
+      "concept": "drum",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "drum"
+    },
+    {
+      "concept": "duck",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "duck"
+    },
+    {
+      "concept": "eagle",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "eagle"
+    },
+    {
+      "concept": "ear",
+      "concept_types": [
+        "body_part",
+        "organ"
+      ],
+      "id": "ear"
+    },
+    {
+      "concept": "earmuffs",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "earmuffs"
+    },
+    {
+      "concept": "eel",
+      "concept_types": [
+        "fish",
+        "food"
+      ],
+      "id": "eel"
+    },
+    {
+      "concept": "eggplant",
+      "concept_types": [
+        "plant",
+        "food"
+      ],
+      "id": "eggplant"
+    },
+    {
+      "concept": "elephant",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "elephant"
+    },
+    {
+      "concept": "elm",
+      "concept_types": [
+        "tree",
+        "plant"
+      ],
+      "id": "elm"
+    },
+    {
+      "concept": "emu",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "emu"
+    },
+    {
+      "concept": "eucalyptus",
+      "concept_types": [
+        "tree",
+        "plant"
+      ],
+      "id": "eucalyptus"
+    },
+    {
+      "concept": "eye",
+      "concept_types": [
+        "body_part",
+        "organ"
+      ],
+      "id": "eye"
+    },
+    {
+      "concept": "falcon",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "falcon"
+    },
+    {
+      "concept": "ferry",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "ferry"
+    },
+    {
+      "concept": "finger",
+      "concept_types": [
+        "body_part"
+      ],
+      "id": "finger"
+    },
+    {
+      "concept": "fir",
+      "concept_types": [
+        "tree",
+        "plant"
+      ],
+      "id": "fir"
+    },
+    {
+      "concept": "flamingo",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "flamingo"
+    },
+    {
+      "concept": "flea",
+      "concept_types": [
+        "insect"
+      ],
+      "id": "flea"
+    },
+    {
+      "concept": "flounder",
+      "concept_types": [
+        "fish",
+        "food"
+      ],
+      "id": "flounder"
+    },
+    {
+      "concept": "flour",
+      "concept_types": [
+        "food",
+        "ingredient",
+        "substance"
+      ],
+      "id": "flour"
+    },
+    {
+      "concept": "flute",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "flute"
+    },
+    {
+      "concept": "foot",
+      "concept_types": [
+        "body_part"
+      ],
+      "id": "foot"
+    },
+    {
+      "concept": "football",
+      "concept_types": [
+        "sports_equipment",
+        "play_object"
+      ],
+      "id": "football"
+    },
+    {
+      "concept": "fork",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "fork"
+    },
+    {
+      "concept": "fox",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "fox"
+    },
+    {
+      "concept": "french horn",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "french_horn"
+    },
+    {
+      "concept": "frisbee",
+      "concept_types": [
+        "toy",
+        "sports_equipment"
+      ],
+      "id": "frisbee"
+    },
+    {
+      "concept": "frog",
+      "concept_types": [
+        "animal"
+      ],
+      "id": "frog"
+    },
+    {
+      "concept": "garlic",
+      "concept_types": [
+        "plant",
+        "food",
+        "ingredient"
+      ],
+      "id": "garlic"
+    },
+    {
+      "concept": "geranium",
+      "concept_types": [
+        "flower",
+        "plant"
+      ],
+      "id": "geranium"
+    },
+    {
+      "concept": "gerbil",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "gerbil"
+    },
+    {
+      "concept": "gherkin",
+      "concept_types": [
+        "food",
+        "ingredient"
+      ],
+      "id": "gherkin"
+    },
+    {
+      "concept": "gin",
+      "concept_types": [
+        "beverage",
+        "drink"
+      ],
+      "id": "gin"
+    },
+    {
+      "concept": "giraffe",
+      "concept_types": [
+        "animal",
+        "mammal"
+      ],
+      "id": "giraffe"
+    },
+    {
+      "concept": "glider",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "glider"
+    },
+    {
+      "concept": "gloves",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "gloves"
+    },
+    {
+      "concept": "goat",
+      "concept_types": [
+        "animal",
+        "mammal"
+      ],
+      "id": "goat"
+    },
+    {
+      "concept": "goldfish",
+      "concept_types": [
+        "animal",
+        "fish"
+      ],
+      "id": "goldfish"
+    },
+    {
+      "concept": "gong",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "gong"
+    },
+    {
+      "concept": "goose",
+      "concept_types": [
+        "animal",
+        "bird"
+      ],
+      "id": "goose"
+    },
+    {
+      "concept": "gorilla",
+      "concept_types": [
+        "animal",
+        "mammal"
+      ],
+      "id": "gorilla"
+    },
+    {
+      "concept": "gown",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "gown"
+    },
+    {
+      "concept": "grape",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "grape"
+    },
+    {
+      "concept": "grapefruit",
+      "concept_types": [
+        "food",
+        "plant"
+      ],
+      "id": "grapefruit"
+    },
+    {
+      "concept": "grasshopper",
+      "concept_types": [
+        "animal",
+        "insect"
+      ],
+      "id": "grasshopper"
+    },
+    {
+      "concept": "grater",
+      "concept_types": [
+        "tool",
+        "human_made_object"
+      ],
+      "id": "grater"
+    },
+    {
+      "concept": "grenade",
+      "concept_types": [
+        "weapon"
+      ],
+      "id": "grenade"
+    },
+    {
+      "concept": "guinea pig",
+      "concept_types": [
+        "animal",
+        "mammal"
+      ],
+      "id": "guinea_pig"
+    },
+    {
+      "concept": "guitar",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "guitar"
+    },
+    {
+      "concept": "gun",
+      "concept_types": [
+        "weapon"
+      ],
+      "id": "gun"
+    },
+    {
+      "concept": "hair",
+      "concept_types": [
+        "body_part",
+        "substance"
+      ],
+      "id": "hair"
+    },
+    {
+      "concept": "ham",
+      "concept_types": [
+        "food"
+      ],
+      "id": "ham"
+    },
+    {
+      "concept": "hammer",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "hammer"
+    },
+    {
+      "concept": "hamster",
+      "concept_types": [
+        "animal",
+        "mammal"
+      ],
+      "id": "hamster"
+    },
+    {
+      "concept": "harmonica",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "harmonica"
+    },
+    {
+      "concept": "harp",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "harp"
+    },
+    {
+      "concept": "harpoon",
+      "concept_types": [
+        "weapon",
+        "tool"
+      ],
+      "id": "harpoon"
+    },
+    {
+      "concept": "harpsichord",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "harpsichord"
+    },
+    {
+      "concept": "hatchet",
+      "concept_types": [
+        "tool",
+        "weapon"
+      ],
+      "id": "hatchet"
+    },
+    {
+      "concept": "hawk",
+      "concept_types": [
+        "animal",
+        "bird"
+      ],
+      "id": "hawk"
+    },
+    {
+      "concept": "heart",
+      "concept_types": [
+        "organ",
+        "body_part"
+      ],
+      "id": "heart"
+    },
+    {
+      "concept": "hedgehog",
+      "concept_types": [
+        "animal",
+        "mammal"
+      ],
+      "id": "hedgehog"
+    },
+    {
+      "concept": "helicopter",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "helicopter"
+    },
+    {
+      "concept": "helmet",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "helmet"
+    },
+    {
+      "concept": "heron",
+      "concept_types": [
+        "animal",
+        "bird"
+      ],
+      "id": "heron"
+    },
+    {
+      "concept": "herring",
+      "concept_types": [
+        "animal",
+        "fish",
+        "food"
+      ],
+      "id": "herring"
+    },
+    {
+      "concept": "hippo",
+      "concept_types": [
+        "animal",
+        "mammal"
+      ],
+      "id": "hippo"
+    },
+    {
+      "concept": "hoe",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "hoe"
+    },
+    {
+      "concept": "hornet",
+      "concept_types": [
+        "animal",
+        "insect"
+      ],
+      "id": "hornet"
+    },
+    {
+      "concept": "horse",
+      "concept_types": [
+        "animal",
+        "mammal"
+      ],
+      "id": "horse"
+    },
+    {
+      "concept": "hose",
+      "concept_types": [
+        "tool",
+        "human_made_object"
+      ],
+      "id": "hose"
+    },
+    {
+      "concept": "houseboat",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "houseboat"
+    },
+    {
+      "concept": "housefly",
+      "concept_types": [
+        "insect"
+      ],
+      "id": "housefly"
+    },
+    {
+      "concept": "hummingbird",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "hummingbird"
+    },
+    {
+      "concept": "hutch",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "hutch"
+    },
+    {
+      "concept": "hyacinth",
+      "concept_types": [
+        "flower"
+      ],
+      "id": "hyacinth"
+    },
+    {
+      "concept": "hyena",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "hyena"
+    },
+    {
+      "concept": "ice cream",
+      "concept_types": [
+        "dessert"
+      ],
+      "id": "ice_cream"
+    },
+    {
+      "concept": "iguana",
+      "concept_types": [
+        "reptile"
+      ],
+      "id": "iguana"
+    },
+    {
+      "concept": "jacket",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "jacket"
+    },
+    {
+      "concept": "jam",
+      "concept_types": [
+        "food",
+        "condiment"
+      ],
+      "id": "jam"
+    },
+    {
+      "concept": "jar",
+      "concept_types": [
+        "object"
+      ],
+      "id": "jar"
+    },
+    {
+      "concept": "jeans",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "jeans"
+    },
+    {
+      "concept": "jelly",
+      "concept_types": [
+        "food",
+        "dessert"
+      ],
+      "id": "jelly"
+    },
+    {
+      "concept": "jellyfish",
+      "concept_types": [
+        "animal"
+      ],
+      "id": "jellyfish"
+    },
+    {
+      "concept": "jug",
+      "concept_types": [
+        "object"
+      ],
+      "id": "jug"
+    },
+    {
+      "concept": "kangaroo",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "kangaroo"
+    },
+    {
+      "concept": "kayak",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "kayak"
+    },
+    {
+      "concept": "ketchup",
+      "concept_types": [
+        "condiment"
+      ],
+      "id": "ketchup"
+    },
+    {
+      "concept": "kettle",
+      "concept_types": [
+        "device"
+      ],
+      "id": "kettle"
+    },
+    {
+      "concept": "kingfisher",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "kingfisher"
+    },
+    {
+      "concept": "kite",
+      "concept_types": [
+        "toy",
+        "play_object"
+      ],
+      "id": "kite"
+    },
+    {
+      "concept": "kiwi",
+      "concept_types": [
+        "fruit"
+      ],
+      "id": "kiwi"
+    },
+    {
+      "concept": "knickers",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "knickers"
+    },
+    {
+      "concept": "knife",
+      "concept_types": [
+        "tool",
+        "weapon"
+      ],
+      "id": "knife"
+    },
+    {
+      "concept": "ladle",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "ladle"
+    },
+    {
+      "concept": "ladybird",
+      "concept_types": [
+        "insect"
+      ],
+      "id": "ladybird"
+    },
+    {
+      "concept": "lamb",
+      "concept_types": [
+        "mammal",
+        "food"
+      ],
+      "id": "lamb"
+    },
+    {
+      "concept": "lamp",
+      "concept_types": [
+        "device"
+      ],
+      "id": "lamp"
+    },
+    {
+      "concept": "leek",
+      "concept_types": [
+        "vegetable"
+      ],
+      "id": "leek"
+    },
+    {
+      "concept": "leg",
+      "concept_types": [
+        "body_part"
+      ],
+      "id": "leg"
+    },
+    {
+      "concept": "lemon",
+      "concept_types": [
+        "fruit"
+      ],
+      "id": "lemon"
+    },
+    {
+      "concept": "lemonade",
+      "concept_types": [
+        "beverage",
+        "drink"
+      ],
+      "id": "lemonade"
+    },
+    {
+      "concept": "leopard",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "leopard"
+    },
+    {
+      "concept": "leotard",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "leotard"
+    },
+    {
+      "concept": "lettuce",
+      "concept_types": [
+        "vegetable"
+      ],
+      "id": "lettuce"
+    },
+    {
+      "concept": "lily",
+      "concept_types": [
+        "flower"
+      ],
+      "id": "lily"
+    },
+    {
+      "concept": "lime",
+      "concept_types": [
+        "fruit"
+      ],
+      "id": "lime"
+    },
+    {
+      "concept": "limousine",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "limousine"
+    },
+    {
+      "concept": "lion",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "lion"
+    },
+    {
+      "concept": "lips",
+      "concept_types": [
+        "body_part"
+      ],
+      "id": "lips"
+    },
+    {
+      "concept": "lizard",
+      "concept_types": [
+        "reptile"
+      ],
+      "id": "lizard"
+    },
+    {
+      "concept": "llama",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "llama"
+    },
+    {
+      "concept": "lobster",
+      "concept_types": [
+        "food"
+      ],
+      "id": "lobster"
+    },
+    {
+      "concept": "locust",
+      "concept_types": [
+        "insect"
+      ],
+      "id": "locust"
+    },
+    {
+      "concept": "lorry",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "lorry"
+    },
+    {
+      "concept": "machete",
+      "concept_types": [
+        "tool",
+        "weapon"
+      ],
+      "id": "machete"
+    },
+    {
+      "concept": "mackerel",
+      "concept_types": [
+        "fish",
+        "food"
+      ],
+      "id": "mackerel"
+    },
+    {
+      "concept": "magpie",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "magpie"
+    },
+    {
+      "concept": "mango",
+      "concept_types": [
+        "fruit"
+      ],
+      "id": "mango"
+    },
+    {
+      "concept": "marble",
+      "concept_types": [
+        "toy",
+        "game"
+      ],
+      "id": "marble"
+    },
+    {
+      "concept": "marigold",
+      "concept_types": [
+        "flower"
+      ],
+      "id": "marigold"
+    },
+    {
+      "concept": "mayonnaise",
+      "concept_types": [
+        "condiment",
+        "food"
+      ],
+      "id": "mayonnaise"
+    },
+    {
+      "concept": "melon",
+      "concept_types": [
+        "fruit"
+      ],
+      "id": "melon"
+    },
+    {
+      "concept": "microwave",
+      "concept_types": [
+        "device"
+      ],
+      "id": "microwave"
+    },
+    {
+      "concept": "milk",
+      "concept_types": [
+        "beverage",
+        "drink",
+        "food"
+      ],
+      "id": "milk"
+    },
+    {
+      "concept": "millipede",
+      "concept_types": [
+        "insect"
+      ],
+      "id": "millipede"
+    },
+    {
+      "concept": "minnow",
+      "concept_types": [
+        "fish"
+      ],
+      "id": "minnow"
+    },
+    {
+      "concept": "mirror",
+      "concept_types": [
+        "object"
+      ],
+      "id": "mirror"
+    },
+    {
+      "concept": "mitten",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "mitten"
+    },
+    {
+      "concept": "monkey",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "monkey"
+    },
+    {
+      "concept": "moose",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "moose"
+    },
+    {
+      "concept": "moped",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "moped"
+    },
+    {
+      "concept": "mosquito",
+      "concept_types": [
+        "insect"
+      ],
+      "id": "mosquito"
+    },
+    {
+      "concept": "moth",
+      "concept_types": [
+        "insect"
+      ],
+      "id": "moth"
+    },
+    {
+      "concept": "motorcycle",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "motorcycle"
+    },
+    {
+      "concept": "mouse",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "mouse"
+    },
+    {
+      "concept": "mug",
+      "concept_types": [
+        "object"
+      ],
+      "id": "mug"
+    },
+    {
+      "concept": "mushroom",
+      "concept_types": [
+        "food"
+      ],
+      "id": "mushroom"
+    },
+    {
+      "concept": "mussel",
+      "concept_types": [
+        "food"
+      ],
+      "id": "mussel"
+    },
+    {
+      "concept": "nail",
+      "concept_types": [
+        "object"
+      ],
+      "id": "nail"
+    },
+    {
+      "concept": "nectarine",
+      "concept_types": [
+        "fruit"
+      ],
+      "id": "nectarine"
+    },
+    {
+      "concept": "nightingale",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "nightingale"
+    },
+    {
+      "concept": "nose",
+      "concept_types": [
+        "body_part"
+      ],
+      "id": "nose"
+    },
+    {
+      "concept": "nut",
+      "concept_types": [
+        "food"
+      ],
+      "id": "nut"
+    },
+    {
+      "concept": "oak",
+      "concept_types": [
+        "tree"
+      ],
+      "id": "oak"
+    },
+    {
+      "concept": "octopus",
+      "concept_types": [
+        "food"
+      ],
+      "id": "octopus"
+    },
+    {
+      "concept": "oil tanker",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "oil_tanker"
+    },
+    {
+      "concept": "olive",
+      "concept_types": [
+        "fruit",
+        "food"
+      ],
+      "id": "olive"
+    },
+    {
+      "concept": "onion",
+      "concept_types": [
+        "vegetable"
+      ],
+      "id": "onion"
+    },
+    {
+      "concept": "orange",
+      "concept_types": [
+        "fruit"
+      ],
+      "id": "orange"
+    },
+    {
+      "concept": "orchid",
+      "concept_types": [
+        "flower",
+        "plant"
+      ],
+      "id": "orchid"
+    },
+    {
+      "concept": "organ",
+      "concept_types": [
+        "organ",
+        "body_part"
+      ],
+      "id": "organ"
+    },
+    {
+      "concept": "ostrich",
+      "concept_types": [
+        "bird",
+        "animal"
+      ],
+      "id": "ostrich"
+    },
+    {
+      "concept": "otter",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "otter"
+    },
+    {
+      "concept": "oven",
+      "concept_types": [
+        "device",
+        "human_made_object"
+      ],
+      "id": "oven"
+    },
+    {
+      "concept": "owl",
+      "concept_types": [
+        "bird",
+        "animal"
+      ],
+      "id": "owl"
+    },
+    {
+      "concept": "ox",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "ox"
+    },
+    {
+      "concept": "oyster",
+      "concept_types": [
+        "food",
+        "animal"
+      ],
+      "id": "oyster"
+    },
+    {
+      "concept": "pajama",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "pajama"
+    },
+    {
+      "concept": "pansy",
+      "concept_types": [
+        "flower",
+        "plant"
+      ],
+      "id": "pansy"
+    },
+    {
+      "concept": "panther",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "panther"
+    },
+    {
+      "concept": "parakeet",
+      "concept_types": [
+        "bird",
+        "animal"
+      ],
+      "id": "parakeet"
+    },
+    {
+      "concept": "parka",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "parka"
+    },
+    {
+      "concept": "parsley",
+      "concept_types": [
+        "plant",
+        "ingredient"
+      ],
+      "id": "parsley"
+    },
+    {
+      "concept": "partridge",
+      "concept_types": [
+        "bird",
+        "animal"
+      ],
+      "id": "partridge"
+    },
+    {
+      "concept": "pea",
+      "concept_types": [
+        "vegetable",
+        "food"
+      ],
+      "id": "pea"
+    },
+    {
+      "concept": "peach",
+      "concept_types": [
+        "fruit",
+        "food"
+      ],
+      "id": "peach"
+    },
+    {
+      "concept": "peacock",
+      "concept_types": [
+        "bird",
+        "animal"
+      ],
+      "id": "peacock"
+    },
+    {
+      "concept": "peanut",
+      "concept_types": [
+        "food",
+        "ingredient"
+      ],
+      "id": "peanut"
+    },
+    {
+      "concept": "pear",
+      "concept_types": [
+        "fruit",
+        "food"
+      ],
+      "id": "pear"
+    },
+    {
+      "concept": "peeler",
+      "concept_types": [
+        "tool",
+        "human_made_object"
+      ],
+      "id": "peeler"
+    },
+    {
+      "concept": "pelican",
+      "concept_types": [
+        "bird",
+        "animal"
+      ],
+      "id": "pelican"
+    },
+    {
+      "concept": "penguin",
+      "concept_types": [
+        "bird",
+        "animal"
+      ],
+      "id": "penguin"
+    },
+    {
+      "concept": "penknife",
+      "concept_types": [
+        "tool",
+        "weapon"
+      ],
+      "id": "penknife"
+    },
+    {
+      "concept": "piano",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "piano"
+    },
+    {
+      "concept": "pie",
+      "concept_types": [
+        "food",
+        "dessert"
+      ],
+      "id": "pie"
+    },
+    {
+      "concept": "pig",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "pig"
+    },
+    {
+      "concept": "pigeon",
+      "concept_types": [
+        "bird",
+        "animal"
+      ],
+      "id": "pigeon"
+    },
+    {
+      "concept": "pine",
+      "concept_types": [
+        "tree",
+        "plant"
+      ],
+      "id": "pine"
+    },
+    {
+      "concept": "pineapple",
+      "concept_types": [
+        "fruit",
+        "food"
+      ],
+      "id": "pineapple"
+    },
+    {
+      "concept": "pistol",
+      "concept_types": [
+        "weapon"
+      ],
+      "id": "pistol"
+    },
+    {
+      "concept": "plate",
+      "concept_types": [
+        "object",
+        "human_made_object"
+      ],
+      "id": "plate"
+    },
+    {
+      "concept": "platypus",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "platypus"
+    },
+    {
+      "concept": "pliers",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "pliers"
+    },
+    {
+      "concept": "plow",
+      "concept_types": [
+        "tool",
+        "human_made_object"
+      ],
+      "id": "plow"
+    },
+    {
+      "concept": "plum",
+      "concept_types": [
+        "fruit",
+        "food"
+      ],
+      "id": "plum"
+    },
+    {
+      "concept": "pony",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "pony"
+    },
+    {
+      "concept": "poppy",
+      "concept_types": [
+        "flower",
+        "plant"
+      ],
+      "id": "poppy"
+    },
+    {
+      "concept": "porcupine",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "porcupine"
+    },
+    {
+      "concept": "potato",
+      "concept_types": [
+        "vegetable",
+        "food"
+      ],
+      "id": "potato"
+    },
+    {
+      "concept": "prawn",
+      "concept_types": [
+        "food"
+      ],
+      "id": "prawn"
+    },
+    {
+      "concept": "prune",
+      "concept_types": [
+        "fruit",
+        "food"
+      ],
+      "id": "prune"
+    },
+    {
+      "concept": "pumpkin",
+      "concept_types": [
+        "vegetable",
+        "food"
+      ],
+      "id": "pumpkin"
+    },
+    {
+      "concept": "puppet",
+      "concept_types": [
+        "toy"
+      ],
+      "id": "puppet"
+    },
+    {
+      "concept": "rabbit",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "rabbit"
+    },
+    {
+      "concept": "raccoon",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "raccoon"
+    },
+    {
+      "concept": "radio",
+      "concept_types": [
+        "device",
+        "human_made_object"
+      ],
+      "id": "radio"
+    },
+    {
+      "concept": "radish",
+      "concept_types": [
+        "vegetable",
+        "food"
+      ],
+      "id": "radish"
+    },
+    {
+      "concept": "raft",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "raft"
+    },
+    {
+      "concept": "raisin",
+      "concept_types": [
+        "fruit",
+        "food"
+      ],
+      "id": "raisin"
+    },
+    {
+      "concept": "rake",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "rake"
+    },
+    {
+      "concept": "raspberry",
+      "concept_types": [
+        "fruit",
+        "food"
+      ],
+      "id": "raspberry"
+    },
+    {
+      "concept": "rat",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "rat"
+    },
+    {
+      "concept": "rattle",
+      "concept_types": [
+        "toy"
+      ],
+      "id": "rattle"
+    },
+    {
+      "concept": "rattlesnake",
+      "concept_types": [
+        "reptile",
+        "animal"
+      ],
+      "id": "rattlesnake"
+    },
+    {
+      "concept": "raven",
+      "concept_types": [
+        "bird",
+        "animal"
+      ],
+      "id": "raven"
+    },
+    {
+      "concept": "refrigerator",
+      "concept_types": [
+        "device",
+        "human_made_object"
+      ],
+      "id": "refrigerator"
+    },
+    {
+      "concept": "revolver",
+      "concept_types": [
+        "weapon"
+      ],
+      "id": "revolver"
+    },
+    {
+      "concept": "rhino",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "rhino"
+    },
+    {
+      "concept": "rhubarb",
+      "concept_types": [
+        "plant",
+        "ingredient"
+      ],
+      "id": "rhubarb"
+    },
+    {
+      "concept": "rice",
+      "concept_types": [
+        "food",
+        "ingredient"
+      ],
+      "id": "rice"
+    },
+    {
+      "concept": "rifle",
+      "concept_types": [
+        "weapon"
+      ],
+      "id": "rifle"
+    },
+    {
+      "concept": "robe",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "robe"
+    },
+    {
+      "concept": "robin",
+      "concept_types": [
+        "bird",
+        "animal"
+      ],
+      "id": "robin"
+    },
+    {
+      "concept": "rocket",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "rocket"
+    },
+    {
+      "concept": "rocking chair",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "rocking_chair"
+    },
+    {
+      "concept": "rollerskate",
+      "concept_types": [
+        "sports_equipment"
+      ],
+      "id": "rollerskate"
+    },
+    {
+      "concept": "rolling pin",
+      "concept_types": [
+        "tool",
+        "human_made_object"
+      ],
+      "id": "rolling_pin"
+    },
+    {
+      "concept": "rose",
+      "concept_types": [
+        "flower",
+        "plant"
+      ],
+      "id": "rose"
+    },
+    {
+      "concept": "salmon",
+      "concept_types": [
+        "fish",
+        "food"
+      ],
+      "id": "salmon"
+    },
+    {
+      "concept": "sandwich",
+      "concept_types": [
+        "food"
+      ],
+      "id": "sandwich"
+    },
+    {
+      "concept": "sardine",
+      "concept_types": [
+        "fish",
+        "food"
+      ],
+      "id": "sardine"
+    },
+    {
+      "concept": "satchel",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "satchel"
+    },
+    {
+      "concept": "satsuma",
+      "concept_types": [
+        "fruit",
+        "food"
+      ],
+      "id": "satsuma"
+    },
+    {
+      "concept": "saw",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "saw"
+    },
+    {
+      "concept": "saxophone",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "saxophone"
+    },
+    {
+      "concept": "scallop",
+      "concept_types": [
+        "food"
+      ],
+      "id": "scallop"
+    },
+    {
+      "concept": "scalpel",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "scalpel"
+    },
+    {
+      "concept": "scarf",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "scarf"
+    },
+    {
+      "concept": "scissors",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "scissors"
+    },
+    {
+      "concept": "scorpion",
+      "concept_types": [
+        "animal"
+      ],
+      "id": "scorpion"
+    },
+    {
+      "concept": "screw",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "screw"
+    },
+    {
+      "concept": "screwdriver",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "screwdriver"
+    },
+    {
+      "concept": "scythe",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "scythe"
+    },
+    {
+      "concept": "seagull",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "seagull"
+    },
+    {
+      "concept": "seahorse",
+      "concept_types": [
+        "fish"
+      ],
+      "id": "seahorse"
+    },
+    {
+      "concept": "seal",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "seal",
+      "sense_hint": "a seal, meaning the marine mammal"
+    },
+    {
+      "concept": "shark",
+      "concept_types": [
+        "fish"
+      ],
+      "id": "shark"
+    },
+    {
+      "concept": "shawl",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "shawl"
+    },
+    {
+      "concept": "sheep",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "sheep"
+    },
+    {
+      "concept": "ship",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "ship"
+    },
+    {
+      "concept": "shirt",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "shirt"
+    },
+    {
+      "concept": "shotgun",
+      "concept_types": [
+        "weapon"
+      ],
+      "id": "shotgun"
+    },
+    {
+      "concept": "shovel",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "shovel"
+    },
+    {
+      "concept": "shrimp",
+      "concept_types": [
+        "food"
+      ],
+      "id": "shrimp"
+    },
+    {
+      "concept": "sink",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "sink"
+    },
+    {
+      "concept": "skateboard",
+      "concept_types": [
+        "sports_equipment"
+      ],
+      "id": "skateboard"
+    },
+    {
+      "concept": "skirt",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "skirt"
+    },
+    {
+      "concept": "skunk",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "skunk"
+    },
+    {
+      "concept": "sledge",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "sledge"
+    },
+    {
+      "concept": "slug",
+      "concept_types": [
+        "animal"
+      ],
+      "id": "slug"
+    },
+    {
+      "concept": "snail",
+      "concept_types": [
+        "animal"
+      ],
+      "id": "snail"
+    },
+    {
+      "concept": "sock",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "sock"
+    },
+    {
+      "concept": "sofa",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "sofa"
+    },
+    {
+      "concept": "soup",
+      "concept_types": [
+        "food"
+      ],
+      "id": "soup"
+    },
+    {
+      "concept": "spade",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "spade"
+    },
+    {
+      "concept": "spanner",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "spanner"
+    },
+    {
+      "concept": "sparrow",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "sparrow"
+    },
+    {
+      "concept": "spatula",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "spatula"
+    },
+    {
+      "concept": "spear",
+      "concept_types": [
+        "weapon"
+      ],
+      "id": "spear"
+    },
+    {
+      "concept": "speedboat",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "speedboat"
+    },
+    {
+      "concept": "spider",
+      "concept_types": [
+        "animal"
+      ],
+      "id": "spider"
+    },
+    {
+      "concept": "spinach",
+      "concept_types": [
+        "vegetable"
+      ],
+      "id": "spinach"
+    },
+    {
+      "concept": "spirit level",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "spirit_level"
+    },
+    {
+      "concept": "spoon",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "spoon"
+    },
+    {
+      "concept": "squid",
+      "concept_types": [
+        "food"
+      ],
+      "id": "squid"
+    },
+    {
+      "concept": "squirrel",
+      "concept_types": [
+        "mammal"
+      ],
+      "id": "squirrel"
+    },
+    {
+      "concept": "starling",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "starling"
+    },
+    {
+      "concept": "stick insect",
+      "concept_types": [
+        "insect"
+      ],
+      "id": "stick_insect"
+    },
+    {
+      "concept": "stocking",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "stocking"
+    },
+    {
+      "concept": "stool",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "stool"
+    },
+    {
+      "concept": "stove",
+      "concept_types": [
+        "device",
+        "human_made_object"
+      ],
+      "id": "stove"
+    },
+    {
+      "concept": "strainer",
+      "concept_types": [
+        "tool",
+        "human_made_object"
+      ],
+      "id": "strainer"
+    },
+    {
+      "concept": "strawberry",
+      "concept_types": [
+        "fruit",
+        "food"
+      ],
+      "id": "strawberry"
+    },
+    {
+      "concept": "submarine",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "submarine"
+    },
+    {
+      "concept": "sugar",
+      "concept_types": [
+        "food",
+        "substance",
+        "ingredient"
+      ],
+      "id": "sugar"
+    },
+    {
+      "concept": "suit",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "suit"
+    },
+    {
+      "concept": "sultana",
+      "concept_types": [
+        "fruit",
+        "food"
+      ],
+      "id": "sultana"
+    },
+    {
+      "concept": "sunflower",
+      "concept_types": [
+        "flower",
+        "plant"
+      ],
+      "id": "sunflower"
+    },
+    {
+      "concept": "swan",
+      "concept_types": [
+        "bird",
+        "animal"
+      ],
+      "id": "swan"
+    },
+    {
+      "concept": "sweater",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "sweater"
+    },
+    {
+      "concept": "sweet potato",
+      "concept_types": [
+        "vegetable",
+        "food"
+      ],
+      "id": "sweet_potato"
+    },
+    {
+      "concept": "swimsuit",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "swimsuit"
+    },
+    {
+      "concept": "swing",
+      "concept_types": [
+        "play_object",
+        "object"
+      ],
+      "id": "swing"
+    },
+    {
+      "concept": "sword",
+      "concept_types": [
+        "weapon"
+      ],
+      "id": "sword"
+    },
+    {
+      "concept": "sycamore",
+      "concept_types": [
+        "tree",
+        "plant"
+      ],
+      "id": "sycamore"
+    },
+    {
+      "concept": "table",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "table"
+    },
+    {
+      "concept": "tambourine",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "tambourine"
+    },
+    {
+      "concept": "tangerine",
+      "concept_types": [
+        "fruit",
+        "food"
+      ],
+      "id": "tangerine"
+    },
+    {
+      "concept": "tank",
+      "concept_types": [
+        "vehicle",
+        "weapon"
+      ],
+      "id": "tank"
+    },
+    {
+      "concept": "tarantula",
+      "concept_types": [
+        "insect",
+        "animal"
+      ],
+      "id": "tarantula"
+    },
+    {
+      "concept": "taxi",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "taxi"
+    },
+    {
+      "concept": "tea",
+      "concept_types": [
+        "beverage",
+        "drink"
+      ],
+      "id": "tea"
+    },
+    {
+      "concept": "television",
+      "concept_types": [
+        "device",
+        "human_made_object"
+      ],
+      "id": "television"
+    },
+    {
+      "concept": "termite",
+      "concept_types": [
+        "insect",
+        "animal"
+      ],
+      "id": "termite"
+    },
+    {
+      "concept": "throne",
+      "concept_types": [
+        "furniture"
+      ],
+      "id": "throne"
+    },
+    {
+      "concept": "thumb",
+      "concept_types": [
+        "body_part"
+      ],
+      "id": "thumb"
+    },
+    {
+      "concept": "tiger",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "tiger"
+    },
+    {
+      "concept": "tights",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "tights"
+    },
+    {
+      "concept": "toad",
+      "concept_types": [
+        "reptile",
+        "animal"
+      ],
+      "id": "toad"
+    },
+    {
+      "concept": "toaster",
+      "concept_types": [
+        "device",
+        "human_made_object"
+      ],
+      "id": "toaster"
+    },
+    {
+      "concept": "toe",
+      "concept_types": [
+        "body_part"
+      ],
+      "id": "toe"
+    },
+    {
+      "concept": "tomato",
+      "concept_types": [
+        "vegetable",
+        "fruit",
+        "food"
+      ],
+      "id": "tomato"
+    },
+    {
+      "concept": "tongue",
+      "concept_types": [
+        "body_part",
+        "organ"
+      ],
+      "id": "tongue"
+    },
+    {
+      "concept": "tortoise",
+      "concept_types": [
+        "reptile",
+        "animal"
+      ],
+      "id": "tortoise"
+    },
+    {
+      "concept": "tractor",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "tractor"
+    },
+    {
+      "concept": "train",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "train"
+    },
+    {
+      "concept": "tray",
+      "concept_types": [
+        "object",
+        "human_made_object"
+      ],
+      "id": "tray"
+    },
+    {
+      "concept": "tricycle",
+      "concept_types": [
+        "vehicle",
+        "toy"
+      ],
+      "id": "tricycle"
+    },
+    {
+      "concept": "trolley",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "trolley"
+    },
+    {
+      "concept": "trombone",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "trombone"
+    },
+    {
+      "concept": "trouser",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "trouser"
+    },
+    {
+      "concept": "trout",
+      "concept_types": [
+        "fish",
+        "food"
+      ],
+      "id": "trout"
+    },
+    {
+      "concept": "trowel",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "trowel"
+    },
+    {
+      "concept": "truck",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "truck"
+    },
+    {
+      "concept": "trumpet",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "trumpet"
+    },
+    {
+      "concept": "tuba",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "tuba"
+    },
+    {
+      "concept": "tugboat",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "tugboat"
+    },
+    {
+      "concept": "tulip",
+      "concept_types": [
+        "flower",
+        "plant"
+      ],
+      "id": "tulip"
+    },
+    {
+      "concept": "tuna",
+      "concept_types": [
+        "fish",
+        "food"
+      ],
+      "id": "tuna"
+    },
+    {
+      "concept": "turkey",
+      "concept_types": [
+        "bird",
+        "food"
+      ],
+      "id": "turkey",
+      "sense_hint": "a turkey, meaning the bird and the poultry food made from that bird"
+    },
+    {
+      "concept": "turnip",
+      "concept_types": [
+        "vegetable",
+        "food"
+      ],
+      "id": "turnip"
+    },
+    {
+      "concept": "turtle",
+      "concept_types": [
+        "reptile"
+      ],
+      "id": "turtle"
+    },
+    {
+      "concept": "tweezer",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "tweezer"
+    },
+    {
+      "concept": "typewriter",
+      "concept_types": [
+        "device",
+        "human_made_object"
+      ],
+      "id": "typewriter"
+    },
+    {
+      "concept": "unicycle",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "unicycle"
+    },
+    {
+      "concept": "van",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "van"
+    },
+    {
+      "concept": "veil",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "veil"
+    },
+    {
+      "concept": "violin",
+      "concept_types": [
+        "musical_instrument"
+      ],
+      "id": "violin"
+    },
+    {
+      "concept": "wallet",
+      "concept_types": [
+        "human_made_object"
+      ],
+      "id": "wallet"
+    },
+    {
+      "concept": "walrus",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "walrus"
+    },
+    {
+      "concept": "washing machine",
+      "concept_types": [
+        "device",
+        "human_made_object"
+      ],
+      "id": "washing_machine"
+    },
+    {
+      "concept": "wasp",
+      "concept_types": [
+        "insect"
+      ],
+      "id": "wasp"
+    },
+    {
+      "concept": "watermelon",
+      "concept_types": [
+        "fruit",
+        "food"
+      ],
+      "id": "watermelon"
+    },
+    {
+      "concept": "wetsuit",
+      "concept_types": [
+        "clothing"
+      ],
+      "id": "wetsuit"
+    },
+    {
+      "concept": "whale",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "whale"
+    },
+    {
+      "concept": "wheelbarrow",
+      "concept_types": [
+        "tool"
+      ],
+      "id": "wheelbarrow"
+    },
+    {
+      "concept": "wheelchair",
+      "concept_types": [
+        "device",
+        "human_made_object"
+      ],
+      "id": "wheelchair"
+    },
+    {
+      "concept": "whisk",
+      "concept_types": [
+        "kitchen_utensil"
+      ],
+      "id": "whisk"
+    },
+    {
+      "concept": "whiskey",
+      "concept_types": [
+        "drink",
+        "beverage"
+      ],
+      "id": "whiskey"
+    },
+    {
+      "concept": "willow",
+      "concept_types": [
+        "tree",
+        "plant"
+      ],
+      "id": "willow"
+    },
+    {
+      "concept": "wine",
+      "concept_types": [
+        "drink",
+        "beverage"
+      ],
+      "id": "wine"
+    },
+    {
+      "concept": "wolf",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "wolf"
+    },
+    {
+      "concept": "woodpecker",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "woodpecker"
+    },
+    {
+      "concept": "worm",
+      "concept_types": [
+        "animal"
+      ],
+      "id": "worm"
+    },
+    {
+      "concept": "wren",
+      "concept_types": [
+        "bird"
+      ],
+      "id": "wren"
+    },
+    {
+      "concept": "yacht",
+      "concept_types": [
+        "vehicle"
+      ],
+      "id": "yacht"
+    },
+    {
+      "concept": "yoghurt",
+      "concept_types": [
+        "food"
+      ],
+      "id": "yoghurt"
+    },
+    {
+      "concept": "yoyo",
+      "concept_types": [
+        "toy",
+        "play_object"
+      ],
+      "id": "yoyo"
+    },
+    {
+      "concept": "zebra",
+      "concept_types": [
+        "mammal",
+        "animal"
+      ],
+      "id": "zebra"
+    },
+    {
+      "concept": "zucchini",
+      "concept_types": [
+        "vegetable"
+      ],
+      "id": "zucchini"
+    }
+  ],
+  "name": "comps_concept_properties_clean_no_neighbors_full521_qwen",
+  "output_dir": "data/concept_curriculum/comps_concept_properties_clean_no_neighbors_full521_qwen",
+  "prompt_variant": "clean_multidoc_no_neighbors",
+  "renderer": {
+    "api_key_file": "fireworks_api.txt",
+    "max_request_retries": 4,
+    "max_tokens": 190,
+    "model_id": "accounts/fireworks/models/qwen3p7-plus",
+    "reasoning_effort": "none",
+    "reasoning_history": "disabled",
+    "temperature": 0.7,
+    "timeout_seconds": 600,
+    "type": "fireworks"
+  }
+}

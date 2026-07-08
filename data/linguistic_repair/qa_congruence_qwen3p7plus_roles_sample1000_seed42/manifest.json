@@ -1,0 +1,28 @@
+{
+  "counts": {
+    "fail": 0,
+    "pass": 1000,
+    "rendered_documents": 1000,
+    "scenario_plans": 1000,
+    "train_documents": 1000,
+    "warn": 0
+  },
+  "created_utc": "2026-07-01T23:41:07.662605+00:00",
+  "document_count": 1000,
+  "name": "qa_congruence_qwen3p7plus_roles_sample50_seed42",
+  "paths": {
+    "audit_report": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_congruence_qwen3p7plus_roles_sample1000_seed42/audit_report.json",
+    "config": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_congruence_qwen3p7plus_roles_sample1000_seed42/qa_congruence_config.yaml",
+    "documents": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_congruence_qwen3p7plus_roles_sample1000_seed42/documents.jsonl",
+    "manifest": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_congruence_qwen3p7plus_roles_sample1000_seed42/manifest.json",
+    "render_checkpoints": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_congruence_qwen3p7plus_roles_sample1000_seed42/render_checkpoints",
+    "scenario_plans": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_congruence_qwen3p7plus_roles_sample1000_seed42/scenario_plans.jsonl",
+    "train": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_congruence_qwen3p7plus_roles_sample1000_seed42/train.txt"
+  },
+  "renderer": {
+    "documents_per_request": 8,
+    "model_id": "accounts/fireworks/models/qwen3p7-plus",
+    "type": "fireworks"
+  },
+  "seed": 42
+}

@@ -1,0 +1,83 @@
+{
+  "answer_preposition_counts": {
+    "behind": 72,
+    "beside": 71,
+    "in": 71,
+    "near": 71,
+    "next to": 72,
+    "on": 71,
+    "under": 72
+  },
+  "answer_style_counts": {
+    "first_person_location_sentence": 130,
+    "location_fragment": 370
+  },
+  "counts": {
+    "fail": 0,
+    "pass": 500,
+    "warn": 0
+  },
+  "flags": [],
+  "name": "qa_where_local_prep_frames_sample500_seed42",
+  "question_count_counts": {
+    "1": 375,
+    "2": 125
+  },
+  "question_object_reference_counts": {
+    "it": 53,
+    "the backpack": 22,
+    "the brush": 21,
+    "the button": 22,
+    "the crayon": 19,
+    "the cup": 23,
+    "the envelope": 22,
+    "the glove": 23,
+    "the key": 23,
+    "the lunchbox": 23,
+    "the marker": 23,
+    "the mitten": 23,
+    "the notebook": 23,
+    "the pencil": 23,
+    "the scarf": 23,
+    "the sock": 21,
+    "the spoon": 22,
+    "the ticket": 23,
+    "the towel": 22,
+    "the toy truck": 24,
+    "the wallet": 22
+  },
+  "second_person_counts": {
+    "second_person": 295,
+    "third_person": 205
+  },
+  "style_counts": {
+    "direct_dialogue": 200,
+    "paired_what_where": 125,
+    "scene_qa": 175
+  },
+  "total_documents": 500,
+  "train_documents": 500,
+  "verb_counts": {
+    "discover": 55,
+    "drop": 42,
+    "find": 56,
+    "hide": 42,
+    "leave": 42,
+    "place": 56,
+    "put": 56,
+    "set": 55,
+    "spot": 55,
+    "store": 41
+  },
+  "verb_family_counts": {
+    "find_discover_spot": 166,
+    "leave_drop_hide_store": 167,
+    "put_place_set": 167
+  },
+  "where_question_style_counts": {
+    "direct_action": 350,
+    "end_up": 50,
+    "indirect_where": 25,
+    "where_now": 75
+  }
+}

@@ -15,9 +15,17 @@ from babysteps.linguistic_repair.location_verb_frames import (
     QaLocationVerbFrameResult,
     build_qa_location_verb_frames,
 )
+from babysteps.linguistic_repair.where_local_prep_frames import (
+    QaWhereLocalPrepFrameResult,
+    build_qa_where_local_prep_frames,
+)
 from babysteps.linguistic_repair.who_person_frames import (
     QaWhoPersonFrameResult,
     build_qa_who_person_frames,
+)
+from babysteps.linguistic_repair.who_common_name_frames import (
+    QaWhoCommonNameFrameResult,
+    build_qa_who_common_name_frames,
 )
 from babysteps.linguistic_repair.what_object_frames import (
     QaWhatObjectFrameResult,
@@ -44,17 +52,21 @@ __all__ = [
     "QUESTION_TYPES",
     "QaRepairResult",
     "QaLocationVerbFrameResult",
+    "QaWhereLocalPrepFrameResult",
     "ScenePlan",
     "TemplateQaRenderer",
     "QaWhatObjectFrameResult",
     "QaWhoPersonFrameResult",
+    "QaWhoCommonNameFrameResult",
     "QaTurnTakingPronounFrameResult",
     "audit_document",
     "audit_documents",
     "build_qa_congruence_repair",
     "build_qa_location_verb_frames",
+    "build_qa_where_local_prep_frames",
     "build_qa_what_object_frames",
     "build_qa_who_person_frames",
+    "build_qa_who_common_name_frames",
     "build_qa_turn_taking_pronoun_frames",
     "build_scene_plans",
     "load_yaml_config",

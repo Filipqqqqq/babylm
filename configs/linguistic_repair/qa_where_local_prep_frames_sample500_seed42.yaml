@@ -1,0 +1,34 @@
+name: qa_where_local_prep_frames_sample500_seed42
+seed: 42
+document_count: 500
+output_dir: data/linguistic_repair/qa_where_local_prep_frames_sample500_seed42
+
+# Focused QA-easy where repair: local placement answers rather than
+# destination-heavy "to X" examples. Object and landmark nouns avoid the
+# BLIMP Supplement QA-easy benchmark nouns we inspected.
+style_weights:
+  direct_dialogue: 0.4
+  scene_qa: 0.35
+  paired_what_where: 0.25
+second_person_ratio: 0.60
+pronoun_question_ratio: 0.45
+full_answer_ratio: 0.45
+where_question_style_weights:
+  direct_action: 0.70
+  where_now: 0.15
+  end_up: 0.10
+  indirect_where: 0.05
+
+prepositions:
+  - behind
+  - next to
+  - under
+  - "on"
+  - in
+  - near
+  - beside
+
+verb_families:
+  - put_place_set
+  - leave_drop_hide_store
+  - find_discover_spot

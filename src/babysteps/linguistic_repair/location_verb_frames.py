@@ -23,6 +23,41 @@ STYLE_ORDER = (DIRECT_DIALOGUE, SCENE_QA)
 QUESTION_TYPE = "where"
 BANNED_QUESTION_WORDS = ("when", "why", "how many", "how_many")
 BANNED_CONTRAST_MARKERS = ("bad:", "wrong:", "incorrect:", "bad answer", "wrong answer")
+DEFAULT_EXCLUDED_NAMED_LOCATIONS = ("Canada", "Europe", "California")
+NAMED_POOL_PREFIX = "named:"
+NAMED_DESTINATION_MODES = frozenset(
+    {
+        "motion_destination",
+        "travel_destination",
+        "ride_destination",
+        "fly_destination",
+        "drive_destination",
+        "send_destination",
+        "broad_address_destination",
+    }
+)
+NAMED_DESTINATION_KINDS_BY_MODE = {
+    "motion_destination": frozenset({"city", "country", "state"}),
+    "travel_destination": frozenset({"city", "country", "state"}),
+    "ride_destination": frozenset({"city", "state"}),
+    "fly_destination": frozenset({"city", "country", "state"}),
+    "drive_destination": frozenset({"city", "state"}),
+    "send_destination": frozenset({"city", "country", "state"}),
+    "broad_address_destination": frozenset({"city", "country", "state"}),
+}
+DEFAULT_SECOND_PERSON_PRONOUN_WEIGHTS = {
+    "find": 1.0,
+    "discover": 1.0,
+    "spot": 1.0,
+    "notice": 1.0,
+    "leave": 0.65,
+    "drop": 0.8,
+    "hide": 0.8,
+    "store": 0.8,
+    "put": 0.8,
+    "place": 0.8,
+    "set": 0.8,
+}
 
 
 @dataclass(frozen=True)
@@ -42,6 +77,36 @@ class LocationCandidate:
     source_location_type: str
     answer_preposition: str
     derived: bool
+    named_location: bool
+
+
+@dataclass(frozen=True)
+class NamedLocation:
+    name: str
+    kind: str
+
+
+DEFAULT_NAMED_LOCATIONS = (
+    NamedLocation("France", "country"),
+    NamedLocation("Germany", "country"),
+    NamedLocation("Spain", "country"),
+    NamedLocation("India", "country"),
+    NamedLocation("China", "country"),
+    NamedLocation("Japan", "country"),
+    NamedLocation("Mexico", "country"),
+    NamedLocation("Brazil", "country"),
+    NamedLocation("Chicago", "city"),
+    NamedLocation("New York", "city"),
+    NamedLocation("Paris", "city"),
+    NamedLocation("Boston", "city"),
+    NamedLocation("Seattle", "city"),
+    NamedLocation("Denver", "city"),
+    NamedLocation("London", "city"),
+    NamedLocation("Arizona", "state"),
+    NamedLocation("Texas", "state"),
+    NamedLocation("Oregon", "state"),
+    NamedLocation("Florida", "state"),
+)
 
 
 @dataclass(frozen=True)
@@ -57,6 +122,7 @@ class LocationVerbFramePlan:
     object_reference: str | None
     question: str
     answer: str
+    answer_style: str
     scene_sentence: str | None
     text: str
     source_location: str
@@ -64,6 +130,8 @@ class LocationVerbFramePlan:
     source_location_type: str
     answer_preposition: str
     derived_location: bool
+    named_location: bool
+    second_person: bool
     template_id: str
 
     def to_dict(self) -> dict[str, Any]:
@@ -299,21 +367,48 @@ def build_qa_location_verb_frames(
 
     output_dir = resolve_path(mapping["output_dir"], base_dir=base_dir)
     direct_ratio = float(mapping.get("direct_dialogue_ratio", 0.7))
+    named_location_ratio = float(mapping.get("named_location_ratio", 0.0))
+    if not 0.0 <= named_location_ratio <= 1.0:
+        raise ValueError("named_location_ratio must be between 0 and 1.")
+    second_person_ratio = float(mapping.get("second_person_ratio", 0.0))
+    if not 0.0 <= second_person_ratio <= 1.0:
+        raise ValueError("second_person_ratio must be between 0 and 1.")
+    second_person_full_answer_ratio = float(
+        mapping.get("second_person_full_answer_ratio", 0.5)
+    )
+    if not 0.0 <= second_person_full_answer_ratio <= 1.0:
+        raise ValueError("second_person_full_answer_ratio must be between 0 and 1.")
+    second_person_pronoun_weights = _second_person_pronoun_weights(mapping)
     family_names = tuple(str(name) for name in mapping.get("verb_families", VERB_FAMILIES))
     unknown = sorted(set(family_names) - set(VERB_FAMILIES))
     if unknown:
         raise ValueError(f"Unknown verb families: {unknown}")
     if not family_names:
         raise ValueError("verb_families must not be empty.")
+    allowed_verbs = _allowed_verbs(mapping)
+    verb_frames = _verb_frames_for_config(
+        family_names=family_names,
+        allowed_verbs=allowed_verbs,
+    )
 
     rng = random.Random(seed)
     agents = _agent_pool(mapping)
-    locations = _build_location_pools()
+    named_locations = _named_location_pool(mapping)
+    excluded_location_strings = _excluded_location_strings(mapping)
+    locations = _build_location_pools(
+        named_locations=named_locations,
+        excluded_location_strings=excluded_location_strings,
+    )
     plans = _build_plans(
         name=name,
         document_count=document_count,
         family_names=family_names,
+        verb_frames=verb_frames,
         direct_ratio=direct_ratio,
+        named_location_ratio=named_location_ratio,
+        second_person_ratio=second_person_ratio,
+        second_person_full_answer_ratio=second_person_full_answer_ratio,
+        second_person_pronoun_weights=second_person_pronoun_weights,
         agents=agents,
         locations=locations,
         rng=rng,
@@ -343,6 +438,15 @@ def build_qa_location_verb_frames(
         "generator": "deterministic_template",
         "question_type": QUESTION_TYPE,
         "direct_dialogue_ratio": direct_ratio,
+        "named_location_ratio": named_location_ratio,
+        "second_person_ratio": second_person_ratio,
+        "second_person_full_answer_ratio": second_person_full_answer_ratio,
+        "second_person_pronoun_weights": dict(sorted(second_person_pronoun_weights.items())),
+        "excluded_named_locations": list(
+            mapping.get("excluded_named_locations", DEFAULT_EXCLUDED_NAMED_LOCATIONS)
+        ),
+        "excluded_location_strings": sorted(excluded_location_strings),
+        "allowed_verbs": sorted(allowed_verbs) if allowed_verbs is not None else None,
         "verb_families": list(family_names),
         "counts": {
             "documents": len(documents),
@@ -352,6 +456,12 @@ def build_qa_location_verb_frames(
             "style_counts": audit_report["style_counts"],
             "source_location_type_counts": audit_report["source_location_type_counts"],
             "answer_preposition_counts": audit_report["answer_preposition_counts"],
+            "named_location_counts": audit_report["named_location_counts"],
+            "second_person_counts": audit_report["second_person_counts"],
+            "answer_style_counts": audit_report["answer_style_counts"],
+            "question_object_reference_counts": audit_report[
+                "question_object_reference_counts"
+            ],
         },
         "paths": {key: str(path) for key, path in paths.items()},
     }
@@ -371,7 +481,12 @@ def _build_plans(
     name: str,
     document_count: int,
     family_names: tuple[str, ...],
+    verb_frames: dict[str, tuple[VerbFrame, ...]],
     direct_ratio: float,
+    named_location_ratio: float,
+    second_person_ratio: float,
+    second_person_full_answer_ratio: float,
+    second_person_pronoun_weights: dict[str, float],
     agents: tuple[str, ...],
     locations: dict[str, tuple[LocationCandidate, ...]],
     rng: random.Random,
@@ -381,19 +496,45 @@ def _build_plans(
     family_offsets: Counter[str] = Counter()
     plans: list[LocationVerbFramePlan] = []
     for index, family_name in enumerate(family_sequence):
-        frames = VERB_FAMILIES[family_name]
+        frames = verb_frames[family_name]
         frame = frames[family_offsets[family_name] % len(frames)]
         family_offsets[family_name] += 1
         location_pool = locations[frame.location_mode]
+        named_location_pool = locations.get(f"{NAMED_POOL_PREFIX}{frame.location_mode}", ())
+        if named_location_pool and rng.random() < named_location_ratio:
+            location_pool = named_location_pool
         location = location_pool[(index + rng.randrange(len(location_pool))) % len(location_pool)]
         agent = rng.choice(agents)
-        obj = rng.choice(frame.object_pool) if frame.object_pool else None
+        object_pool = _object_pool_for_location(frame, location)
+        obj = rng.choice(object_pool) if object_pool else None
         object_reference = f"the {obj}" if obj else None
-        question = _where_question(agent=agent, frame=frame, object_reference=object_reference)
-        answer = _answer_sentence(location.answer)
+        second_person = second_person_ratio > 0.0 and rng.random() < second_person_ratio
+        question_object_reference = _question_object_reference(
+            frame=frame,
+            object_reference=object_reference,
+            second_person=second_person,
+            pronoun_weights=second_person_pronoun_weights,
+            rng=rng,
+        )
+        question = _where_question(
+            agent="you" if second_person else agent,
+            frame=frame,
+            object_reference=question_object_reference,
+        )
+        full_second_person_answer = (
+            second_person
+            and rng.random() < second_person_full_answer_ratio
+        )
+        answer, answer_style = _answer_for_location(
+            frame=frame,
+            location=location,
+            object_reference=question_object_reference,
+            second_person=second_person,
+            full_second_person_answer=full_second_person_answer,
+        )
         scene_sentence = (
             _scene_sentence(
-                agent=agent,
+                agent="I" if second_person else agent,
                 frame=frame,
                 object_reference=object_reference,
                 location=location.scene_location,
@@ -420,6 +561,7 @@ def _build_plans(
                 object_reference=object_reference,
                 question=question,
                 answer=answer,
+                answer_style=answer_style,
                 scene_sentence=scene_sentence,
                 text=text,
                 source_location=location.source_location,
@@ -427,10 +569,100 @@ def _build_plans(
                 source_location_type=location.source_location_type,
                 answer_preposition=location.answer_preposition,
                 derived_location=location.derived,
+                named_location=location.named_location,
+                second_person=second_person,
                 template_id=styles[index],
             )
         )
     return plans
+
+
+def _object_pool_for_location(
+    frame: VerbFrame,
+    location: LocationCandidate,
+) -> tuple[str, ...]:
+    if location.named_location and frame.verb == "drive":
+        return tuple(obj for obj in frame.object_pool if obj != "cart")
+    return frame.object_pool
+
+
+def _second_person_pronoun_weights(mapping: dict[str, Any]) -> dict[str, float]:
+    weights = dict(DEFAULT_SECOND_PERSON_PRONOUN_WEIGHTS)
+    for verb, raw_weight in mapping.get("second_person_pronoun_weights", {}).items():
+        weight = float(raw_weight)
+        if not 0.0 <= weight <= 1.0:
+            raise ValueError("second_person_pronoun_weights must be between 0 and 1.")
+        weights[str(verb)] = weight
+    return weights
+
+
+def _allowed_verbs(mapping: dict[str, Any]) -> frozenset[str] | None:
+    raw = mapping.get("allowed_verbs")
+    if raw is None:
+        return None
+    verbs = frozenset(str(verb) for verb in raw)
+    if not verbs:
+        raise ValueError("allowed_verbs must not be empty when provided.")
+    known_verbs = {
+        frame.verb
+        for frames in VERB_FAMILIES.values()
+        for frame in frames
+    }
+    unknown = sorted(verbs - known_verbs)
+    if unknown:
+        raise ValueError(f"Unknown allowed_verbs: {unknown}")
+    return verbs
+
+
+def _verb_frames_for_config(
+    *,
+    family_names: tuple[str, ...],
+    allowed_verbs: frozenset[str] | None,
+) -> dict[str, tuple[VerbFrame, ...]]:
+    frames_by_family: dict[str, tuple[VerbFrame, ...]] = {}
+    for family_name in family_names:
+        frames = VERB_FAMILIES[family_name]
+        if allowed_verbs is not None:
+            frames = tuple(frame for frame in frames if frame.verb in allowed_verbs)
+        if not frames:
+            raise ValueError(
+                f"verb family {family_name!r} has no frames after allowed_verbs filtering."
+            )
+        frames_by_family[family_name] = frames
+    return frames_by_family
+
+
+def _question_object_reference(
+    *,
+    frame: VerbFrame,
+    object_reference: str | None,
+    second_person: bool,
+    pronoun_weights: dict[str, float],
+    rng: random.Random,
+) -> str | None:
+    if not second_person or object_reference is None:
+        return object_reference
+    pronoun_weight = pronoun_weights.get(frame.verb, 0.0)
+    if pronoun_weight > 0.0 and rng.random() < pronoun_weight:
+        return "it"
+    return object_reference
+
+
+def _answer_for_location(
+    *,
+    frame: VerbFrame,
+    location: LocationCandidate,
+    object_reference: str | None,
+    second_person: bool,
+    full_second_person_answer: bool,
+) -> tuple[str, str]:
+    if not second_person or not full_second_person_answer:
+        return _answer_sentence(location.answer), "location_fragment"
+    object_part = f" {object_reference}" if object_reference else ""
+    return (
+        _answer_sentence(f"I {frame.past}{object_part} {location.answer}"),
+        "first_person_location_sentence",
+    )
 
 
 def _agent_pool(mapping: dict[str, Any]) -> tuple[str, ...]:
@@ -450,7 +682,29 @@ def _agent_pool(mapping: dict[str, Any]) -> tuple[str, ...]:
     return tuple(agents)
 
 
-def _build_location_pools() -> dict[str, tuple[LocationCandidate, ...]]:
+def _named_location_pool(mapping: dict[str, Any]) -> tuple[NamedLocation, ...]:
+    raw_locations = mapping.get("named_locations", DEFAULT_NAMED_LOCATIONS)
+    raw_excluded = mapping.get("excluded_named_locations", DEFAULT_EXCLUDED_NAMED_LOCATIONS)
+    excluded = {_normalize_place_name(str(location)) for location in raw_excluded}
+    named_locations: list[NamedLocation] = []
+    for item in raw_locations:
+        if isinstance(item, NamedLocation):
+            location = item
+        elif isinstance(item, dict):
+            location = NamedLocation(name=str(item["name"]), kind=str(item.get("kind", "place")))
+        else:
+            name = str(item)
+            location = NamedLocation(name=name, kind=_infer_named_location_kind(name))
+        if _normalize_place_name(location.name) not in excluded:
+            named_locations.append(location)
+    return tuple(named_locations)
+
+
+def _build_location_pools(
+    *,
+    named_locations: tuple[NamedLocation, ...],
+    excluded_location_strings: frozenset[str],
+) -> dict[str, tuple[LocationCandidate, ...]]:
     unique_locations = sorted({location for topic in TOPICS for location in topic.locations})
     local_any = tuple(
         LocationCandidate(
@@ -460,6 +714,7 @@ def _build_location_pools() -> dict[str, tuple[LocationCandidate, ...]]:
             source_location_type=_source_location_type(location),
             answer_preposition=_first_word(location),
             derived=False,
+            named_location=False,
         )
         for location in unique_locations
         if not _is_destination(location)
@@ -474,6 +729,7 @@ def _build_location_pools() -> dict[str, tuple[LocationCandidate, ...]]:
                 source_location_type=_source_location_type(location),
                 answer_preposition=_first_word(location),
                 derived=False,
+                named_location=False,
             )
         else:
             answer = _derive_destination(location)
@@ -484,6 +740,7 @@ def _build_location_pools() -> dict[str, tuple[LocationCandidate, ...]]:
                 source_location_type=_source_location_type(location),
                 answer_preposition=_first_word(answer),
                 derived=True,
+                named_location=False,
             )
         destination_candidates.append(candidate)
 
@@ -548,9 +805,62 @@ def _build_location_pools() -> dict[str, tuple[LocationCandidate, ...]]:
             include_existing_destinations=False,
         ),
     }
+    for mode in NAMED_DESTINATION_MODES:
+        named_destinations = _named_destination_candidates(
+            named_locations,
+            allowed_kinds=NAMED_DESTINATION_KINDS_BY_MODE[mode],
+        )
+        if named_destinations and mode in pools:
+            pools[f"{NAMED_POOL_PREFIX}{mode}"] = named_destinations
+    if excluded_location_strings:
+        pools = {
+            name: _exclude_locations(pool, excluded_location_strings)
+            for name, pool in pools.items()
+        }
     if any(not pool for pool in pools.values()):
         raise ValueError("location pools must not be empty.")
     return pools
+
+
+def _excluded_location_strings(mapping: dict[str, Any]) -> frozenset[str]:
+    raw = mapping.get("excluded_location_strings", ())
+    return frozenset(_normalize_location_string(str(item)) for item in raw)
+
+
+def _exclude_locations(
+    candidates: tuple[LocationCandidate, ...],
+    excluded_location_strings: frozenset[str],
+) -> tuple[LocationCandidate, ...]:
+    return tuple(
+        candidate
+        for candidate in candidates
+        if _normalize_location_string(candidate.answer) not in excluded_location_strings
+        and _normalize_location_string(candidate.scene_location) not in excluded_location_strings
+        and _normalize_location_string(candidate.source_location) not in excluded_location_strings
+    )
+
+
+def _named_destination_candidates(
+    named_locations: tuple[NamedLocation, ...],
+    *,
+    allowed_kinds: frozenset[str],
+) -> tuple[LocationCandidate, ...]:
+    # Experimental repair signal: use named places to test whether richer
+    # location nouns help the model learn where-answer typing.
+    candidates = [
+        LocationCandidate(
+            answer=f"to {location.name}",
+            scene_location=f"to {location.name}",
+            source_location=location.name,
+            source_location_type=f"named_{location.kind}_destination",
+            answer_preposition="to",
+            derived=False,
+            named_location=True,
+        )
+        for location in named_locations
+        if location.kind in allowed_kinds
+    ]
+    return tuple(sorted(candidates, key=lambda candidate: candidate.answer.lower()))
 
 
 def _filter_destinations(
@@ -639,6 +949,15 @@ def _audit_documents(
     style_counts = Counter(str(row["style"]) for row in documents)
     location_counts = Counter(str(row["source_location_type"]) for row in documents)
     preposition_counts = Counter(str(row["answer_preposition"]) for row in documents)
+    named_counts = Counter("named" if row.get("named_location") else "generic" for row in documents)
+    second_person_counts = Counter(
+        "second_person" if row.get("second_person") else "third_person"
+        for row in documents
+    )
+    answer_style_counts = Counter(str(row["answer_style"]) for row in documents)
+    question_object_reference_counts = Counter(
+        _question_object_reference_surface(str(row["question"])) for row in documents
+    )
     family_values = [family_counts[name] for name in family_names]
     balance_delta = max(family_values) - min(family_values) if family_values else 0
     flags = []
@@ -664,6 +983,12 @@ def _audit_documents(
         "style_counts": dict(sorted(style_counts.items())),
         "source_location_type_counts": dict(sorted(location_counts.items())),
         "answer_preposition_counts": dict(sorted(preposition_counts.items())),
+        "named_location_counts": dict(sorted(named_counts.items())),
+        "second_person_counts": dict(sorted(second_person_counts.items())),
+        "answer_style_counts": dict(sorted(answer_style_counts.items())),
+        "question_object_reference_counts": dict(
+            sorted(question_object_reference_counts.items())
+        ),
         "balance": {
             "verb_family_max_minus_min": balance_delta,
         },
@@ -748,6 +1073,34 @@ def _is_destination(location: str) -> bool:
 
 def _first_word(text: str) -> str:
     return text.split(maxsplit=1)[0].lower()
+
+
+def _normalize_place_name(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip().lower())
+
+
+def _normalize_location_string(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip().lower())
+
+
+def _infer_named_location_kind(name: str) -> str:
+    normalized = _normalize_place_name(name)
+    if normalized in {"arizona", "texas", "oregon", "florida", "california"}:
+        return "state"
+    if normalized in {"chicago", "new york", "paris", "boston", "seattle", "denver", "london"}:
+        return "city"
+    return "country"
+
+
+def _question_object_reference_surface(question: str) -> str:
+    prefix = "Where did "
+    if not question.startswith(prefix):
+        return "unknown"
+    body = question[len(prefix):].rstrip("?")
+    parts = body.split(maxsplit=2)
+    if len(parts) < 3:
+        return "none"
+    return parts[2]
 
 
 def _answer_sentence(text: str) -> str:

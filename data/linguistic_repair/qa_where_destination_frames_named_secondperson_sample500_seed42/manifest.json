@@ -1,0 +1,125 @@
+{
+  "allowed_verbs": [
+    "deliver",
+    "drive",
+    "fly",
+    "go",
+    "head",
+    "mail",
+    "return",
+    "ride",
+    "send",
+    "ship",
+    "travel",
+    "walk"
+  ],
+  "counts": {
+    "answer_preposition_counts": {
+      "across": 11,
+      "to": 489
+    },
+    "answer_style_counts": {
+      "first_person_location_sentence": 243,
+      "location_fragment": 257
+    },
+    "documents": 500,
+    "fail": 0,
+    "named_location_counts": {
+      "generic": 197,
+      "named": 303
+    },
+    "pass": 500,
+    "question_object_reference_counts": {
+      "none": 250,
+      "the box": 12,
+      "the car": 55,
+      "the card": 10,
+      "the cart": 16,
+      "the gift": 8,
+      "the letter": 33,
+      "the package": 31,
+      "the postcard": 23,
+      "the receipt": 8,
+      "the van": 54
+    },
+    "second_person_counts": {
+      "second_person": 372,
+      "third_person": 128
+    },
+    "source_location_type_counts": {
+      "activity_place": 60,
+      "container_interior": 26,
+      "destination_path": 55,
+      "local_surface": 56,
+      "named_city_destination": 166,
+      "named_country_destination": 69,
+      "named_state_destination": 68
+    },
+    "style_counts": {
+      "direct_dialogue": 400,
+      "scene_qa": 100
+    },
+    "train_documents": 500,
+    "verb_family_counts": {
+      "drive_park": 125,
+      "go_walk_head_return": 125,
+      "send_mail_ship_deliver": 125,
+      "travel_ride_fly": 125
+    },
+    "warn": 0
+  },
+  "created_utc": "2026-07-05T16:16:44.123894+00:00",
+  "direct_dialogue_ratio": 0.8,
+  "document_count": 500,
+  "excluded_location_strings": [
+    "across the country",
+    "california",
+    "canada",
+    "europe",
+    "the next town over",
+    "the other side of town",
+    "to california",
+    "to canada",
+    "to europe",
+    "to the next town over",
+    "to the other side of town"
+  ],
+  "excluded_named_locations": [
+    "Canada",
+    "Europe",
+    "California"
+  ],
+  "generator": "deterministic_template",
+  "name": "qa_where_destination_frames_named_secondperson_sample500_seed42",
+  "named_location_ratio": 0.7,
+  "paths": {
+    "audit_report": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_where_destination_frames_named_secondperson_sample500_seed42/audit_report.json",
+    "config": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_where_destination_frames_named_secondperson_sample500_seed42/qa_location_verb_frames_config.yaml",
+    "documents": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_where_destination_frames_named_secondperson_sample500_seed42/documents.jsonl",
+    "manifest": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_where_destination_frames_named_secondperson_sample500_seed42/manifest.json",
+    "train": "/home/jorge/snap/babylm-baby-steps/data/linguistic_repair/qa_where_destination_frames_named_secondperson_sample500_seed42/train.txt"
+  },
+  "question_type": "where",
+  "second_person_full_answer_ratio": 0.6,
+  "second_person_pronoun_weights": {
+    "discover": 1.0,
+    "drop": 0.8,
+    "find": 1.0,
+    "hide": 0.8,
+    "leave": 0.65,
+    "notice": 1.0,
+    "place": 0.8,
+    "put": 0.8,
+    "set": 0.8,
+    "spot": 1.0,
+    "store": 0.8
+  },
+  "second_person_ratio": 0.75,
+  "seed": 42,
+  "verb_families": [
+    "send_mail_ship_deliver",
+    "go_walk_head_return",
+    "travel_ride_fly",
+    "drive_park"
+  ]
+}

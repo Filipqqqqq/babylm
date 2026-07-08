@@ -57,6 +57,13 @@ def main(argv: list[str] | None = None) -> None:
     print(f"Audit counts: pass={counts['pass']:,} warn={counts['warn']:,} fail={counts['fail']:,}")
     print(f"Verb family counts: {counts['verb_family_counts']}")
     print(f"Style counts: {counts['style_counts']}")
+    print(f"Named location counts: {counts.get('named_location_counts', {})}")
+    print(f"Second-person counts: {counts.get('second_person_counts', {})}")
+    print(f"Answer style counts: {counts.get('answer_style_counts', {})}")
+    print(
+        "Question object-reference counts: "
+        f"{counts.get('question_object_reference_counts', {})}"
+    )
     print(f"Train text: {result.outputs['train']}")
     print(f"Documents JSONL: {result.outputs['documents']}")
     print(f"Manifest: {result.outputs['manifest']}")
