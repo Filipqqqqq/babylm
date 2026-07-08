@@ -119,18 +119,20 @@ CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n babylm \
 The table below compares final epoch in-training diagnostics against the
 earlier 5.0% reference mix with easy QA, turn-taking, physical dynamics, and
 material affordance. Entity Tracking is omitted here while its scoring path is
-under audit.
+under audit. Overall is the unweighted mean of EWoK, BLIMP Supplement, and
+COMPS.
 
-| Mix | EWoK | EWoK Spatial | BLIMP | BLIMP Supplement | COMPS |
+| Mix | EWoK | BLIMP | BLIMP Supplement | COMPS | Overall |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| 5.0% reference | 0.5277 | 0.4571 | 0.7254 | 0.6780 | 0.5269 |
-| 5.5% targeted BLIMP repair | 0.5284 | **0.4816** | 0.7261 | **0.7049** | 0.5282 |
-| 8.5% COMPS + targeted QA | **0.5334** | 0.4551 | **0.7331** | 0.7011 | **0.5421** |
+| 5.0% reference | 0.5277 | 0.7254 | 0.6780 | 0.5269 | 0.5775 |
+| 5.5% targeted BLIMP repair | 0.5284 | 0.7261 | **0.7049** | 0.5282 | 0.5872 |
+| 8.5% COMPS + targeted QA | **0.5334** | **0.7331** | 0.7011 | **0.5421** | **0.5922** |
 
 Relative to the 5.0% reference, the 5.5% targeted repair improves BLIMP
-Supplement by 2.70 points and EWoK spatial by 2.45 points. The 8.5% COMPS mix
-is the stronger current overall recipe: +1.52 points on COMPS, +0.77 points on
-BLIMP, +2.32 points on BLIMP Supplement, and +0.56 points on EWoK overall.
+Supplement by 2.69 points and the three-way overall score by 0.96 points. The
+8.5% COMPS mix is the stronger current overall recipe: +1.52 points on COMPS,
++0.77 points on BLIMP, +2.31 points on BLIMP Supplement, +0.57 points on EWoK,
+and +1.47 points on the three-way overall score.
 
 For fast training runs without the expensive benchmark diagnostics, disable the
 BLIMP/Entity Tracking/COMPS MNTP likelihood evals and EWoK context evals:
