@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 
+import pytest
 import torch
 from torch import nn
 
@@ -324,6 +325,38 @@ def test_muon_optimizer_keeps_extra_module_params_in_aux_adamw_groups() -> None:
     assert nextlat_ids.isdisjoint(muon_ids)
     assert nextlat_ids <= aux_ids
     assert info.auxiliary_tensors >= len(nextlat_ids)
+
+
+def test_muon_optimizer_supports_distinct_extra_module_learning_rate() -> None:
+    model = _TinyGPTLike()
+    nextlat = LatentDynamicsMLP(
+        hidden_size=4,
+        token_embedding_size=4,
+        mlp_hidden_dim=8,
+        mlp_layers=2,
+    )
+    optimizer, _ = build_optimizer(
+        model,
+        {
+            "optimizer": "muon_pe",
+            "learning_rate": 5e-5,
+            "extra_learning_rate": 4e-4,
+            "muon_lr": 0.03,
+        },
+        extra_modules=(nextlat,),
+    )
+
+    nextlat_ids = {id(param) for param in nextlat.parameters()}
+    nextlat_groups = [
+        group
+        for group in optimizer.param_groups
+        if any(id(param) in nextlat_ids for param in group["params"])
+    ]
+
+    assert nextlat_groups
+    assert all(group["use_muon"] is False for group in nextlat_groups)
+    assert all(group["lr"] == pytest.approx(4e-4) for group in nextlat_groups)
+    assert all(group["base_lr"] == pytest.approx(4e-4) for group in nextlat_groups)
 
 
 def test_build_optimizer_accepts_lamb_config_and_steps() -> None:

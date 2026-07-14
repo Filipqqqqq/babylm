@@ -53,6 +53,7 @@ from babysteps.training.nextlat import (
     NextLatConfig,
     NextLatLossResult,
     compute_nextlat_loss,
+    compute_nextlat_rollout_losses,
     nextlat_kl_weight,
 )
 from babysteps.training.spatial_auxiliary import (
@@ -270,8 +271,9 @@ def save_hf_checkpoint(
     output_dir: str | Path,
     *,
     name: str,
+    nextlat_dynamics: LatentDynamicsMLP | None = None,
 ) -> None:
-    """Save a Hugging Face model/tokenizer checkpoint."""
+    """Save a Hugging Face model/tokenizer and optional NextLat dynamics."""
 
     accelerator.wait_for_everyone()
     if not accelerator.is_main_process:
@@ -284,6 +286,12 @@ def save_hf_checkpoint(
     unwrapped_model = accelerator.unwrap_model(model)
     unwrapped_model.save_pretrained(checkpoint_dir, save_function=accelerator.save)
     tokenizer.save_pretrained(checkpoint_dir)
+    if nextlat_dynamics is not None:
+        unwrapped_dynamics = accelerator.unwrap_model(nextlat_dynamics)
+        accelerator.save(
+            unwrapped_dynamics.state_dict(),
+            checkpoint_dir / "nextlat_dynamics.pt",
+        )
 
 
 def train_causal_lm(
@@ -457,6 +465,7 @@ def train_causal_lm(
     )
     nextlat_input_embeddings = None
     nextlat_output_embeddings = None
+    nextlat_rollout_eval_index = 0
     if nextlat_enabled:
         if nextlat_config is None or nextlat_dynamics is None:
             raise ValueError("NextLat requires both nextlat_config and nextlat_dynamics.")
@@ -476,9 +485,152 @@ def train_causal_lm(
             nextlat_output_embeddings = unwrapped_model.get_output_embeddings()
             if nextlat_output_embeddings is None:
                 raise ValueError("NextLat KL requires output embeddings.")
+        if nextlat_config.rollout_eval_words:
+            if val_loader is None:
+                raise ValueError("NextLat rollout evaluation requires a val_loader.")
+            if words_per_token is None:
+                raise ValueError(
+                    "NextLat rollout word checkpoints require words_per_token."
+                )
 
     if accelerator.is_main_process:
         output_dir.mkdir(parents=True, exist_ok=True)
+
+    def run_nextlat_rollout_eval(
+        *,
+        epoch: int,
+        step: int,
+        tokens_seen: float,
+        requested_words: float,
+    ) -> None:
+        if (
+            nextlat_dynamics is None
+            or nextlat_config is None
+            or nextlat_input_embeddings is None
+            or val_loader is None
+        ):
+            return
+
+        model.eval()
+        nextlat_dynamics.eval()
+        horizons = nextlat_config.rollout_eval_horizons
+        loss_sums = {
+            horizon: torch.zeros((), device=accelerator.device, dtype=torch.float32)
+            for horizon in horizons
+        }
+        transition_counts = {
+            horizon: torch.zeros((), device=accelerator.device, dtype=torch.float32)
+            for horizon in horizons
+        }
+        persistence_sums = {
+            horizon: torch.zeros((), device=accelerator.device, dtype=torch.float32)
+            for horizon in horizons
+        }
+        persistence_counts = {
+            horizon: torch.zeros((), device=accelerator.device, dtype=torch.float32)
+            for horizon in horizons
+        }
+
+        batches = islice(val_loader, nextlat_config.rollout_eval_max_batches)
+        with torch.no_grad():
+            for input_ids, _labels, loss_mask, attention_mask in batches:
+                max_seq_len = nextlat_config.rollout_eval_max_seq_len
+                if max_seq_len is not None:
+                    input_ids = input_ids[:, :max_seq_len]
+                    loss_mask = loss_mask[:, :max_seq_len]
+                    attention_mask = attention_mask[:, :max_seq_len]
+                with accelerator.autocast():
+                    outputs = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        output_hidden_states=True,
+                    )
+                    if outputs.hidden_states is None:
+                        raise RuntimeError(
+                            "NextLat rollout evaluation expected hidden states."
+                        )
+                    rollout = compute_nextlat_rollout_losses(
+                        dynamics=nextlat_dynamics,
+                        input_embeddings=nextlat_input_embeddings,
+                        hidden_states=outputs.hidden_states[-1],
+                        input_ids=input_ids,
+                        loss_mask=loss_mask,
+                        attention_mask=attention_mask,
+                        horizons=horizons,
+                        bos_token_id=nextlat_bos_token_id,
+                        eos_token_id=nextlat_eos_token_id,
+                        mask_eos_bos_boundaries=(
+                            nextlat_config.mask_eos_bos_boundaries
+                        ),
+                    )
+                for horizon in horizons:
+                    if horizon not in rollout.loss_by_horizon:
+                        continue
+                    count = rollout.transition_count_by_horizon[horizon].float()
+                    persistence_count = (
+                        rollout.persistence_transition_count_by_horizon[horizon].float()
+                    )
+                    loss_sums[horizon] += (
+                        rollout.loss_by_horizon[horizon].detach().float() * count
+                    )
+                    transition_counts[horizon] += count
+                    persistence_sums[horizon] += (
+                        rollout.persistence_loss_by_horizon[horizon].detach().float()
+                        * persistence_count
+                    )
+                    persistence_counts[horizon] += persistence_count
+
+        if accelerator.num_processes > 1:
+            for horizon in horizons:
+                loss_sums[horizon] = accelerator.reduce(
+                    loss_sums[horizon], reduction="sum"
+                )
+                transition_counts[horizon] = accelerator.reduce(
+                    transition_counts[horizon], reduction="sum"
+                )
+                persistence_sums[horizon] = accelerator.reduce(
+                    persistence_sums[horizon], reduction="sum"
+                )
+                persistence_counts[horizon] = accelerator.reduce(
+                    persistence_counts[horizon], reduction="sum"
+                )
+
+        if accelerator.is_main_process:
+            for horizon in horizons:
+                transition_count = transition_counts[horizon].item()
+                persistence_count = persistence_counts[horizon].item()
+                if transition_count <= 0.0 or persistence_count <= 0.0:
+                    continue
+                rollout_loss = (loss_sums[horizon] / transition_counts[horizon]).item()
+                persistence_loss = (
+                    persistence_sums[horizon] / persistence_counts[horizon]
+                ).item()
+                record = {
+                    "type": "nextlat_rollout",
+                    "epoch": epoch,
+                    "step": step,
+                    "tokens_seen": int(tokens_seen),
+                    "words_seen": float(tokens_seen) * float(words_per_token),
+                    "requested_words": float(requested_words),
+                    "horizon": horizon,
+                    "smooth_l1_loss": rollout_loss,
+                    "persistence_loss": persistence_loss,
+                    "improvement_over_persistence": persistence_loss - rollout_loss,
+                    "transition_count": int(transition_count),
+                    "max_batches": nextlat_config.rollout_eval_max_batches,
+                    "max_seq_len": nextlat_config.rollout_eval_max_seq_len,
+                }
+                history.append(record)
+                print(
+                    f"[step {step:06d}] nextlat_rollout_h{horizon}="
+                    f"{rollout_loss:.4f} persistence={persistence_loss:.4f} "
+                    f"improvement={persistence_loss - rollout_loss:.4f}",
+                    flush=True,
+                )
+            save_json_atomic(history, metrics_path)
+
+        model.train()
+        nextlat_dynamics.train()
 
     def reduction_filter(score_reductions: tuple[ScoreReduction, ...]) -> ScoreReduction | None:
         return score_reductions[0] if len(score_reductions) == 1 else None
@@ -1407,6 +1559,27 @@ def train_causal_lm(
                         words_seen=current_words_seen or 0.0,
                     )
 
+            while (
+                nextlat_enabled
+                and nextlat_config is not None
+                and accelerator.sync_gradients
+                and current_words_seen is not None
+                and nextlat_rollout_eval_index
+                < len(nextlat_config.rollout_eval_words)
+                and current_words_seen
+                >= nextlat_config.rollout_eval_words[nextlat_rollout_eval_index]
+            ):
+                requested_words = nextlat_config.rollout_eval_words[
+                    nextlat_rollout_eval_index
+                ]
+                run_nextlat_rollout_eval(
+                    epoch=epoch,
+                    step=global_step,
+                    tokens_seen=cumulative_tokens_seen,
+                    requested_words=requested_words,
+                )
+                nextlat_rollout_eval_index += 1
+
             should_spatial_auxiliary_eval = (
                 spatial_auxiliary_eval_items is not None
                 and spatial_auxiliary_eval_every_steps > 0
@@ -1635,10 +1808,18 @@ def train_causal_lm(
                 accelerator,
                 output_dir,
                 name=f"checkpoint-epoch-{epoch:04d}",
+                nextlat_dynamics=nextlat_dynamics,
             )
 
     if save_final:
-        save_hf_checkpoint(model, tokenizer, accelerator, output_dir, name="final")
+        save_hf_checkpoint(
+            model,
+            tokenizer,
+            accelerator,
+            output_dir,
+            name="final",
+            nextlat_dynamics=nextlat_dynamics,
+        )
 
     accelerator.wait_for_everyone()
     return history

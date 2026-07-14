@@ -13,8 +13,10 @@ from babysteps.training.nextlat import (
     LatentDynamicsMLP,
     NextLatConfig,
     NextLatLossResult,
+    NextLatRolloutResult,
     build_transition_mask,
     compute_nextlat_loss,
+    compute_nextlat_rollout_losses,
     nextlat_config_from_dict,
 )
 from babysteps.training.optimizers import build_optimizer
@@ -44,8 +46,10 @@ __all__ = [
     "LatentDynamicsMLP",
     "NextLatConfig",
     "NextLatLossResult",
+    "NextLatRolloutResult",
     "build_transition_mask",
     "compute_nextlat_loss",
+    "compute_nextlat_rollout_losses",
     "nextlat_config_from_dict",
     "read_spatial_auxiliary_examples",
     "set_all_seeds",

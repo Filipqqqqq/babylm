@@ -33,6 +33,10 @@ class NextLatConfig:
     mlp_layers: int = 3
     detach_targets: bool = True
     mask_eos_bos_boundaries: bool = True
+    rollout_eval_horizons: tuple[int, ...] = ()
+    rollout_eval_words: tuple[float, ...] = ()
+    rollout_eval_max_batches: int = 1
+    rollout_eval_max_seq_len: int | None = 256
 
 
 @dataclass(frozen=True)
@@ -48,8 +52,23 @@ class NextLatLossResult:
     kl_weight: torch.Tensor
 
 
+@dataclass(frozen=True)
+class NextLatRolloutResult:
+    """Per-horizon latent rollout diagnostics."""
+
+    loss_by_horizon: dict[int, torch.Tensor]
+    transition_count_by_horizon: dict[int, torch.Tensor]
+    persistence_loss_by_horizon: dict[int, torch.Tensor]
+    persistence_transition_count_by_horizon: dict[int, torch.Tensor]
+
+
 class LatentDynamicsMLP(nn.Module):
-    """Predict the next hidden state from a hidden state and next-token embedding."""
+    """Predict a residual update from a hidden state and next-token embedding.
+
+    This follows the paper's transition parameterization: layer-normalize the
+    concatenated inputs, predict a delta with a small MLP, and add that delta to
+    the current hidden state.
+    """
 
     def __init__(
         self,
@@ -84,6 +103,7 @@ class LatentDynamicsMLP(nn.Module):
             for _ in range(mlp_layers - 2):
                 layers.extend([nn.Linear(mlp_hidden_dim, mlp_hidden_dim), nn.GELU()])
             layers.append(nn.Linear(mlp_hidden_dim, hidden_size))
+        self.input_norm = nn.LayerNorm(input_size)
         self.net = nn.Sequential(*layers)
 
     def forward(
@@ -97,7 +117,12 @@ class LatentDynamicsMLP(nn.Module):
             )
         if next_token_embeddings.dtype != current_hidden.dtype:
             next_token_embeddings = next_token_embeddings.to(dtype=current_hidden.dtype)
-        return self.net(torch.cat([current_hidden, next_token_embeddings], dim=-1))
+        dynamics_input = torch.cat(
+            [next_token_embeddings, current_hidden],
+            dim=-1,
+        )
+        delta = self.net(self.input_norm(dynamics_input))
+        return current_hidden + delta
 
 
 def nextlat_config_from_dict(config: dict[str, Any] | None) -> NextLatConfig:
@@ -128,6 +153,18 @@ def nextlat_config_from_dict(config: dict[str, Any] | None) -> NextLatConfig:
         mlp_layers=int(raw.get("mlp_layers", 3)),
         detach_targets=bool(raw.get("detach_targets", True)),
         mask_eos_bos_boundaries=bool(raw.get("mask_eos_bos_boundaries", True)),
+        rollout_eval_horizons=tuple(
+            int(value) for value in (raw.get("rollout_eval_horizons", []) or [])
+        ),
+        rollout_eval_words=tuple(
+            float(value) for value in (raw.get("rollout_eval_words", []) or [])
+        ),
+        rollout_eval_max_batches=int(raw.get("rollout_eval_max_batches", 1)),
+        rollout_eval_max_seq_len=(
+            None
+            if raw.get("rollout_eval_max_seq_len", 256) is None
+            else int(raw.get("rollout_eval_max_seq_len", 256))
+        ),
     )
     if parsed.horizon <= 0:
         raise ValueError("nextlat.horizon must be positive.")
@@ -160,6 +197,28 @@ def nextlat_config_from_dict(config: dict[str, Any] | None) -> NextLatConfig:
         raise ValueError("nextlat.mlp_hidden_dim must be positive.")
     if parsed.mlp_layers <= 0:
         raise ValueError("nextlat.mlp_layers must be positive.")
+    if any(horizon <= 0 for horizon in parsed.rollout_eval_horizons):
+        raise ValueError("nextlat.rollout_eval_horizons must be positive.")
+    if tuple(sorted(set(parsed.rollout_eval_horizons))) != parsed.rollout_eval_horizons:
+        raise ValueError(
+            "nextlat.rollout_eval_horizons must be unique and increasing."
+        )
+    if any(words <= 0.0 for words in parsed.rollout_eval_words):
+        raise ValueError("nextlat.rollout_eval_words must be positive.")
+    if tuple(sorted(set(parsed.rollout_eval_words))) != parsed.rollout_eval_words:
+        raise ValueError("nextlat.rollout_eval_words must be unique and increasing.")
+    if parsed.rollout_eval_max_batches <= 0:
+        raise ValueError("nextlat.rollout_eval_max_batches must be positive.")
+    if (
+        parsed.rollout_eval_max_seq_len is not None
+        and parsed.rollout_eval_max_seq_len <= 1
+    ):
+        raise ValueError("nextlat.rollout_eval_max_seq_len must exceed 1.")
+    if bool(parsed.rollout_eval_horizons) != bool(parsed.rollout_eval_words):
+        raise ValueError(
+            "Set both nextlat.rollout_eval_horizons and "
+            "nextlat.rollout_eval_words, or neither."
+        )
     return parsed
 
 
@@ -443,12 +502,98 @@ def compute_nextlat_loss(
     )
 
 
+def compute_nextlat_rollout_losses(
+    *,
+    dynamics: LatentDynamicsMLP,
+    input_embeddings: nn.Module,
+    hidden_states: torch.Tensor,
+    input_ids: torch.Tensor,
+    loss_mask: torch.Tensor,
+    attention_mask: torch.Tensor,
+    horizons: tuple[int, ...],
+    bos_token_id: int | None,
+    eos_token_id: int | None,
+    mask_eos_bos_boundaries: bool = True,
+) -> NextLatRolloutResult:
+    """Measure exact recursive rollout error at selected future horizons.
+
+    Ground-truth future tokens are teacher-forced through the learned dynamics,
+    while latent states are recursively predicted.  Each horizon is reported
+    separately rather than averaged with shorter horizons.  A same-horizon
+    persistence baseline predicts that ``h_t`` remains unchanged at ``t + d``.
+    """
+
+    normalized_horizons = tuple(sorted({int(horizon) for horizon in horizons}))
+    if not normalized_horizons or normalized_horizons[0] <= 0:
+        raise ValueError("NextLat rollout horizons must be positive.")
+
+    base_mask = build_transition_mask(
+        input_ids=input_ids,
+        loss_mask=loss_mask,
+        attention_mask=attention_mask,
+        bos_token_id=bos_token_id,
+        eos_token_id=eos_token_id,
+        mask_eos_bos_boundaries=mask_eos_bos_boundaries,
+    )
+    loss_by_horizon: dict[int, torch.Tensor] = {}
+    transition_count_by_horizon: dict[int, torch.Tensor] = {}
+    persistence_loss_by_horizon: dict[int, torch.Tensor] = {}
+    persistence_transition_count_by_horizon: dict[int, torch.Tensor] = {}
+
+    current_states = hidden_states
+    cumulative_mask = base_mask
+    for step in range(1, normalized_horizons[-1] + 1):
+        if current_states.size(1) < 2:
+            break
+        if step > 1:
+            cumulative_mask = cumulative_mask[:, :-1] & base_mask[:, step - 1 :]
+        if cumulative_mask.numel() == 0:
+            break
+
+        current_states = current_states[:, :-1]
+        next_tokens = input_ids[:, step:]
+        target_states = hidden_states[:, step:].detach()
+        next_token_embeddings = input_embeddings(next_tokens)
+        pred_states = dynamics(current_states, next_token_embeddings)
+
+        if step in normalized_horizons:
+            loss_sum, transition_count = _masked_smooth_l1(
+                pred_states,
+                target_states,
+                cumulative_mask,
+            )
+            persistence_sum, persistence_count = _masked_smooth_l1(
+                hidden_states[:, :-step].detach(),
+                target_states,
+                cumulative_mask,
+            )
+            loss_by_horizon[step] = loss_sum / transition_count.clamp_min(1.0)
+            transition_count_by_horizon[step] = transition_count.detach()
+            persistence_loss_by_horizon[step] = (
+                persistence_sum / persistence_count.clamp_min(1.0)
+            )
+            persistence_transition_count_by_horizon[step] = persistence_count.detach()
+
+        current_states = pred_states
+
+    return NextLatRolloutResult(
+        loss_by_horizon=loss_by_horizon,
+        transition_count_by_horizon=transition_count_by_horizon,
+        persistence_loss_by_horizon=persistence_loss_by_horizon,
+        persistence_transition_count_by_horizon=(
+            persistence_transition_count_by_horizon
+        ),
+    )
+
+
 __all__ = [
     "LatentDynamicsMLP",
     "NextLatConfig",
     "NextLatLossResult",
+    "NextLatRolloutResult",
     "build_transition_mask",
     "compute_nextlat_loss",
+    "compute_nextlat_rollout_losses",
     "nextlat_kl_weight",
     "nextlat_config_from_dict",
 ]

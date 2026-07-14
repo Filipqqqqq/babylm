@@ -244,6 +244,7 @@ def build_muon_pe_optimizer(
     muon_nesterov: bool,
     muon_split_qkv: bool,
     muon_batch_updates: bool,
+    extra_learning_rate: float | None = None,
     extra_modules: tuple[torch.nn.Module, ...] = (),
 ) -> tuple[MuonWithAuxAdamPE, OptimizerBuildInfo]:
     """Build Muon for hidden matrices plus auxiliary AdamW groups."""
@@ -262,6 +263,13 @@ def build_muon_pe_optimizer(
         split_qkv=bool(muon_split_qkv),
     )
     extra_params = _trainable_extra_parameters(extra_modules)
+    resolved_extra_lr = (
+        float(learning_rate)
+        if extra_learning_rate is None
+        else float(extra_learning_rate)
+    )
+    if resolved_extra_lr <= 0.0:
+        raise ValueError("extra_learning_rate must be positive.")
     extra_decay_params = [param for param in extra_params if param.dim() >= 2]
     extra_nodecay_params = [param for param in extra_params if param.dim() < 2]
     if extra_decay_params:
@@ -269,8 +277,8 @@ def build_muon_pe_optimizer(
             {
                 "params": extra_decay_params,
                 "use_muon": False,
-                "lr": float(learning_rate),
-                "base_lr": float(learning_rate),
+                "lr": resolved_extra_lr,
+                "base_lr": resolved_extra_lr,
                 "betas": betas,
                 "eps": float(eps),
                 "weight_decay": float(weight_decay),
@@ -281,8 +289,8 @@ def build_muon_pe_optimizer(
             {
                 "params": extra_nodecay_params,
                 "use_muon": False,
-                "lr": float(learning_rate),
-                "base_lr": float(learning_rate),
+                "lr": resolved_extra_lr,
+                "base_lr": resolved_extra_lr,
                 "betas": betas,
                 "eps": float(eps),
                 "weight_decay": 0.0,
@@ -355,6 +363,11 @@ def build_optimizer(
             muon_nesterov=bool(settings.get("muon_nesterov", True)),
             muon_split_qkv=bool(settings.get("muon_split_qkv", True)),
             muon_batch_updates=bool(settings.get("muon_batch_updates", True)),
+            extra_learning_rate=(
+                None
+                if settings.get("extra_learning_rate") is None
+                else float(settings["extra_learning_rate"])
+            ),
             extra_modules=extra_modules,
         )
 

@@ -1257,6 +1257,9 @@ def main() -> None:
                 f"kl_warmup_end_words={nextlat_config.kl_warmup_end_words} "
                 f"mlp_hidden_dim={nextlat_config.mlp_hidden_dim} "
                 f"mlp_layers={nextlat_config.mlp_layers} "
+                f"optimizer_lr={training_config.get('extra_learning_rate')} "
+                f"rollout_eval_horizons={nextlat_config.rollout_eval_horizons} "
+                f"rollout_eval_words={nextlat_config.rollout_eval_words} "
                 f"params={nextlat_params:,}",
                 flush=True,
             )

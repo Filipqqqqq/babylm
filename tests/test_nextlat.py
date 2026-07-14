@@ -10,6 +10,7 @@ from babysteps.training.nextlat import (
     NextLatConfig,
     build_transition_mask,
     compute_nextlat_loss,
+    compute_nextlat_rollout_losses,
     nextlat_kl_weight,
     nextlat_config_from_dict,
 )
@@ -39,6 +40,24 @@ def test_latent_dynamics_mlp_preserves_shape_device_and_dtype() -> None:
     assert output.shape == current_hidden.shape
     assert output.device == current_hidden.device
     assert output.dtype == current_hidden.dtype
+
+
+def test_latent_dynamics_mlp_predicts_residual_delta_from_normalized_input() -> None:
+    dynamics = LatentDynamicsMLP(
+        hidden_size=4,
+        token_embedding_size=3,
+        mlp_hidden_dim=8,
+        mlp_layers=2,
+    )
+    with torch.no_grad():
+        for parameter in dynamics.net.parameters():
+            parameter.zero_()
+    current_hidden = torch.randn(2, 5, 4)
+    next_token_embeddings = torch.randn(2, 5, 3)
+
+    output = dynamics(current_hidden, next_token_embeddings)
+
+    torch.testing.assert_close(output, current_hidden)
 
 
 def test_transition_mask_excludes_eos_bos_and_padding() -> None:
@@ -113,6 +132,32 @@ def test_nextlat_horizon_rollout_counts_cumulative_valid_transitions() -> None:
 
     assert result.transition_count.item() == 5
     assert result.persistence_transition_count.item() == 3
+
+
+def test_nextlat_rollout_diagnostics_report_exact_selected_horizons() -> None:
+    hidden_states = torch.randn(1, 5, 3)
+    input_ids = torch.tensor([[1, 3, 4, 5, 6]])
+    attention_mask = torch.ones_like(input_ids, dtype=torch.bool)
+    loss_mask = torch.ones_like(input_ids, dtype=torch.bool)
+    embeddings = nn.Embedding(8, 3)
+
+    result = compute_nextlat_rollout_losses(
+        dynamics=_ZeroDynamics(),  # type: ignore[arg-type]
+        input_embeddings=embeddings,
+        hidden_states=hidden_states,
+        input_ids=input_ids,
+        loss_mask=loss_mask,
+        attention_mask=attention_mask,
+        horizons=(1, 2, 4),
+        bos_token_id=1,
+        eos_token_id=2,
+    )
+
+    assert tuple(result.loss_by_horizon) == (1, 2, 4)
+    assert result.transition_count_by_horizon[1].item() == 4
+    assert result.transition_count_by_horizon[2].item() == 3
+    assert result.transition_count_by_horizon[4].item() == 1
+    assert tuple(result.persistence_loss_by_horizon) == (1, 2, 4)
 
 
 def test_nextlat_detaches_target_hidden_states_but_trains_dynamics() -> None:
@@ -290,3 +335,20 @@ def test_nextlat_kl_warmup_schedule() -> None:
     assert nextlat_kl_weight(config, words_seen=100_000_000) == 0.0
     assert nextlat_kl_weight(config, words_seen=150_000_000) == pytest.approx(0.05)
     assert nextlat_kl_weight(config, words_seen=200_000_000) == pytest.approx(0.1)
+
+
+def test_nextlat_config_parses_rollout_diagnostics() -> None:
+    config = nextlat_config_from_dict(
+        {
+            "enabled": True,
+            "rollout_eval_horizons": [1, 2, 4, 8],
+            "rollout_eval_words": [200_000_000, 300_000_000],
+            "rollout_eval_max_batches": 2,
+            "rollout_eval_max_seq_len": 256,
+        }
+    )
+
+    assert config.rollout_eval_horizons == (1, 2, 4, 8)
+    assert config.rollout_eval_words == (200_000_000.0, 300_000_000.0)
+    assert config.rollout_eval_max_batches == 2
+    assert config.rollout_eval_max_seq_len == 256
