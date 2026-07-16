@@ -20,6 +20,9 @@ from babysteps.training.hybrid_lm_loop import (
     make_masked_batch,
     objective_schedule_from_config,
     objective_for,
+    reshape_training_batch,
+    sequence_length_for_step,
+    sequence_length_schedule_from_config,
     set_gpt_bert_is_causal,
     train_hybrid_lm,
 )
@@ -160,6 +163,43 @@ def test_objective_schedule_config_replaces_causal_per_masked() -> None:
         assert "At least one" in str(exc)
     else:
         raise AssertionError("Expected an empty objective schedule to be rejected.")
+
+
+def test_sequence_length_curriculum_matches_sid_boundaries() -> None:
+    schedule = sequence_length_schedule_from_config(
+        {
+            "enabled": True,
+            "phases": [
+                {"until_fraction": 0.60, "seq_len": 128},
+                {"until_fraction": 0.80, "seq_len": 256},
+                {"until_fraction": 1.00, "seq_len": 512},
+            ],
+        },
+        max_seq_len=512,
+        tokens_per_batch=16_384,
+    )
+
+    assert sequence_length_for_step(0, 10_380, schedule, default_seq_len=512) == 128
+    assert sequence_length_for_step(6_227, 10_380, schedule, default_seq_len=512) == 128
+    assert sequence_length_for_step(6_228, 10_380, schedule, default_seq_len=512) == 256
+    assert sequence_length_for_step(8_303, 10_380, schedule, default_seq_len=512) == 256
+    assert sequence_length_for_step(8_304, 10_380, schedule, default_seq_len=512) == 512
+
+
+def test_reshape_training_batch_preserves_tokens_and_attention() -> None:
+    input_ids = torch.arange(16).reshape(2, 8)
+    attention_mask = torch.ones_like(input_ids, dtype=torch.bool)
+
+    reshaped_ids, reshaped_mask = reshape_training_batch(
+        input_ids,
+        attention_mask,
+        seq_len=4,
+    )
+
+    assert reshaped_ids.shape == (4, 4)
+    assert reshaped_mask.shape == (4, 4)
+    assert reshaped_ids.flatten().tolist() == input_ids.flatten().tolist()
+    assert reshaped_mask.flatten().tolist() == attention_mask.flatten().tolist()
 
 
 def test_mntp_likelihood_plots_use_supplement_uid_group_scope(
@@ -323,12 +363,15 @@ def test_train_hybrid_lm_smoke_logs_validation_and_saves(tmp_path: Path) -> None
         save_final=True,
         tail_average_fraction=1.0,
         tail_average_every_steps=1,
+        sequence_length_schedule=((0.5, 2), (1.0, 4)),
     )
 
     assert any(record["type"] == "validation" for record in history)
     assert any("val_causal_loss" in record for record in history)
     assert any("val_mntp_loss" in record for record in history)
     train_records = [record for record in history if record["type"] == "train"]
+    assert [record["sequence_length"] for record in train_records] == [2, 4]
+    assert [record["sequences_per_batch"] for record in train_records] == [4, 2]
     assert any("train_causal_loss" in record for record in train_records)
     assert any("train_mntp_loss" in record for record in train_records)
     assert (tmp_path / "checkpoint-epoch-0001" / "pytorch_model.bin").exists()

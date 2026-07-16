@@ -41,8 +41,11 @@ from babysteps.models import (
 from babysteps.models.causal_lm import DEFAULT_GPT_BERT_REPO
 from babysteps.paths import resolve_path, validate_tokenizer_dir
 from babysteps.training.causal_lm_loop import save_json_atomic, set_all_seeds
-from babysteps.training.hybrid_lm_loop import MNTP_LIKELIHOOD_BENCHMARKS
-from babysteps.training.hybrid_lm_loop import train_hybrid_lm
+from babysteps.training.hybrid_lm_loop import (
+    MNTP_LIKELIHOOD_BENCHMARKS,
+    sequence_length_schedule_from_config,
+    train_hybrid_lm,
+)
 from babysteps.training.nextlat import LatentDynamicsMLP, nextlat_config_from_dict
 from babysteps.training.optimizers import build_optimizer
 from babysteps.training.spatial_auxiliary import (
@@ -286,7 +289,12 @@ def read_mntp_likelihood_items(config: dict[str, Any]) -> dict[str, list[Any]]:
         if benchmark_name in {"blimp", "blimp_supplement"}:
             items = read_blimp_items(data_dir)
         elif benchmark_name == "entity_tracking":
-            items = read_entity_tracking_items(data_dir)
+            items = read_entity_tracking_items(
+                data_dir,
+                exclude_nothing_candidates=bool(
+                    merged.get("exclude_nothing_candidates", True)
+                ),
+            )
         elif benchmark_name == "comps":
             items = read_comps_items(data_dir)
         else:
@@ -644,6 +652,11 @@ def main() -> None:
     model_config = config["model"]
     seq_len = int(data_config.get("seq_len", model_config.get("context_length", 512)))
     batch_size = int(training_config.get("batch_size", 16))
+    sequence_length_schedule = sequence_length_schedule_from_config(
+        training_config.get("sequence_length_curriculum"),
+        max_seq_len=seq_len,
+        tokens_per_batch=seq_len * batch_size,
+    )
     num_workers = int(data_config.get("num_workers", 0))
     data_dir = data_config["data_dir"]
     train_loader, train_dataset = build_token_shard_loader(
@@ -942,6 +955,12 @@ def main() -> None:
             f"tokens/update~={tokens_per_update:,}",
             flush=True,
         )
+        if sequence_length_schedule:
+            phases = ", ".join(
+                f"seq_len={phase_seq_len} through {until_fraction:.0%}"
+                for until_fraction, phase_seq_len in sequence_length_schedule
+            )
+            print(f"Sequence-length curriculum: {phases}", flush=True)
         if words_per_token is not None:
             print(
                 "Word-progress estimate: "
@@ -1104,6 +1123,7 @@ def main() -> None:
         ),
         tail_average_every_steps=int(tail_average_config.get("every_steps", 10)),
         tail_average_name=str(tail_average_config.get("name", "model_tail_avg")),
+        sequence_length_schedule=sequence_length_schedule,
         benchmark_eval_at_start=bool(logging_config.get("benchmark_eval_at_start", True)),
         nextlat_dynamics=nextlat_dynamics,
         nextlat_config=nextlat_config,

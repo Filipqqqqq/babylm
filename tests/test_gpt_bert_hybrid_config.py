@@ -308,6 +308,14 @@ def test_gpt_bert_mixed_adamuon_tailavg_config_matches_experiment(monkeypatch) -
     assert config["training"]["learning_rate"] == 0.006
     assert config["training"]["adamuon_beta2"] == 0.95
     assert config["training"]["muon_batch_updates"] is False
+    assert config["training"]["sequence_length_curriculum"] == {
+        "enabled": True,
+        "phases": [
+            {"until_fraction": 0.60, "seq_len": 128},
+            {"until_fraction": 0.80, "seq_len": 256},
+            {"until_fraction": 1.00, "seq_len": 512},
+        ],
+    }
     assert config["checkpointing"]["tail_average"] == {
         "enabled": True,
         "fraction": 0.20,

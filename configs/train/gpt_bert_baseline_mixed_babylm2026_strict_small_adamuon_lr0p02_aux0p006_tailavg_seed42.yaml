@@ -89,6 +89,17 @@ training:
   gradient_accumulation_steps: 1
   gradient_clip_norm: 2.0
   mixed_precision: bf16
+  # Match Sid's 60%/20%/20% 128 -> 256 -> 512 token curriculum while
+  # preserving 16,384 input tokens per optimizer update.
+  sequence_length_curriculum:
+    enabled: true
+    phases:
+      - until_fraction: 0.60
+        seq_len: 128
+      - until_fraction: 0.80
+        seq_len: 256
+      - until_fraction: 1.00
+        seq_len: 512
 
 logging:
   log_every_steps: 50

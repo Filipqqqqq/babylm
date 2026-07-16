@@ -69,8 +69,18 @@ class EntityTrackingResult:
     summary_rows: list[dict[str, Any]]
 
 
-def read_entity_tracking_items(path: str | Path) -> list[EntityTrackingItem]:
-    """Read Entity Tracking JSONL files from a directory or single file."""
+def read_entity_tracking_items(
+    path: str | Path,
+    *,
+    exclude_nothing_candidates: bool = True,
+) -> list[EntityTrackingItem]:
+    """Read Entity Tracking items, excluding ``nothing`` candidates by default.
+
+    The official BabyLM decoder drops an entire example when any candidate
+    contains ``nothing``. Applying the same filter while loading keeps the
+    confounded empty-answer examples out of item records, summaries, and plots.
+    Set ``exclude_nothing_candidates=False`` only for explicit legacy analyses.
+    """
 
     path = Path(path)
     paths = [path] if path.is_file() else sorted(path.glob("*.jsonl"))
@@ -91,6 +101,10 @@ def read_entity_tracking_items(path: str | Path) -> list[EntityTrackingItem]:
                 options = tuple(str(option) for option in row["options"])
                 if len(options) < 2:
                     raise ValueError(f"Entity Tracking item has fewer than two options: {uid}")
+                if exclude_nothing_candidates and any(
+                    "nothing" in option.casefold() for option in options
+                ):
+                    continue
                 items.append(
                     EntityTrackingItem(
                         item_id=f"{family}:{row.get('example_id', line_number)}",

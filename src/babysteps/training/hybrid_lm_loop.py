@@ -52,6 +52,7 @@ MNTP_LIKELIHOOD_BENCHMARKS = (
     "comps",
 )
 BENCHMARK_X_AXES = {"step", "tokens_seen", "words_seen"}
+SequenceLengthSchedule = tuple[tuple[float, int], ...]
 
 
 def benchmark_label(benchmark_name: str) -> str:
@@ -214,6 +215,108 @@ def objective_for(global_micro_step: int, causal_steps: int, masked_steps: int) 
         raise ValueError("causal_steps + masked_steps must be positive.")
     phase = int(global_micro_step) % period
     return "causal" if phase < int(causal_steps) else "masked"
+
+
+def sequence_length_schedule_from_config(
+    config: dict[str, Any] | None,
+    *,
+    max_seq_len: int,
+    tokens_per_batch: int,
+) -> SequenceLengthSchedule:
+    """Validate and normalize an optional sequence-length curriculum."""
+
+    if config is None:
+        return ()
+    if not isinstance(config, dict):
+        raise ValueError("training.sequence_length_curriculum must be a mapping.")
+    if not bool(config.get("enabled", False)):
+        return ()
+    raw_phases = config.get("phases")
+    if not isinstance(raw_phases, list) or not raw_phases:
+        raise ValueError(
+            "training.sequence_length_curriculum.phases must be a non-empty list."
+        )
+
+    schedule: list[tuple[float, int]] = []
+    previous_fraction = 0.0
+    previous_seq_len = 0
+    for index, raw_phase in enumerate(raw_phases, start=1):
+        if not isinstance(raw_phase, dict):
+            raise ValueError(
+                "Each training.sequence_length_curriculum phase must be a mapping."
+            )
+        until_fraction = float(raw_phase.get("until_fraction", 0.0))
+        seq_len = int(raw_phase.get("seq_len", 0))
+        if not previous_fraction < until_fraction <= 1.0:
+            raise ValueError(
+                "Sequence-length curriculum until_fraction values must be strictly "
+                f"increasing in (0, 1]; phase {index} has {until_fraction}."
+            )
+        if seq_len <= 0 or seq_len > int(max_seq_len):
+            raise ValueError(
+                "Sequence-length curriculum seq_len values must be positive and no "
+                f"larger than data.seq_len={max_seq_len}; phase {index} has {seq_len}."
+            )
+        if seq_len < previous_seq_len:
+            raise ValueError("Sequence-length curriculum seq_len values must not decrease.")
+        if int(tokens_per_batch) % seq_len:
+            raise ValueError(
+                f"tokens_per_batch={tokens_per_batch} is not divisible by seq_len={seq_len}."
+            )
+        schedule.append((until_fraction, seq_len))
+        previous_fraction = until_fraction
+        previous_seq_len = seq_len
+
+    if abs(schedule[-1][0] - 1.0) > 1e-12:
+        raise ValueError(
+            "The final sequence-length curriculum phase must have until_fraction: 1.0."
+        )
+    return tuple(schedule)
+
+
+def sequence_length_for_step(
+    global_update_step: int,
+    total_update_steps: int,
+    schedule: SequenceLengthSchedule,
+    *,
+    default_seq_len: int,
+) -> int:
+    """Return the active training length using Sid's integer phase boundaries."""
+
+    if int(total_update_steps) <= 0:
+        raise ValueError("total_update_steps must be positive.")
+    if int(global_update_step) < 0:
+        raise ValueError("global_update_step must be non-negative.")
+    if not schedule:
+        return int(default_seq_len)
+    for until_fraction, seq_len in schedule:
+        if int(global_update_step) < int(float(until_fraction) * int(total_update_steps)):
+            return int(seq_len)
+    return int(schedule[-1][1])
+
+
+def reshape_training_batch(
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+    *,
+    seq_len: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Reshape one contiguous training batch without changing its token budget."""
+
+    if input_ids.ndim != 2 or attention_mask.shape != input_ids.shape:
+        raise ValueError("Training input_ids and attention_mask must be matching 2D tensors.")
+    if int(seq_len) <= 0:
+        raise ValueError("seq_len must be positive.")
+    token_count = int(input_ids.numel())
+    if token_count % int(seq_len):
+        raise ValueError(
+            f"Training batch has {token_count} tokens, not divisible by seq_len={seq_len}."
+        )
+    batch_size = token_count // int(seq_len)
+    return (
+        input_ids.reshape(batch_size, int(seq_len)),
+        attention_mask.reshape(batch_size, int(seq_len)),
+    )
 
 
 def mask_ratio_for_step(global_update_step: int, total_update_steps: int, start: float, end: float) -> float:
@@ -607,6 +710,7 @@ def train_hybrid_lm(
     tail_average_fraction: float = 0.0,
     tail_average_every_steps: int = 10,
     tail_average_name: str = "model_tail_avg",
+    sequence_length_schedule: SequenceLengthSchedule = (),
     benchmark_eval_at_start: bool = True,
     nextlat_dynamics: LatentDynamicsMLP | None = None,
     nextlat_config: NextLatConfig | None = None,
@@ -1250,6 +1354,17 @@ def train_hybrid_lm(
         )
 
         for input_ids, _loader_labels, _loss_mask, attention_mask in progress:
+            active_sequence_length = sequence_length_for_step(
+                global_update_step,
+                total_update_steps,
+                sequence_length_schedule,
+                default_seq_len=int(input_ids.shape[-1]),
+            )
+            input_ids, attention_mask = reshape_training_batch(
+                input_ids,
+                attention_mask,
+                seq_len=active_sequence_length,
+            )
             objective = objective_for(global_micro_step, causal_steps, masked_steps)
             mask_ratio = mask_ratio_for_step(
                 global_update_step,
@@ -1598,6 +1713,7 @@ def train_hybrid_lm(
                 progress.set_postfix(
                     loss=f"{loss.item():.4f}",
                     obj=objective,
+                    seq=active_sequence_length,
                     step=global_update_step,
                 )
 
@@ -1616,6 +1732,8 @@ def train_hybrid_lm(
                     "loss": window_loss_sum / max(1.0, window_tokens),
                     "ce_loss": window_ce_sum / max(1.0, window_tokens),
                     "mask_ratio": mask_ratio,
+                    "sequence_length": active_sequence_length,
+                    "sequences_per_batch": int(input_ids.shape[0]),
                     "causal_microsteps": window_causal_microsteps,
                     "masked_microsteps": window_masked_microsteps,
                     "seconds": time.perf_counter() - started,
@@ -2047,7 +2165,10 @@ __all__ = [
     "objective_schedule_from_config",
     "objective_for",
     "plot_mntp_likelihood_summaries",
+    "reshape_training_batch",
     "save_gpt_bert_checkpoint",
+    "sequence_length_for_step",
+    "sequence_length_schedule_from_config",
     "set_gpt_bert_is_causal",
     "special_token_ids",
     "train_hybrid_lm",

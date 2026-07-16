@@ -913,7 +913,12 @@ def main() -> None:
             ),
             base_dir=ROOT,
         )
-        entity_tracking_items = read_entity_tracking_items(entity_tracking_data_dir)
+        entity_tracking_items = read_entity_tracking_items(
+            entity_tracking_data_dir,
+            exclude_nothing_candidates=bool(
+                entity_tracking_config.get("exclude_nothing_candidates", True)
+            ),
+        )
         max_entity_tracking_items = entity_tracking_config.get("max_items")
         if max_entity_tracking_items:
             entity_tracking_items = entity_tracking_items[: int(max_entity_tracking_items)]

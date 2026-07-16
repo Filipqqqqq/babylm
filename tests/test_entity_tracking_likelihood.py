@@ -117,6 +117,39 @@ def test_read_entity_tracking_items_builds_uid_from_family_and_numops(tmp_path: 
     assert items[0].uid == "ambiref_3_ops"
 
 
+def test_read_entity_tracking_items_excludes_any_nothing_candidate_by_default(
+    tmp_path: Path,
+) -> None:
+    data_path = tmp_path / "regular.jsonl"
+    rows = [
+        {
+            "example_id": 1,
+            "numops": 0,
+            "input_prefix": "Box contains ",
+            "options": ["good.", "bad1.", "bad2.", "bad3.", "bad4."],
+        },
+        {
+            "example_id": 2,
+            "numops": 0,
+            "input_prefix": "Box contains ",
+            "options": ["good.", "Nothing.", "bad2.", "bad3.", "bad4."],
+        },
+    ]
+    data_path.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+    filtered = read_entity_tracking_items(data_path)
+    legacy = read_entity_tracking_items(
+        data_path,
+        exclude_nothing_candidates=False,
+    )
+
+    assert [item.item_id for item in filtered] == ["regular:1"]
+    assert [item.item_id for item in legacy] == ["regular:1", "regular:2"]
+
+
 def test_build_item_records_uses_strict_option_zero_greater_than_all() -> None:
     item = make_item()
     records = build_item_records(
