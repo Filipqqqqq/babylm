@@ -86,6 +86,44 @@ def test_gpt_bert_mixed_tokenization_config_uses_cache_roots(monkeypatch) -> Non
     )
 
 
+def test_gpt_bert_mixed_slip_bridge_tokenization_config_uses_local_mix(monkeypatch) -> None:
+    monkeypatch.delenv("BABYSTEPS_GPT_BERT_BASELINE_MIXED_TOKENIZER_DIR", raising=False)
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+
+    config = token_shard_builder.load_yaml_config(
+        ROOT
+        / "configs"
+        / "tokenization"
+        / "archive"
+        / (
+            "babylm2026_strict_small_plus_physical_dynamics_ewok_micro_1000_"
+            "slip_bridge_1pct_gpt_bert_mixed_shards.yaml"
+        )
+    )
+
+    assert config["dataset"]["kind"] == "local_text"
+    assert config["dataset"]["document_mode"] == "line"
+    assert config["dataset"]["files"] == [
+        "data/analysis/word2vec/base_text/babylm2026_strict_small/train.txt",
+        (
+            "data/analysis/word2vec/text_mixes/"
+            "babylm2026_strict_small_plus_physical_dynamics_ewok_micro_1000_"
+            "slip_bridge_1pct/synthetic_repeated.txt"
+        ),
+    ]
+    assert config["tokenizer"]["kind"] == "pretrained"
+    assert config["tokenizer"]["source"] == "/cache/tokenizers/gpt_bert_baseline_mixed"
+    assert config["tokenizer"]["output_dir"] == "/cache/tokenizers/gpt_bert_baseline_mixed"
+    assert (
+        config["shards"]["output_dir"]
+        == (
+            "/cache/token_shards/"
+            "babylm2026_strict_small_plus_physical_dynamics_ewok_micro_1000_"
+            "slip_bridge_1pct_gpt_bert_mixed"
+        )
+    )
+
+
 def test_gpt_bert_100m_masked_focus_tokenization_config_uses_full_strict_dataset(
     monkeypatch,
 ) -> None:
@@ -190,7 +228,7 @@ def test_gpt_bert_muon_train_config_reuses_hybrid_defaults(monkeypatch) -> None:
     assert config["model"]["architecture"] == "gpt_bert"
     assert config["model"]["repo"] == "BabyLM-community/babylm-baseline-10m-gpt-bert-causal-focus"
     assert config["training"]["optimizer"] == "muon_pe"
-    assert config["training"]["learning_rate"] == 0.00005
+    assert config["training"]["learning_rate"] == 0.001
     assert config["training"]["muon_lr"] == 0.01
     assert config["training"]["muon_weight_decay"] == 0.1
     assert config["training"]["muon_split_qkv"] is False
@@ -239,6 +277,139 @@ def test_gpt_bert_mixed_train_config_uses_even_hybrid_schedule(monkeypatch) -> N
         config["tokenizer"]["name"]
         == "/cache/tokenizers/gpt_bert_baseline_mixed"
     )
+
+
+def test_gpt_bert_mixed_adamuon_tailavg_config_matches_experiment(monkeypatch) -> None:
+    monkeypatch.delenv("BABYSTEPS_GPT_BERT_BASELINE_MIXED_TOKENIZER_DIR", raising=False)
+    monkeypatch.delenv(
+        "BABYSTEPS_BABYLM2026_STRICT_SMALL_GPT_BERT_BASELINE_MIXED_SHARDS_DIR",
+        raising=False,
+    )
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+    monkeypatch.setenv("BABYSTEPS_RUNS_DIR", "/runs")
+
+    config = train_script.load_yaml_config(
+        ROOT
+        / "configs"
+        / "train"
+        / (
+            "gpt_bert_baseline_mixed_babylm2026_strict_small_"
+            "adamuon_lr0p02_aux0p006_tailavg_seed42.yaml"
+        )
+    )
+
+    assert config["run"]["name"] == "adamuon-10m-mixed-lr0.02-aux0.006-s42-tailavg"
+    assert config["run"]["seed"] == 42
+    assert config["model"]["repo"] == "BabyLM-community/babylm-baseline-10m-gpt-bert-mixed"
+    assert config["hybrid"]["causal_steps"] == 1
+    assert config["hybrid"]["masked_steps"] == 1
+    assert config["training"]["optimizer"] == "adamuon"
+    assert config["training"]["muon_lr"] == 0.02
+    assert config["training"]["learning_rate"] == 0.006
+    assert config["training"]["adamuon_beta2"] == 0.95
+    assert config["training"]["muon_batch_updates"] is False
+    assert config["checkpointing"]["tail_average"] == {
+        "enabled": True,
+        "fraction": 0.20,
+        "every_steps": 10,
+        "name": "model_tail_avg",
+    }
+
+
+def test_gpt_bert_mixed_muon_ewok_only_train_config_disables_mntp(monkeypatch) -> None:
+    monkeypatch.delenv("BABYSTEPS_GPT_BERT_BASELINE_MIXED_TOKENIZER_DIR", raising=False)
+    monkeypatch.delenv(
+        "BABYSTEPS_BABYLM2026_STRICT_SMALL_GPT_BERT_BASELINE_MIXED_SHARDS_DIR",
+        raising=False,
+    )
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+    monkeypatch.setenv("BABYSTEPS_RUNS_DIR", "/runs")
+
+    config = train_script.load_yaml_config(
+        ROOT
+        / "configs"
+        / "train"
+        / "archive"
+        / "gpt_bert_baseline_mixed_babylm2026_strict_small_muon_ewok_only.yaml"
+    )
+
+    assert config["run"]["name"] == "gpt_bert_baseline_mixed_babylm2026_strict_small_muon_ewok_only"
+    assert config["run"]["output_root"] == "/runs/training"
+    assert config["model"]["architecture"] == "gpt_bert"
+    assert config["model"]["repo"] == "BabyLM-community/babylm-baseline-10m-gpt-bert-mixed"
+    assert config["hybrid"]["causal_steps"] == 1
+    assert config["hybrid"]["masked_steps"] == 1
+    assert (
+        config["data"]["data_dir"]
+        == "/cache/token_shards/babylm2026_strict_small_gpt_bert_baseline_mixed"
+    )
+    assert config["tokenizer"]["name"] == "/cache/tokenizers/gpt_bert_baseline_mixed"
+    assert config["training"]["optimizer"] == "muon_pe"
+    assert config["training"]["learning_rate"] == 0.001
+    assert config["training"]["muon_lr"] == 0.01
+    assert config["ewok_context_sensitivity_full"]["enabled"] is True
+    assert config["ewok_context_sensitivity_full"]["every_words"] == 10_000_000
+    assert config["ewok_context_sensitivity_full"]["score_reduction"] == "both"
+    assert config["ewok_context_sensitivity_full"]["plot"] is True
+    assert config["ewok_mntp_context_sensitivity"]["enabled"] is False
+    assert config["mntp_likelihood"]["enabled"] is False
+    assert config["mntp_likelihood"]["every_words"] is None
+    assert config["mntp_likelihood"]["plot"] is False
+    assert config["loss_dynamics"]["plot"] is False
+
+
+def test_gpt_bert_mixed_slip_bridge_muon_train_config_uses_ewok_only_benchmark(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("BABYSTEPS_GPT_BERT_BASELINE_MIXED_TOKENIZER_DIR", raising=False)
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+    monkeypatch.setenv("BABYSTEPS_RUNS_DIR", "/runs")
+
+    config = train_script.load_yaml_config(
+        ROOT
+        / "configs"
+        / "train"
+        / "archive"
+        / (
+            "gpt_bert_mixed_babylm2026_strict_small_plus_physical_dynamics_"
+            "ewok_micro_1000_slip_bridge_1pct_muon.yaml"
+        )
+    )
+
+    assert (
+        config["run"]["name"]
+        == (
+            "gpt_bert_mixed_babylm2026_strict_small_plus_physical_dynamics_"
+            "ewok_micro_1000_slip_bridge_1pct_muon"
+        )
+    )
+    assert config["run"]["output_root"] == "/runs/training"
+    assert config["model"]["architecture"] == "gpt_bert"
+    assert config["model"]["repo"] == "BabyLM-community/babylm-baseline-10m-gpt-bert-mixed"
+    assert config["hybrid"]["causal_steps"] == 1
+    assert config["hybrid"]["masked_steps"] == 1
+    assert config["training"]["optimizer"] == "muon_pe"
+    assert config["training"]["learning_rate"] == 0.001
+    assert config["training"]["muon_lr"] == 0.01
+    assert config["training"]["epochs"] == 10
+    assert (
+        config["data"]["data_dir"]
+        == (
+            "/cache/token_shards/"
+            "babylm2026_strict_small_plus_physical_dynamics_ewok_micro_1000_"
+            "slip_bridge_1pct_gpt_bert_mixed"
+        )
+    )
+    assert config["tokenizer"]["name"] == "/cache/tokenizers/gpt_bert_baseline_mixed"
+    assert config["ewok_context_sensitivity_full"]["enabled"] is True
+    assert config["ewok_context_sensitivity_full"]["every_words"] == 10_000_000
+    assert config["ewok_context_sensitivity_full"]["score_reduction"] == "both"
+    assert config["ewok_context_sensitivity_full"]["plot"] is True
+    assert config["ewok_mntp_context_sensitivity"]["enabled"] is False
+    assert config["mntp_likelihood"]["enabled"] is False
+    assert config["mntp_likelihood"]["every_words"] is None
+    assert config["mntp_likelihood"]["plot"] is False
+    assert config["loss_dynamics"]["plot"] is False
 
 
 def test_gpt_bert_100m_masked_focus_train_config_uses_100m_paths(

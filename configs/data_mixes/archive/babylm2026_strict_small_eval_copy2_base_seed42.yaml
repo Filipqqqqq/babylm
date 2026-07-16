@@ -1,0 +1,21 @@
+# Exact-size clean base slice used so final capping cannot drop leaked eval rows.
+name: babylm2026_strict_small_eval_copy2_base_seed42
+seed: 42
+order_seed: 1
+max_words: 4403748
+strict_max_words: true
+document_mode: line
+final_order: deterministic_document_shuffle
+trim_policy: trim_final_document_only_if_needed
+output_dir: data/text_mixes/archive/babylm2026_strict_small_eval_copy2_base_seed42
+
+word_count:
+  kind: regex
+  pattern: '\S+'
+
+sources:
+  - name: babylm2026_strict_small
+    role: base
+    path: data/analysis/word2vec/base_text/babylm2026_strict_small/train.txt
+    target_words: 4403748
+    sampling: random_without_replacement

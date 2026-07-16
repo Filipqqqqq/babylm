@@ -232,6 +232,7 @@ def test_replace4pct_gpt_bert_tokenization_config_points_at_mixed_train(monkeypa
         ROOT
         / "configs"
         / "tokenization"
+        / "archive"
         / "babylm2026_strict_small_replace4pct_phys2_mat2_gpt_bert_mixed_shards.yaml"
     )
 
@@ -261,6 +262,7 @@ def test_replace4pct_train_config_matches_mixed_muon_baseline_except_identity(mo
         ROOT
         / "configs"
         / "train"
+        / "archive"
         / "gpt_bert_mixed_babylm2026_strict_small_replace4pct_phys2_mat2_muon.yaml"
     )
 

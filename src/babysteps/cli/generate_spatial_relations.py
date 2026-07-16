@@ -22,7 +22,7 @@ from babysteps.spatial_synth.generate import (
 
 
 ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_CONFIG = ROOT / "configs" / "data" / "spatial_relations_synth.yaml"
+DEFAULT_CONFIG = ROOT / "configs" / "data" / "spatial_relations_synth_context_rank.yaml"
 
 
 def load_yaml_config(path: str | Path) -> dict[str, Any]:

@@ -4,9 +4,15 @@ from types import SimpleNamespace
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from babysteps.cli import build_token_shards as token_shard_builder
 from babysteps.cli import train_causal_lm as train_script
+from babysteps.training.causal_lm_loop import (
+    advance_word_interval,
+    validate_every_words,
+    word_interval_due,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -171,6 +177,187 @@ def test_gpt2_strict_small_train_config_paths_can_use_env_roots(monkeypatch) -> 
     )
 
 
+def test_gpt2_slip_bridge_mix_configs_use_strict_small_tokenizer_and_mix_shards(monkeypatch) -> None:
+    train_script = load_train_script_module()
+    token_shards = load_token_shard_builder_module()
+    monkeypatch.delenv("BABYSTEPS_BABYLM2026_STRICT_SMALL_TOKENIZER_DIR", raising=False)
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+    monkeypatch.setenv("BABYSTEPS_RUNS_DIR", "/runs")
+
+    tokenization_config = token_shards.load_yaml_config(
+        ROOT
+        / "configs"
+        / "tokenization"
+        / "archive"
+        / "babylm2026_strict_small_plus_physical_dynamics_ewok_micro_1000_slip_bridge_1pct_byte_bpe_16384_shards.yaml"
+    )
+    train_config = train_script.load_yaml_config(
+        ROOT
+        / "configs"
+        / "train"
+        / "archive"
+        / "gpt2_8l512_bpe16384_babylm2026_strict_small_plus_physical_dynamics_ewok_micro_1000_slip_bridge_1pct_muon.yaml"
+    )
+
+    expected_shards = (
+        "/cache/token_shards/"
+        "babylm2026_strict_small_plus_physical_dynamics_ewok_micro_1000_"
+        "slip_bridge_1pct_byte_bpe_16384_bos_eos"
+    )
+    assert tokenization_config["dataset"]["kind"] == "local_text"
+    assert tokenization_config["dataset"]["files"] == [
+        "data/analysis/word2vec/base_text/babylm2026_strict_small/train.txt",
+        (
+            "data/analysis/word2vec/text_mixes/"
+            "babylm2026_strict_small_plus_physical_dynamics_ewok_micro_1000_"
+            "slip_bridge_1pct/synthetic_repeated.txt"
+        ),
+    ]
+    assert (
+        tokenization_config["tokenizer"]["source"]
+        == "/cache/tokenizers/babylm2026_strict_small_byte_bpe_16384"
+    )
+    assert tokenization_config["shards"]["output_dir"] == expected_shards
+    assert train_config["run"]["output_root"] == "/runs/training"
+    assert train_config["data"]["data_dir"] == expected_shards
+    assert train_config["model"]["n_layer"] == 8
+    assert train_config["model"]["n_embd"] == 512
+    assert train_config["training"]["epochs"] == 10
+    assert train_config["training"]["optimizer"] == "muon_pe"
+    assert train_config["training"]["muon_lr"] == 0.01
+    assert train_config["training"]["mixed_precision"] == "bf16"
+
+
+def test_gpt2_ewok_physical_dynamics_leak_configs_repeat_correct_pairs(monkeypatch) -> None:
+    train_script = load_train_script_module()
+    token_shards = load_token_shard_builder_module()
+    monkeypatch.delenv("BABYSTEPS_BABYLM2026_STRICT_SMALL_TOKENIZER_DIR", raising=False)
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+    monkeypatch.setenv("BABYSTEPS_RUNS_DIR", "/runs")
+
+    tokenization_config = token_shards.load_yaml_config(
+        ROOT
+        / "configs"
+        / "tokenization"
+        / "archive"
+        / "babylm2026_strict_small_plus_ewok_physical_dynamics_correct_pairs_repeat4_byte_bpe_16384_shards.yaml"
+    )
+    train_config = train_script.load_yaml_config(
+        ROOT
+        / "configs"
+        / "train"
+        / "archive"
+        / "gpt2_8l512_bpe16384_babylm2026_strict_small_plus_ewok_physical_dynamics_correct_pairs_repeat4_muon.yaml"
+    )
+
+    expected_shards = (
+        "/cache/token_shards/"
+        "babylm2026_strict_small_plus_ewok_physical_dynamics_correct_pairs_"
+        "repeat4_byte_bpe_16384_bos_eos"
+    )
+    assert tokenization_config["dataset"]["kind"] == "local_text"
+    assert tokenization_config["dataset"]["files"] == [
+        "data/analysis/word2vec/base_text/babylm2026_strict_small/train.txt",
+        "data/analysis/ewok_leakage/archive/physical_dynamics_correct_pairs_repeat4/train.txt",
+    ]
+    assert tokenization_config["shards"]["output_dir"] == expected_shards
+    assert train_config["run"]["output_root"] == "/runs/training"
+    assert train_config["run"]["name"].endswith("correct_pairs_repeat4_muon")
+    assert train_config["data"]["data_dir"] == expected_shards
+    assert train_config["model"]["n_layer"] == 8
+    assert train_config["model"]["n_embd"] == 512
+    assert train_config["training"]["epochs"] == 10
+    assert train_config["training"]["optimizer"] == "muon_pe"
+    assert train_config["training"]["mixed_precision"] == "bf16"
+
+
+def test_gpt2_ewok_physical_dynamics_leak_configs_repeat8_correct_pairs(monkeypatch) -> None:
+    train_script = load_train_script_module()
+    token_shards = load_token_shard_builder_module()
+    monkeypatch.delenv("BABYSTEPS_BABYLM2026_STRICT_SMALL_TOKENIZER_DIR", raising=False)
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+    monkeypatch.setenv("BABYSTEPS_RUNS_DIR", "/runs")
+
+    tokenization_config = token_shards.load_yaml_config(
+        ROOT
+        / "configs"
+        / "tokenization"
+        / "archive"
+        / "babylm2026_strict_small_plus_ewok_physical_dynamics_correct_pairs_repeat8_byte_bpe_16384_shards.yaml"
+    )
+    train_config = train_script.load_yaml_config(
+        ROOT
+        / "configs"
+        / "train"
+        / "archive"
+        / "gpt2_8l512_bpe16384_babylm2026_strict_small_plus_ewok_physical_dynamics_correct_pairs_repeat8_muon.yaml"
+    )
+
+    expected_shards = (
+        "/cache/token_shards/"
+        "babylm2026_strict_small_plus_ewok_physical_dynamics_correct_pairs_"
+        "repeat8_byte_bpe_16384_bos_eos"
+    )
+    assert tokenization_config["dataset"]["kind"] == "local_text"
+    assert tokenization_config["dataset"]["files"] == [
+        "data/analysis/word2vec/base_text/babylm2026_strict_small/train.txt",
+        "data/analysis/ewok_leakage/archive/physical_dynamics_correct_pairs_repeat8/train.txt",
+    ]
+    assert tokenization_config["shards"]["output_dir"] == expected_shards
+    assert train_config["run"]["output_root"] == "/runs/training"
+    assert train_config["run"]["name"].endswith("correct_pairs_repeat8_muon")
+    assert train_config["data"]["data_dir"] == expected_shards
+    assert train_config["model"]["n_layer"] == 8
+    assert train_config["model"]["n_embd"] == 512
+    assert train_config["training"]["epochs"] == 10
+    assert train_config["training"]["optimizer"] == "muon_pe"
+    assert train_config["training"]["mixed_precision"] == "bf16"
+
+
+@pytest.mark.parametrize("repeat", [4, 8, 16])
+def test_gpt2_ewok_full_leak_configs_repeat_correct_pairs(monkeypatch, repeat: int) -> None:
+    train_script = load_train_script_module()
+    token_shards = load_token_shard_builder_module()
+    monkeypatch.delenv("BABYSTEPS_BABYLM2026_STRICT_SMALL_TOKENIZER_DIR", raising=False)
+    monkeypatch.setenv("BABYSTEPS_CACHE_DIR", "/cache")
+    monkeypatch.setenv("BABYSTEPS_RUNS_DIR", "/runs")
+
+    tokenization_config = token_shards.load_yaml_config(
+        ROOT
+        / "configs"
+        / "tokenization"
+        / "archive"
+        / f"babylm2026_strict_small_plus_ewok_full_correct_pairs_repeat{repeat}_byte_bpe_16384_shards.yaml"
+    )
+    train_config = train_script.load_yaml_config(
+        ROOT
+        / "configs"
+        / "train"
+        / "archive"
+        / f"gpt2_8l512_bpe16384_babylm2026_strict_small_plus_ewok_full_correct_pairs_repeat{repeat}_muon.yaml"
+    )
+
+    expected_shards = (
+        "/cache/token_shards/"
+        "babylm2026_strict_small_plus_ewok_full_correct_pairs_"
+        f"repeat{repeat}_byte_bpe_16384_bos_eos"
+    )
+    assert tokenization_config["dataset"]["kind"] == "local_text"
+    assert tokenization_config["dataset"]["files"] == [
+        "data/analysis/word2vec/base_text/babylm2026_strict_small/train.txt",
+        f"data/analysis/ewok_leakage/archive/full_ewok_correct_pairs_repeat{repeat}/train.txt",
+    ]
+    assert tokenization_config["shards"]["output_dir"] == expected_shards
+    assert train_config["run"]["output_root"] == "/runs/training"
+    assert train_config["run"]["name"].endswith(f"ewok_full_correct_pairs_repeat{repeat}_muon")
+    assert train_config["data"]["data_dir"] == expected_shards
+    assert train_config["model"]["n_layer"] == 8
+    assert train_config["model"]["n_embd"] == 512
+    assert train_config["training"]["epochs"] == 10
+    assert train_config["training"]["optimizer"] == "muon_pe"
+    assert train_config["training"]["mixed_precision"] == "bf16"
+
+
 def test_modern_gpt2_smoke_config_uses_strict_small_shards(monkeypatch) -> None:
     train_script = load_train_script_module()
     monkeypatch.delenv("BABYSTEPS_BABYLM2026_STRICT_SMALL_TOKENIZER_DIR", raising=False)
@@ -218,38 +405,33 @@ def test_default_babylm_eval_dir_prefers_full_eval_when_present(tmp_path: Path) 
     path = train_script.default_babylm_eval_dir(
         "full_eval",
         "blimp_filtered",
-        fallback_split="fast_eval",
-        fallback_relative_parts=("blimp_fast",),
         root=tmp_path,
     )
 
     assert path == full_dir
 
 
-def test_default_babylm_eval_dir_falls_back_to_fast_eval_when_full_missing(
+def test_default_babylm_eval_dir_keeps_full_eval_path_when_full_missing(
     tmp_path: Path,
 ) -> None:
     train_script = load_train_script_module()
-    fast_dir = (
+    full_dir = (
         tmp_path
         / "external"
         / "babylm-eval"
         / "strict"
         / "evaluation_data"
-        / "fast_eval"
-        / "blimp_fast"
+        / "full_eval"
+        / "blimp_filtered"
     )
-    fast_dir.mkdir(parents=True)
 
     path = train_script.default_babylm_eval_dir(
         "full_eval",
         "blimp_filtered",
-        fallback_split="fast_eval",
-        fallback_relative_parts=("blimp_fast",),
         root=tmp_path,
     )
 
-    assert path == fast_dir
+    assert path == full_dir
 
 
 class FakeTokenizer:
@@ -282,6 +464,42 @@ def test_estimate_words_per_token_uses_raw_chunk_token_count() -> None:
     assert estimate["sample_tokens"] == 5
     assert estimate["sample_words"] == 3
     assert estimate["words_per_token"] == 3 / 5
+
+
+def test_default_words_per_token_sample_tokens_is_4096() -> None:
+    train_script = load_train_script_module()
+
+    assert train_script.DEFAULT_WORDS_PER_TOKEN_SAMPLE_TOKENS == 4096
+
+
+def test_read_every_words_accepts_positive_values() -> None:
+    train_script = load_train_script_module()
+
+    assert train_script.read_every_words(
+        {"every_words": 1_000_000},
+        "entity_tracking_likelihood",
+    ) == 1_000_000.0
+    assert train_script.read_every_words({}, "entity_tracking_likelihood") is None
+
+    with pytest.raises(ValueError, match="every_words must be positive"):
+        train_script.read_every_words({"every_words": 0}, "entity_tracking_likelihood")
+
+
+def test_word_interval_helpers_advance_past_current_progress() -> None:
+    assert validate_every_words("toy_every_words", 1000) == 1000.0
+    assert word_interval_due(words_seen=999.0, next_words=1000.0) is False
+    assert word_interval_due(words_seen=1000.0, next_words=1000.0) is True
+    assert (
+        advance_word_interval(
+            next_words=1000.0,
+            every_words=1000.0,
+            words_seen=2500.0,
+        )
+        == 3000.0
+    )
+
+    with pytest.raises(ValueError, match="toy_every_words must be positive"):
+        validate_every_words("toy_every_words", -1)
 
 
 def test_sample_training_token_ids_reads_token_shard_prefix(tmp_path: Path) -> None:
@@ -359,6 +577,33 @@ def test_cli_config_override_keeps_yaml_bool_aliases_as_strings() -> None:
     assert config["training"]["mixed_precision"] == "no"
     assert config["model"]["note"] == "off"
     assert config["model"]["enabled"] is False
+
+
+def test_read_score_reductions_accepts_single_both_and_lists() -> None:
+    train_script = load_train_script_module()
+
+    assert train_script.read_score_reductions({}, "blimp_likelihood") == ("sum",)
+    assert train_script.read_score_reductions(
+        {"score_reduction": "mean"},
+        "blimp_likelihood",
+    ) == ("mean",)
+    assert train_script.read_score_reductions(
+        {"score_reduction": "both"},
+        "blimp_likelihood",
+    ) == ("sum", "mean")
+    assert train_script.read_score_reductions(
+        {"score_reduction": ["mean", "sum", "mean"]},
+        "blimp_likelihood",
+    ) == ("mean", "sum")
+
+
+def test_benchmark_eval_at_start_default_is_enabled() -> None:
+    train_script = load_train_script_module()
+    config = {"logging": {}}
+
+    assert config["logging"].get("benchmark_eval_at_start", True) is True
+    train_script.apply_config_override(config, "logging.benchmark_eval_at_start=false")
+    assert config["logging"]["benchmark_eval_at_start"] is False
 
 
 def test_cli_config_override_rejects_non_mapping_path() -> None:

@@ -1,0 +1,227 @@
+{
+  "version": "physical_dynamics_core_plus_landmark_physical_v1_120",
+  "description": "Physical-dynamics-focused canonical run with explicit float and roll/slide target concepts.",
+  "notes": [
+    "Generate 120 documents: 4 documents for each of 30 target canonical concepts.",
+    "This extends the canonical 108 config with float, roll, and slide, because those EWoK physical-dynamics contrasts were under-covered as target concepts.",
+    "Sink/float examples import the dedicated sink_float scenario pool so float appears as an expected process, not only as a contrast.",
+    "Roll/slide examples import the v2 roll_slide family from the core scenario pool."
+  ],
+  "model_id": "accounts/fireworks/models/qwen3p7-plus",
+  "fireworks_url": "https://api.fireworks.ai/inference/v1/chat/completions",
+  "reasoning_effort": "none",
+  "reasoning_history": "disabled",
+  "output_dir": "data/concept_curriculum/archive/physical_dynamics_core_plus_landmark_physical_120",
+  "selection_seed": "physical-dynamics-core-plus-landmark-physical-v1-120",
+  "physical_dynamics_profile": {
+    "profile_id": "physical_dynamics",
+    "profile_type": "physical_dynamics",
+    "domain": "physical-dynamics",
+    "definition": "Can a model connect evidence about directional physical change, motion, and state/process change over time to the right event/process concept?",
+    "centrality_rule": "The cause, physical process, and outcome must be central; the document should not be solvable from object identity, landmark identity, or verb identity alone.",
+    "canonical_inventory_path": "configs/concept_curriculum/physical_dynamics/canonical_inventory.json",
+    "generation_guidance": [
+      "Make a concrete cause visible before or near the physical change.",
+      "Make the expected process visible in ordinary prose.",
+      "Include at least one active event sentence where the object or person is the subject and the expected process is the main verb or verb phrase.",
+      "For landmark_direction examples, make the before/after landmark relation visible and do not let the landmark alone determine the direction.",
+      "Make the outcome visible as evidence over time.",
+      "Avoid benchmark-style wording and avoid explaining the hidden schema to the reader."
+    ],
+    "path_shape_policy": {
+      "v1_role": "tracked_axis",
+      "none_value": "none",
+      "guidance": "Use path_shape only when it is natural evidence for the scenario. Dedicated path-shape families are v2 unless a v1 schema requires them.",
+      "v2_candidates": ["roll/slide", "swing/spin", "drift", "curve/straight"]
+    },
+    "document_types": [
+      {
+        "id": "causal_scene",
+        "description": "A compact physical event that names the cause and result."
+      },
+      {
+        "id": "state_transition",
+        "description": "A before/after process description."
+      },
+      {
+        "id": "contrast_pair",
+        "description": "A comparison between the expected process and a contrast process."
+      },
+      {
+        "id": "observation_log",
+        "description": "A concrete observation record of cause, motion, and outcome."
+      }
+    ],
+    "family_source_configs": [
+      {
+        "path": "configs/concept_curriculum/physical_dynamics/archive/physical_dynamics_core_80.json",
+        "family_ids": [
+          "directional_motion",
+          "roll_slide",
+          "support_stability",
+          "force_speed",
+          "contact_collision",
+          "containment_flow"
+        ]
+      },
+      {
+        "path": "configs/concept_curriculum/physical_dynamics/archive/physical_dynamics_landmark_direction_60.json",
+        "family_ids": ["landmark_direction"]
+      },
+      {
+        "path": "configs/concept_curriculum/physical_dynamics/archive/physical_dynamics_scenario_expansions_v1.json",
+        "family_ids": [
+          "directional_motion_sink_expansion",
+          "containment_flow_expansion",
+          "directional_motion_lift_expansion",
+          "containment_absorb_expansion",
+          "force_deformation_expansion",
+          "contact_collision_expansion"
+        ]
+      },
+      {
+        "path": "configs/concept_curriculum/physical_dynamics/archive/physical_dynamics_sink_float_80.json",
+        "family_ids": ["sink_float"]
+      }
+    ]
+  },
+  "discourse_styles": [
+    {
+      "style_id": "everyday_observation",
+      "style_name": "Child everyday noticing",
+      "description": "A small everyday moment from the perspective of a child noticing what changed.",
+      "guidance": [
+        "Write like a child or nearby adult noticed one concrete event during ordinary play, cleanup, cooking, or classroom activity.",
+        "Use simple sensory details and natural curiosity, not a lab-report voice.",
+        "Keep the cause and result visible, but do not explain the hidden schema.",
+        "Use active event wording, such as the object fell, rose, floated, sank, sped up, slowed down, rolled, slid, passed, or crossed."
+      ]
+    },
+    {
+      "style_id": "cause_effect_explanation",
+      "style_name": "Short simple wiki",
+      "description": "A plain encyclopedia-like explanation of one physical dynamic, with the scenario as the central example.",
+      "guidance": [
+        "Start with the dynamic idea or process, then use the scenario as the central example.",
+        "Use clear general prose, like a short simple wiki entry for children.",
+        "Keep the paragraph informative without sounding like a quiz answer or metadata explanation.",
+        "Make the central example an active physical event, not a passive label for a scene."
+      ]
+    },
+    {
+      "style_id": "comparison_contrast",
+      "style_name": "Practical handling contrast",
+      "description": "A practical note about making, preventing, or diagnosing a physical change.",
+      "guidance": [
+        "Write from the perspective of someone handling the object, arranging the setup, or trying to prevent the contrast outcome.",
+        "Mention the contrast process only to clarify what would have happened under a different condition.",
+        "Keep the expected process more central than the contrast.",
+        "Describe what the object or person actively did before discussing the contrast."
+      ]
+    },
+    {
+      "style_id": "observation_log",
+      "style_name": "Compact observation record",
+      "description": "A brief field-note-style record of one visible physical event.",
+      "guidance": [
+        "Use a compact note style, but avoid repeated labels like Cause, Process, and Outcome.",
+        "Let the order of noticed details carry the before clue, motion, and result.",
+        "Vary sentence shape from other records in the same batch.",
+        "Include one direct event sentence with the object or person as subject."
+      ]
+    }
+  ],
+  "coverage_packs": [
+    {
+      "id": "physical_dynamics_core_plus_landmark_physical_v1_120",
+      "canonical_concept_counts": {
+        "fall": 4,
+        "rise": 4,
+        "lift_up": 4,
+        "sink": 4,
+        "float": 4,
+        "direction_up_crossing": 4,
+        "direction_down_crossing": 4,
+        "roll": 4,
+        "slide": 4,
+        "remain_stable": 4,
+        "tip": 4,
+        "topple": 4,
+        "collapse": 4,
+        "speed_up": 4,
+        "slow_down": 4,
+        "stop": 4,
+        "compress": 4,
+        "stretch": 4,
+        "rebound": 4,
+        "stick": 4,
+        "scatter": 4,
+        "crack": 4,
+        "dent": 4,
+        "spill": 4,
+        "remain_contained": 4,
+        "leak": 4,
+        "drain": 4,
+        "absorb": 4,
+        "overflow": 4,
+        "flow_down": 4
+      }
+    }
+  ],
+  "document_constraints": {
+    "min_words": 35,
+    "max_words": 130,
+    "prompt_banned_terms": [
+      "benchmark",
+      "scoring",
+      "hidden metadata",
+      "scenario spec",
+      "answer key",
+      "target concept",
+      "expected process",
+      "contrast process",
+      "Context1",
+      "Context2",
+      "Target1",
+      "Target2"
+    ],
+    "audit_banned_terms": [
+      "benchmark",
+      "scoring",
+      "hidden metadata",
+      "scenario spec",
+      "answer key",
+      "target concept",
+      "expected process",
+      "contrast process",
+      "Context1",
+      "Context2",
+      "Target1",
+      "Target2",
+      "EWoK"
+    ],
+    "physical_leakage_terms": [
+      "benchmark",
+      "scoring",
+      "hidden metadata",
+      "scenario spec",
+      "answer key",
+      "target concept",
+      "expected process",
+      "contrast process",
+      "Context1",
+      "Context2",
+      "Target1",
+      "Target2",
+      "EWoK"
+    ],
+    "audit_repeated_openings": true,
+    "max_opening_reuse": 2,
+    "audit_near_duplicates": true,
+    "near_duplicate_jaccard": 0.82,
+    "audit_repeated_sentences": true,
+    "max_repeated_sentence_reuse": 1,
+    "audit_overused_sentence_frames": true,
+    "max_sentence_frame_reuse": 2
+  }
+}

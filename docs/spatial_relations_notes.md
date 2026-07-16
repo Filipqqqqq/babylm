@@ -61,11 +61,11 @@ left/right-only intervention.
 
 ## Prototype Mixes
 
-- `spatial_relations_synth_context_rank_concept_balanced.yaml`: a separate
-  5.5k context-rank prototype that balances broad concept pressure more
-  explicitly. It uses 1.5k vertical rows, 1.5k cardinal rows, 1.5k egocentric
-  rows, and 1k close/far rows. It excludes `absolute_role_swap` so cardinal and
-  vertical exposure are easier to audit.
+- `configs/data/archive/spatial_relations_synth_context_rank_concept_balanced.yaml`:
+  an archived 5.5k context-rank prototype that balances broad concept pressure
+  more explicitly. It uses 1.5k vertical rows, 1.5k cardinal rows, 1.5k
+  egocentric rows, and 1k close/far rows. It excludes `absolute_role_swap` so
+  cardinal and vertical exposure are easier to audit.
 
 ## Close/Far Subtypes
 

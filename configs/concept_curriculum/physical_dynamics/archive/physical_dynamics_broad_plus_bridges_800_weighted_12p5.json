@@ -1,0 +1,358 @@
+{
+  "version": "physical_dynamics_broad_plus_bridges_v1_800_weighted_12p5",
+  "description": "Broad physical-dynamics canonical run with lexical bridge slices upweighted to 12.5% for W2V co-occurrence probes.",
+  "notes": [
+    "Generate 800 documents across the same broad 30-concept canonical inventory as physical_dynamics_broad_plus_bridges_800.json.",
+    "Upweight explicit lexical_bridge examples from 50 to 100 planned specs, exactly 12.5% of the run.",
+    "Reduce non-lexical speed cue shares so speed_up and slow_down receive more same-sentence lexical co-occurrence examples.",
+    "Use this as the moderate W2V intervention: broader than object-agnostic shortcuts, but less diffuse than the original broad+bridges config."
+  ],
+  "model_id": "accounts/fireworks/models/qwen3p7-plus",
+  "fireworks_url": "https://api.fireworks.ai/inference/v1/chat/completions",
+  "reasoning_effort": "none",
+  "reasoning_history": "disabled",
+  "output_dir": "data/concept_curriculum/archive/physical_dynamics_broad_plus_bridges_800_weighted_12p5",
+  "selection_seed": "physical-dynamics-broad-plus-bridges-v1-800-weighted-12p5",
+  "physical_dynamics_profile": {
+    "profile_id": "physical_dynamics",
+    "profile_type": "physical_dynamics",
+    "domain": "physical-dynamics",
+    "definition": "Can a model connect evidence about directional physical change, motion, and state/process change over time to the right event/process concept?",
+    "centrality_rule": "The cause, physical process, and outcome must be central; the document should not be solvable from object identity, landmark identity, verb identity, or one benchmark-like phrase alone.",
+    "canonical_inventory_path": "configs/concept_curriculum/physical_dynamics/canonical_inventory.json",
+    "generation_guidance": [
+      "Make a concrete cause visible before or near the physical change.",
+      "Make the expected process visible in ordinary prose.",
+      "Include at least one active event sentence where the object or person is the subject and the expected process is the main verb or verb phrase.",
+      "For lexical_bridge examples, put the assigned lexical_target near a concrete evidence phrase, but keep the prose natural.",
+      "For landmark examples, make the before/after landmark relation visible and do not let the landmark alone determine the direction.",
+      "For float/rise examples, distinguish upward motion from support at a surface.",
+      "For speed examples, connect faster/slower and speed increased/decreased to the process rather than only to an endpoint.",
+      "Avoid benchmark-style wording and avoid explaining the hidden schema to the reader.",
+      "This weighted variant targets 12.5% lexical bridge specs; keep lexical bridge examples short, active, and same-sentence."
+    ],
+    "path_shape_policy": {
+      "v1_role": "tracked_axis",
+      "none_value": "none",
+      "guidance": "Use path_shape only when it is natural evidence for the scenario. Dedicated path-shape families are v2 unless a v1 schema requires them.",
+      "v2_candidates": [
+        "roll/slide",
+        "swing/spin",
+        "drift",
+        "curve/straight"
+      ]
+    },
+    "canonical_candidate_family_shares": {
+      "fall_rise_direction_language_expansion": {
+        "concept_ids": [
+          "fall",
+          "rise"
+        ],
+        "share": 0.2
+      },
+      "vertical_relation_language_expansion": {
+        "concept_ids": [
+          "fall",
+          "rise",
+          "sink",
+          "float"
+        ],
+        "share": 0.18
+      },
+      "fall_rise_landmark_lexical_bridge": {
+        "concept_ids": [
+          "fall",
+          "rise"
+        ],
+        "share": 0.4
+      },
+      "float_rise_disambiguation_bridge": {
+        "concept_ids": [
+          "rise",
+          "float"
+        ],
+        "share": 0.4
+      },
+      "sink_float_surface_cues": {
+        "concept_ids": [
+          "sink",
+          "float"
+        ],
+        "share": 0.2
+      },
+      "sink_float_surface_lexical_bridge": {
+        "concept_ids": [
+          "sink",
+          "float"
+        ],
+        "share": 0.4
+      },
+      "speed_change_language_expansion": {
+        "concept_ids": [
+          "speed_up",
+          "slow_down"
+        ],
+        "share": 0.1
+      },
+      "speed_quantity_change_cues": {
+        "concept_ids": [
+          "speed_up",
+          "slow_down"
+        ],
+        "share": 0.1
+      },
+      "speed_endpoint_tendency_cues": {
+        "concept_ids": [
+          "speed_up",
+          "slow_down"
+        ],
+        "share": 0.1
+      },
+      "speed_rate_definition_bridge": {
+        "concept_ids": [
+          "speed_up",
+          "slow_down"
+        ],
+        "share": 0.1
+      },
+      "speed_change_lexical_bridge": {
+        "concept_ids": [
+          "speed_up",
+          "slow_down"
+        ],
+        "share": 0.4
+      },
+      "roll_slide_surface_rotation_cues": {
+        "concept_ids": [
+          "roll",
+          "slide"
+        ],
+        "share": 0.25
+      },
+      "roll_slide_rotation_surface_bridge": {
+        "concept_ids": [
+          "roll",
+          "slide"
+        ],
+        "share": 0.4
+      }
+    },
+    "canonical_candidate_balance_axes": {
+      "landmark_direction": [
+        "landmark"
+      ],
+      "vertical_relation_language_expansion": [
+        "landmark"
+      ],
+      "fall_rise_landmark_lexical_bridge": [
+        "landmark"
+      ],
+      "sink_float_surface_lexical_bridge": [
+        "bridge_type"
+      ],
+      "float_rise_disambiguation_bridge": [
+        "bridge_type"
+      ],
+      "roll_slide_rotation_surface_bridge": [
+        "bridge_type",
+        "object_set_id"
+      ],
+      "speed_change_lexical_bridge": [
+        "bridge_type",
+        "object_set_id"
+      ]
+    },
+    "document_types": [
+      {
+        "id": "causal_scene",
+        "description": "A compact physical event that names the cause and result."
+      },
+      {
+        "id": "state_transition",
+        "description": "A before/after process description."
+      },
+      {
+        "id": "contrast_pair",
+        "description": "A comparison-oriented slot; with metadata_only contrast verbalization, the prose should still focus on positive evidence."
+      },
+      {
+        "id": "observation_log",
+        "description": "A concrete observation record of cause, motion, and outcome."
+      }
+    ],
+    "family_source_configs": [
+      {
+        "path": "configs/concept_curriculum/physical_dynamics/archive/physical_dynamics_core_plus_landmark_broad_200.json"
+      },
+      {
+        "path": "configs/concept_curriculum/physical_dynamics/archive/physical_dynamics_lexical_bridges_v1.json",
+        "family_ids": [
+          "fall_rise_landmark_lexical_bridge",
+          "sink_float_surface_lexical_bridge",
+          "float_rise_disambiguation_bridge",
+          "roll_slide_rotation_surface_bridge",
+          "speed_change_lexical_bridge"
+        ]
+      }
+    ]
+  },
+  "discourse_styles": [
+    {
+      "style_id": "everyday_observation",
+      "style_name": "Child everyday noticing",
+      "description": "A small everyday moment from the perspective of a child noticing what changed.",
+      "guidance": [
+        "Write like a child or nearby adult noticed one concrete event during ordinary play, cleanup, cooking, or classroom activity.",
+        "Use simple sensory details and natural curiosity, not a lab-report voice.",
+        "Keep the cause and result visible, but do not explain the hidden schema.",
+        "Use active event wording, such as the object fell, rose, floated, sank, sped up, slowed down, rolled, slid, passed, or crossed."
+      ]
+    },
+    {
+      "style_id": "cause_effect_explanation",
+      "style_name": "Short simple wiki",
+      "description": "A plain encyclopedia-like explanation of one physical dynamic, with the scenario as the central example.",
+      "guidance": [
+        "Start with the dynamic idea or process, then use the scenario as the central example.",
+        "Use clear general prose, like a short simple wiki entry for children.",
+        "Keep the paragraph informative without sounding like a quiz answer or metadata explanation.",
+        "Make the central example an active physical event, not a passive label for a scene."
+      ]
+    },
+    {
+      "style_id": "comparison_contrast",
+      "style_name": "Practical handling note",
+      "description": "A practical note about making, preventing, or diagnosing a physical change without naming the stored contrast process.",
+      "guidance": [
+        "Write from the perspective of someone handling the object, arranging the setup, or checking the result.",
+        "Focus on what condition produced the actual process and what visible trace followed.",
+        "Do not name the stored contrast process when the contrast verbalization policy is metadata_only.",
+        "Describe what the object or person actively did before mentioning any different condition."
+      ]
+    },
+    {
+      "style_id": "observation_log",
+      "style_name": "Compact observation record",
+      "description": "A brief field-note-style record of one visible physical event.",
+      "guidance": [
+        "Use a compact note style, but avoid repeated labels like Cause, Process, and Outcome.",
+        "Let the order of noticed details carry the before clue, motion, and result.",
+        "Vary sentence shape from other records in the same batch.",
+        "Include one direct event sentence with the object or person as subject."
+      ]
+    }
+  ],
+  "coverage_packs": [
+    {
+      "id": "physical_dynamics_broad_plus_bridges_v1_800",
+      "canonical_concept_counts": {
+        "fall": 27,
+        "rise": 27,
+        "lift_up": 27,
+        "sink": 27,
+        "float": 27,
+        "direction_up_crossing": 27,
+        "direction_down_crossing": 27,
+        "roll": 27,
+        "slide": 27,
+        "remain_stable": 27,
+        "tip": 27,
+        "topple": 27,
+        "collapse": 27,
+        "speed_up": 27,
+        "slow_down": 27,
+        "stop": 27,
+        "compress": 27,
+        "stretch": 27,
+        "rebound": 27,
+        "stick": 27,
+        "scatter": 26,
+        "crack": 26,
+        "dent": 26,
+        "spill": 26,
+        "remain_contained": 26,
+        "leak": 26,
+        "drain": 26,
+        "absorb": 26,
+        "overflow": 26,
+        "flow_down": 26
+      }
+    }
+  ],
+  "document_constraints": {
+    "min_words": 30,
+    "max_words": 130,
+    "contrast_verbalization": "metadata_only",
+    "missing_lexical_target_severity": "warning",
+    "prompt_banned_terms": [
+      "benchmark",
+      "scoring",
+      "hidden metadata",
+      "scenario spec",
+      "answer key",
+      "target concept",
+      "expected process",
+      "contrast process",
+      "Context1",
+      "Context2",
+      "Target1",
+      "Target2",
+      "EWoK"
+    ],
+    "audit_banned_terms": [
+      "benchmark",
+      "scoring",
+      "hidden metadata",
+      "scenario spec",
+      "answer key",
+      "target concept",
+      "expected process",
+      "contrast process",
+      "Context1",
+      "Context2",
+      "Target1",
+      "Target2",
+      "EWoK"
+    ],
+    "physical_leakage_terms": [
+      "benchmark",
+      "scoring",
+      "hidden metadata",
+      "scenario spec",
+      "answer key",
+      "target concept",
+      "expected process",
+      "contrast process",
+      "Context1",
+      "Context2",
+      "Target1",
+      "Target2",
+      "EWoK"
+    ],
+    "audit_repeated_openings": true,
+    "max_opening_reuse": 2,
+    "audit_near_duplicates": true,
+    "near_duplicate_jaccard": 0.82,
+    "audit_repeated_sentences": true,
+    "max_repeated_sentence_reuse": 1,
+    "audit_overused_sentence_frames": true,
+    "max_sentence_frame_reuse": 2
+  },
+  "batching": {
+    "documents_per_request": 8
+  },
+  "request": {
+    "timeout_seconds": 600,
+    "max_request_retries": 4,
+    "initial_backoff_seconds": 1.0,
+    "max_backoff_seconds": 16.0,
+    "invalid_json_retries": 1,
+    "min_fallback_documents_per_request": 1
+  },
+  "stages": {
+    "document_render": {
+      "temperature": 0.35,
+      "max_tokens": 5000
+    }
+  }
+}
