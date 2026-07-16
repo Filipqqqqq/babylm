@@ -47,7 +47,7 @@ def make_item() -> EwokItem:
 
 
 def test_read_ewok_items_from_directory(tmp_path: Path) -> None:
-    data_dir = tmp_path / "ewok_fast"
+    data_dir = tmp_path / "ewok_filtered"
     data_dir.mkdir()
     (data_dir / "material-dynamics.jsonl").write_text(
         json.dumps(

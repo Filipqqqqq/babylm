@@ -74,6 +74,7 @@ def load_accuracy_rows(
     group_scope: str,
     run_name: str | None = None,
     series_label: str | None = None,
+    score_reduction: str | None = None,
     x_axis: str = "step",
 ) -> list[dict[str, Any]]:
     """Load step-indexed accuracy rows from a BLiMP likelihood summary CSV."""
@@ -84,6 +85,9 @@ def load_accuracy_rows(
             if run_name and row.get("run_name") != run_name:
                 continue
             if row.get("group_scope") != group_scope:
+                continue
+            row_score_reduction = row.get("score_reduction", "")
+            if score_reduction and row_score_reduction != score_reduction:
                 continue
             if group_scope == "overall" and row.get("group_name") != "all":
                 continue
@@ -96,17 +100,23 @@ def load_accuracy_rows(
             panel = "average" if group_scope == "overall" else str(row.get("group_name", ""))
             if not panel:
                 continue
+            series = (
+                series_label
+                or row.get("run_name")
+                or row.get("checkpoint")
+                or Path(summary_csv).parent.name
+            )
+            if row_score_reduction and score_reduction is None:
+                series = f"{series} ({row_score_reduction})"
 
             rows.append(
                 {
                     "panel": panel,
-                    "series": series_label
-                    or row.get("run_name")
-                    or row.get("checkpoint")
-                    or Path(summary_csv).parent.name,
+                    "series": series,
                     "step": step,
                     "score": score,
                     "items": parse_optional_int(row.get("items")),
+                    "score_reduction": row_score_reduction,
                     "summary_csv": str(summary_csv),
                 }
             )
@@ -161,6 +171,7 @@ def plot_overall_accuracy(
     summary_csvs: dict[str, str | Path],
     output_path: str | Path,
     run_name: str | None = None,
+    score_reduction: str | None = None,
     title: str = "BLiMP Likelihood Overall Accuracy",
     x_axis: str = "step",
 ) -> None:
@@ -193,6 +204,7 @@ def plot_overall_accuracy(
             group_scope="overall",
             run_name=run_name,
             series_label=label,
+            score_reduction=score_reduction,
             x_axis=x_axis,
         )
         counts = panel_item_counts(rows)
@@ -339,6 +351,7 @@ def plot_blimp_likelihood_summary(
     benchmark_label: str,
     run_name: str | None = None,
     group_scopes: tuple[str, ...] = ("field", "linguistics_term"),
+    score_reduction: str | None = None,
     x_axis: str = "step",
 ) -> None:
     """Write the standard plots for one BLiMP-like benchmark summary."""
@@ -348,6 +361,7 @@ def plot_blimp_likelihood_summary(
         summary_csvs={benchmark_label: summary_csv},
         output_path=output_dir / "overall_accuracy.png",
         run_name=run_name,
+        score_reduction=score_reduction,
         title=f"{benchmark_label} Overall Accuracy",
         x_axis=x_axis,
     )
@@ -356,6 +370,7 @@ def plot_blimp_likelihood_summary(
             summary_csv,
             group_scope=group_scope,
             run_name=run_name,
+            score_reduction=score_reduction,
             x_axis=x_axis,
         )
         if not rows:

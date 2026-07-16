@@ -1,0 +1,132 @@
+run:
+  name: llama_12l896_bpe16384_babylm2026_strict_muon_liger_causal_diagnostics_bs64
+  seed: 42
+  deterministic: false
+  output_root: ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/training
+  append_timestamp: true
+
+data:
+  format: token_shards
+  data_dir: ${BABYSTEPS_BABYLM2026_SHARDS_DIR:-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_shards/babylm2026_strict_byte_bpe_16384_bos_eos}
+  train_split: train
+  val_split: val
+  seq_len: 1024
+  max_train_blocks:
+  max_val_blocks:
+  num_workers: 0
+
+tokenizer:
+  name: ${BABYSTEPS_BABYLM2026_TOKENIZER_DIR:-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/tokenizers/babylm2026_strict_byte_bpe_16384}
+
+model:
+  architecture: llama
+  size: 12l896
+  vocab_size: 16384
+  context_length: 1024
+  n_layer: 12
+  n_head: 14
+  n_embd: 896
+  llama_intermediate_size: 2304
+  llama_num_key_value_heads: 14
+  llama_tie_word_embeddings: true
+  rope_theta: 10000.0
+  llama_dropout: 0.1
+  use_liger_kernel: true
+
+progress:
+  benchmark_plot_x_axis: words_seen
+  estimate_words_per_token: true
+  words_per_token_sample_tokens: 8192
+
+ewok_context_sensitivity_full:
+  enabled: true
+  every_words: 50000000
+  batch_size: 64
+  score_reduction: both
+  plot: true
+  plot_every_evals: 1
+
+blimp_likelihood:
+  enabled: true
+  every_words: 50000000
+  batch_size: 64
+  score_reduction: sum
+  plot: true
+  plot_every_evals: 1
+
+entity_tracking_likelihood:
+  enabled: true
+  every_words: 50000000
+  batch_size: 64
+  score_reduction: sum
+  plot: true
+  plot_every_evals: 1
+
+comps_likelihood:
+  enabled: true
+  every_words: 50000000
+  batch_size: 64
+  score_reduction: sum
+  plot: true
+  plot_every_evals: 1
+
+training:
+  epochs: 10
+  batch_size: 16
+  optimizer: muon_pe
+  learning_rate: 0.00005
+  betas: [0.9, 0.95]
+  eps: 0.00000001
+  weight_decay: 0.1
+  muon_lr: 0.01
+  muon_weight_decay: 0.1
+  muon_momentum: 0.95
+  muon_ns_steps: 5
+  muon_nesterov: true
+  muon_split_qkv: true
+  muon_batch_updates: true
+  warmup_ratio: 0.03
+  gradient_accumulation_steps: 4
+  gradient_clip_norm: 1.0
+  mixed_precision: bf16
+
+logging:
+  log_every_steps: 50
+  eval_every_steps: 500
+  eval_max_batches: 20
+  benchmark_eval_at_start: true
+  profile_optimizer_steps: true
+
+nextlat:
+  # Experimental prototype for BabyLM ablations.
+  enabled: false
+  horizon: 1
+  lambda_next_h: 1.0
+  lambda_kl: 0.0
+  kl_mode: topk
+  kl_top_k: 256
+  kl_transition_chunk_size: 1024
+  kl_warmup_start_words: null
+  kl_warmup_end_words: null
+  detach_kl_lm_head: true
+  mlp_hidden_dim: 1024
+  mlp_layers: 3
+  detach_targets: true
+  mask_eos_bos_boundaries: true
+
+spatial_auxiliary:
+  enabled: false
+  path: ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/synthetic/spatial_relations/spatial_relations_synth_context_rank.jsonl
+  objective: context_rank
+  batch_size: 16
+  loss_weight: 0.03
+  temperature: 1.0
+  score_reduction: mean
+  every_steps: 1
+  eval_items: 300
+  eval_every_steps: 50
+  eval_batch_size: 64
+
+checkpointing:
+  save_every_epochs: 1
+  save_final: true

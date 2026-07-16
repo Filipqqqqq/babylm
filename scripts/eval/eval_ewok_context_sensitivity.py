@@ -18,7 +18,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from babysteps.evaluation.babylm_fast_eval import discover_checkpoints  # noqa: E402
+from babysteps.evaluation.babylm_zero_shot_eval import discover_checkpoints  # noqa: E402
 from babysteps.evaluation.ewok_context_sensitivity import (  # noqa: E402
     append_item_records_jsonl,
     append_summary_csv,

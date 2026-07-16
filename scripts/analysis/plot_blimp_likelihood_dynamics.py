@@ -39,6 +39,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--run-name", help="Optional run_name filter.")
     parser.add_argument(
+        "--score-reduction",
+        choices=("sum", "mean", "both"),
+        help="Filter to one score reduction. Omit or pass both to plot all rows.",
+    )
+    parser.add_argument(
         "--group-scope",
         action="append",
         default=None,
@@ -62,6 +67,7 @@ def main() -> None:
 
     output_dir = resolve_path(args.output_dir, base_dir=ROOT) if args.output_dir else None
     group_scopes = tuple(args.group_scope or ("field", "linguistics_term", "uid"))
+    score_reduction = None if args.score_reduction in {None, "both"} else args.score_reduction
 
     for summary, label in zip(summaries, labels, strict=True):
         target_dir = output_dir or summary.parent
@@ -71,6 +77,7 @@ def main() -> None:
             benchmark_label=label,
             run_name=args.run_name,
             group_scopes=group_scopes,
+            score_reduction=score_reduction,
             x_axis=args.x_axis,
         )
         print(f"Wrote plots for {label}: {target_dir}")
@@ -82,6 +89,7 @@ def main() -> None:
             summary_csvs=dict(zip(labels, summaries, strict=True)),
             output_path=output_path,
             run_name=args.run_name,
+            score_reduction=score_reduction,
             x_axis=args.x_axis,
         )
         print(f"Wrote combined overall plot: {output_path}")

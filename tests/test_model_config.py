@@ -432,3 +432,37 @@ def test_llama_100m_muon_liger_config_is_current_default() -> None:
     assert training_config["gradient_accumulation_steps"] == 4
     assert training_config["warmup_ratio"] == 0.03
     assert training_config["mixed_precision"] == "bf16"
+
+
+def test_llama_100m_muon_liger_causal_diagnostics_config_enables_benchmarks() -> None:
+    config_path = (
+        Path(__file__).resolve().parents[1]
+        / "configs"
+        / "train"
+        / "llama_12l896_bpe16384_babylm2026_strict_muon_liger_causal_diagnostics.yaml"
+    )
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    hf_config = build_causal_lm_config_from_dict(config, _tokenizer(vocab_size=16384))
+
+    assert hf_config.model_type == "llama"
+    assert hf_config.hidden_size == 896
+    assert hf_config.num_hidden_layers == 12
+    assert config["progress"]["benchmark_plot_x_axis"] == "words_seen"
+    assert config["progress"]["estimate_words_per_token"] is True
+    assert config["progress"]["words_per_token_sample_tokens"] == 8192
+    assert config["logging"]["benchmark_eval_at_start"] is True
+    assert "mntp_likelihood" not in config
+    assert config["ewok_context_sensitivity_full"]["enabled"] is True
+    assert config["ewok_context_sensitivity_full"]["every_words"] == 50_000_000
+    assert config["ewok_context_sensitivity_full"]["score_reduction"] == "both"
+    for section_name in (
+        "blimp_likelihood",
+        "entity_tracking_likelihood",
+        "comps_likelihood",
+    ):
+        section = config[section_name]
+        assert section["enabled"] is True
+        assert section["every_words"] == 50_000_000
+        assert section["score_reduction"] == "sum"
+        assert section["plot"] is True

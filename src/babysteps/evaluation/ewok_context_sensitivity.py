@@ -75,7 +75,7 @@ class EwokContextResult:
 
 
 def read_ewok_items(path: str | Path) -> list[EwokItem]:
-    """Read EWoK fast-eval JSONL files from a directory or single file."""
+    """Read EWoK JSONL files from a directory or single file."""
 
     path = Path(path)
     if path.is_file():

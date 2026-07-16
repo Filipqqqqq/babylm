@@ -38,7 +38,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--summary", required=True, help="Path to ewok_context_summary.csv.")
     parser.add_argument("--output", help="Output plot path.")
     parser.add_argument("--run-name", help="Filter to one run_name in the summary CSV.")
-    parser.add_argument("--score-reduction", default="sum", help="Usually sum.")
+    parser.add_argument(
+        "--score-reduction",
+        choices=("sum", "mean", "both"),
+        help="Filter to one score reduction. Omit or pass both to plot all rows.",
+    )
     parser.add_argument(
         "--title",
         default="EWoK Context Sensitivity by Domain",
@@ -56,10 +60,11 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     output_path = Path(args.output) if args.output else default_output_path(args.summary)
+    score_reduction = None if args.score_reduction in {None, "both"} else args.score_reduction
     rows = load_domain_rows(
         args.summary,
         run_name=args.run_name,
-        score_reduction=args.score_reduction,
+        score_reduction=score_reduction,
         x_axis=args.x_axis,
     )
     plot_domain_grid(

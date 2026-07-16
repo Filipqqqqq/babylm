@@ -50,10 +50,24 @@ training:
   gradient_clip_norm: 1.0
   mixed_precision: bf16
 
+progress:
+  benchmark_plot_x_axis: words_seen
+  estimate_words_per_token: true
+  words_per_token_sample_tokens: 4096
+
+ewok_context_sensitivity_full:
+  enabled: true
+  every_words: 10000000
+  batch_size: 64
+  score_reduction: both
+  plot: true
+  plot_every_evals: 1
+
 logging:
   log_every_steps: 50
   eval_every_steps: 500
   eval_max_batches: 20
+  benchmark_eval_at_start: true
 
 checkpointing:
   save_every_epochs: 1
