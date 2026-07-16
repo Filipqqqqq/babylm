@@ -42,6 +42,7 @@ from babysteps.training.spatial_auxiliary import (
     compute_spatial_auxiliary_loss,
     evaluate_spatial_auxiliary,
 )
+from babysteps.training.tail_averaging import TailAverager
 
 
 MNTP_LIKELIHOOD_BENCHMARKS = (
@@ -402,6 +403,7 @@ def save_gpt_bert_checkpoint(
     *,
     name: str,
     repo: str = DEFAULT_GPT_BERT_REPO,
+    state_dict: dict[str, torch.Tensor] | None = None,
 ) -> None:
     """Save GPT-BERT in the trust_remote_code format expected by HF loading."""
 
@@ -412,7 +414,8 @@ def save_gpt_bert_checkpoint(
     checkpoint_dir = Path(output_dir) / name
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     unwrapped_model = accelerator.unwrap_model(model)
-    torch.save(unwrapped_model.state_dict(), checkpoint_dir / "pytorch_model.bin")
+    checkpoint_state = unwrapped_model.state_dict() if state_dict is None else state_dict
+    torch.save(checkpoint_state, checkpoint_dir / "pytorch_model.bin")
     tokenizer.save_pretrained(checkpoint_dir)
 
     for filename in ("configuration_gpt_bert.py", "modeling_gpt_bert.py", "config.json"):
@@ -601,6 +604,9 @@ def train_hybrid_lm(
     gradient_clip_norm: float | None = None,
     save_every_epochs: int | None = 1,
     save_final: bool = True,
+    tail_average_fraction: float = 0.0,
+    tail_average_every_steps: int = 10,
+    tail_average_name: str = "model_tail_avg",
     benchmark_eval_at_start: bool = True,
     nextlat_dynamics: LatentDynamicsMLP | None = None,
     nextlat_config: NextLatConfig | None = None,
@@ -642,6 +648,7 @@ def train_hybrid_lm(
     spatial_auxiliary_temperature: float = 1.0,
     spatial_auxiliary_score_reduction: BranchScoreReduction = "mean",
     spatial_auxiliary_every_steps: int = 1,
+    spatial_auxiliary_every_causal_steps: int | None = None,
     spatial_auxiliary_apply_on: str = "causal",
     spatial_auxiliary_eval_items: list[SpatialAuxiliaryExample] | None = None,
     spatial_auxiliary_eval_every_steps: int = 0,
@@ -730,6 +737,14 @@ def train_hybrid_lm(
         raise ValueError("spatial_auxiliary_score_reduction must be 'sum' or 'mean'.")
     if spatial_auxiliary_sampler is not None and spatial_auxiliary_every_steps <= 0:
         raise ValueError("spatial_auxiliary_every_steps must be positive when enabled.")
+    if (
+        spatial_auxiliary_sampler is not None
+        and spatial_auxiliary_every_causal_steps is not None
+        and spatial_auxiliary_every_causal_steps <= 0
+    ):
+        raise ValueError(
+            "spatial_auxiliary_every_causal_steps must be positive when set."
+        )
     if spatial_auxiliary_apply_on != "causal":
         raise ValueError("spatial_auxiliary_apply_on currently supports only 'causal'.")
     if nextlat_apply_on != "causal":
@@ -738,6 +753,12 @@ def train_hybrid_lm(
         raise ValueError("spatial_auxiliary_eval_every_steps must be non-negative.")
     if spatial_auxiliary_eval_batch_size <= 0:
         raise ValueError("spatial_auxiliary_eval_batch_size must be positive.")
+    if not 0.0 <= float(tail_average_fraction) <= 1.0:
+        raise ValueError("tail_average_fraction must be in [0, 1].")
+    if tail_average_fraction > 0.0 and int(tail_average_every_steps) <= 0:
+        raise ValueError("tail_average_every_steps must be positive when enabled.")
+    if tail_average_fraction > 0.0 and not str(tail_average_name).strip():
+        raise ValueError("tail_average_name must not be empty when enabled.")
 
     output_dir = Path(output_dir)
     metrics_path = output_dir / "metrics_history.json"
@@ -758,6 +779,7 @@ def train_hybrid_lm(
     mntp_summary_path = benchmark_dir / "likelihood_summary.csv"
     history: list[dict[str, Any]] = []
     global_micro_step = 0
+    global_causal_update_step = 0
     global_update_step = 0
     cumulative_tokens_seen = 0.0
     next_ewok_context_words = ewok_context_every_words
@@ -811,6 +833,22 @@ def train_hybrid_lm(
 
     if accelerator.is_main_process:
         output_dir.mkdir(parents=True, exist_ok=True)
+
+    tail_averager = None
+    if tail_average_fraction > 0.0 and accelerator.is_main_process:
+        tail_averager = TailAverager(
+            accelerator.unwrap_model(model),
+            total_steps=total_update_steps,
+            fraction=tail_average_fraction,
+            every_steps=tail_average_every_steps,
+        )
+        print(
+            "Tail averaging enabled: "
+            f"start_step={tail_averager.start_step} "
+            f"every_steps={tail_averager.every_steps} "
+            f"artifact={tail_average_name}",
+            flush=True,
+        )
 
     def reduction_filter(score_reductions: tuple[Any, ...]) -> Any | None:
         return score_reductions[0] if len(score_reductions) == 1 else None
@@ -1306,11 +1344,19 @@ def train_hybrid_lm(
                         )
 
                 accelerator.backward(loss)
+                spatial_schedule_due = (
+                    accelerator.sync_gradients
+                    and (global_causal_update_step + 1)
+                    % spatial_auxiliary_every_causal_steps
+                    == 0
+                    if spatial_auxiliary_every_causal_steps is not None
+                    else (global_update_step + 1) % spatial_auxiliary_every_steps == 0
+                )
                 should_apply_spatial_auxiliary = (
                     objective == spatial_auxiliary_apply_on
                     and spatial_auxiliary_sampler is not None
                     and spatial_auxiliary_loss_weight > 0.0
-                    and (global_update_step + 1) % spatial_auxiliary_every_steps == 0
+                    and spatial_schedule_due
                 )
                 if should_apply_spatial_auxiliary:
                     with accelerator.autocast():
@@ -1340,6 +1386,11 @@ def train_hybrid_lm(
                 if scheduler is not None and accelerator.sync_gradients:
                     scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
+                if accelerator.sync_gradients and tail_averager is not None:
+                    tail_averager.update(
+                        accelerator.unwrap_model(model),
+                        step=global_update_step + 1,
+                    )
 
             target_tokens_float = target_tokens.float()
             loss_sum = (loss.detach() * target_tokens_float).float()
@@ -1440,6 +1491,8 @@ def train_hybrid_lm(
 
             if accelerator.sync_gradients:
                 global_update_step += 1
+                if objective == "causal":
+                    global_causal_update_step += 1
 
             loss_sum_value = loss_sum.item()
             ce_sum_value = ce_sum.item()
@@ -1948,6 +2001,32 @@ def train_hybrid_lm(
             name="final",
             repo=model_repo,
         )
+
+    if tail_average_fraction > 0.0:
+        averaged_state = None
+        if tail_averager is not None:
+            averaged_state = tail_averager.averaged_state_dict(
+                accelerator.unwrap_model(model)
+            )
+        save_gpt_bert_checkpoint(
+            model,
+            tokenizer,
+            accelerator,
+            output_dir,
+            name=str(tail_average_name),
+            repo=model_repo,
+            state_dict=averaged_state,
+        )
+        if accelerator.is_main_process:
+            if tail_averager is None:
+                raise RuntimeError("Main process did not initialize tail averaging.")
+            print(
+                "Saved tail-averaged checkpoint: "
+                f"snapshots={tail_averager.num_snapshots} "
+                f"fraction={tail_average_fraction:g} "
+                f"name={tail_average_name}",
+                flush=True,
+            )
 
     accelerator.wait_for_everyone()
     return history

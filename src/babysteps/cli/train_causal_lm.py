@@ -987,9 +987,14 @@ def main() -> None:
     spatial_auxiliary_objective = str(
         spatial_auxiliary_config.get("objective", "context_rank")
     ).strip()
-    if spatial_auxiliary_objective not in {"completion_rank", "context_rank"}:
+    if spatial_auxiliary_objective not in {
+        "completion_rank",
+        "context_rank",
+        "counterfactual_rank",
+    }:
         raise ValueError(
-            "spatial_auxiliary.objective must be 'completion_rank' or 'context_rank'."
+            "spatial_auxiliary.objective must be 'completion_rank', 'context_rank', "
+            "or 'counterfactual_rank'."
         )
     spatial_auxiliary_loss_weight = float(
         spatial_auxiliary_config.get("loss_weight", 0.03)
@@ -1272,7 +1277,7 @@ def main() -> None:
     )
     if accelerator.is_main_process:
         print(f"Optimizer: {optimizer_info.name}", flush=True)
-        if optimizer_info.name == "muon_pe":
+        if optimizer_info.name in {"muon_pe", "adamuon"}:
             print(f"Muon hidden matrix tensors: {optimizer_info.primary_tensors}", flush=True)
             print(f"Auxiliary AdamW tensors: {optimizer_info.auxiliary_tensors}", flush=True)
             print(f"Muon split-QKV tensors: {optimizer_info.qkv_split_tensors}", flush=True)

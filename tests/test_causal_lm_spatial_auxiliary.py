@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -8,6 +9,7 @@ from accelerate import Accelerator
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
+import babysteps.training.causal_lm_loop as causal_lm_loop
 from babysteps.evaluation.ewok_context_sensitivity import EwokItem
 from babysteps.training.causal_lm_loop import EwokContextEvalSpec, train_causal_lm
 from babysteps.training.spatial_auxiliary import (
@@ -151,3 +153,182 @@ def test_train_causal_lm_logs_spatial_auxiliary_loss_and_eval(tmp_path: Path) ->
         for record in history
     )
     assert (tmp_path / "benchmarks" / "ewok_full" / "context_summary.csv").exists()
+
+
+def test_train_causal_lm_runs_causal_likelihood_benchmarks_and_writes_items(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    calls: list[str] = []
+
+    def fake_blimp_likelihood(**kwargs):
+        calls.append("blimp")
+        assert kwargs["score_reduction"] == "sum"
+        return SimpleNamespace(
+            item_records=[
+                {
+                    "item_id": "blimp:1",
+                    "uid": "toy",
+                    "score_reduction": "sum",
+                    "score_good": -1.0,
+                    "score_bad": -2.0,
+                    "correct": True,
+                    "margin": 1.0,
+                    "tie": False,
+                }
+            ],
+            summary_rows=[
+                {
+                    "group_scope": "overall",
+                    "group_name": "all",
+                    "score_reduction": "sum",
+                    "items": 1,
+                    "correct": 1,
+                    "score": 1.0,
+                    "mean_margin": 1.0,
+                    "ties": 0,
+                }
+            ],
+        )
+
+    def fake_entity_tracking_likelihood(**kwargs):
+        calls.append("entity_tracking")
+        assert kwargs["score_reduction"] == "sum"
+        return SimpleNamespace(
+            item_records=[
+                {
+                    "item_id": "entity:1",
+                    "uid": "toy_1_ops",
+                    "score_reduction": "sum",
+                    "correct": True,
+                    "margin": 1.0,
+                    "tie": False,
+                }
+            ],
+            summary_rows=[
+                {
+                    "group_scope": "overall",
+                    "group_name": "all",
+                    "score_reduction": "sum",
+                    "items": 1,
+                    "correct": 1,
+                    "score": 1.0,
+                    "mean_margin": 1.0,
+                    "ties": 0,
+                }
+            ],
+        )
+
+    def fake_comps_likelihood(**kwargs):
+        calls.append("comps")
+        assert kwargs["score_reduction"] == "sum"
+        return SimpleNamespace(
+            item_records=[
+                {
+                    "item_id": "comps:1",
+                    "subtask": "base",
+                    "score_reduction": "sum",
+                    "correct": True,
+                    "margin": 1.0,
+                    "tie": False,
+                }
+            ],
+            summary_rows=[
+                {
+                    "group_scope": "overall",
+                    "group_name": "all",
+                    "score_reduction": "sum",
+                    "items": 1,
+                    "correct": 1,
+                    "score": 1.0,
+                    "score_kind": "macro",
+                    "micro_score": 1.0,
+                    "mean_margin": 1.0,
+                    "ties": 0,
+                }
+            ],
+        )
+
+    monkeypatch.setattr(
+        causal_lm_loop,
+        "evaluate_blimp_likelihood",
+        fake_blimp_likelihood,
+    )
+    monkeypatch.setattr(
+        causal_lm_loop,
+        "evaluate_entity_tracking_likelihood",
+        fake_entity_tracking_likelihood,
+    )
+    monkeypatch.setattr(
+        causal_lm_loop,
+        "evaluate_comps_likelihood",
+        fake_comps_likelihood,
+    )
+
+    tokenizer = TinyTokenizer()
+    model = TinyCausalModel()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+    batches = [
+        make_batch(torch.tensor([[1, 3, 5, 2], [1, 4, 6, 2]])),
+    ]
+    train_loader = DataLoader(BatchDataset(batches), batch_size=None)
+    val_loader = DataLoader(BatchDataset(batches), batch_size=None)
+    accelerator = Accelerator(cpu=True)
+    model, optimizer, train_loader, val_loader = accelerator.prepare(
+        model,
+        optimizer,
+        train_loader,
+        val_loader,
+    )
+
+    history = train_causal_lm(
+        model=model,
+        tokenizer=tokenizer,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        optimizer=optimizer,
+        scheduler=None,
+        accelerator=accelerator,
+        output_dir=tmp_path,
+        epochs=1,
+        log_every_steps=0,
+        eval_every_steps=0,
+        save_every_epochs=None,
+        save_final=False,
+        benchmark_eval_at_start=False,
+        blimp_likelihood_items={"blimp": [object()]},
+        blimp_likelihood_every_steps=1,
+        blimp_likelihood_score_reductions=("sum",),
+        blimp_likelihood_run_name="toy_llama",
+        entity_tracking_items=[object()],
+        entity_tracking_every_steps=1,
+        entity_tracking_score_reductions=("sum",),
+        entity_tracking_run_name="toy_llama",
+        comps_items=[object()],
+        comps_every_steps=1,
+        comps_score_reductions=("sum",),
+        comps_run_name="toy_llama",
+    )
+
+    assert calls == ["blimp", "entity_tracking", "comps"]
+    assert any(record["type"] == "blimp_likelihood" for record in history)
+    assert any(record["type"] == "entity_tracking_likelihood" for record in history)
+    assert any(record["type"] == "comps_likelihood" for record in history)
+    assert (tmp_path / "benchmarks" / "blimp" / "likelihood_summary.csv").exists()
+    assert (tmp_path / "benchmarks" / "blimp" / "likelihood_items.jsonl").exists()
+    assert (
+        tmp_path / "benchmarks" / "entity_tracking" / "likelihood_summary.csv"
+    ).exists()
+    assert (
+        tmp_path / "benchmarks" / "entity_tracking" / "likelihood_items.jsonl"
+    ).exists()
+    assert (tmp_path / "benchmarks" / "comps" / "likelihood_summary.csv").exists()
+    assert (tmp_path / "benchmarks" / "comps" / "likelihood_items.jsonl").exists()
+
+    blimp_item = json.loads(
+        (tmp_path / "benchmarks" / "blimp" / "likelihood_items.jsonl").read_text(
+            encoding="utf-8",
+        ).splitlines()[0]
+    )
+    assert blimp_item["run_name"] == "toy_llama"
+    assert blimp_item["step"] == 1

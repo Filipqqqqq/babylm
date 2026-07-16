@@ -321,6 +321,8 @@ def test_train_hybrid_lm_smoke_logs_validation_and_saves(tmp_path: Path) -> None
         eval_max_batches=1,
         save_every_epochs=1,
         save_final=True,
+        tail_average_fraction=1.0,
+        tail_average_every_steps=1,
     )
 
     assert any(record["type"] == "validation" for record in history)
@@ -332,6 +334,7 @@ def test_train_hybrid_lm_smoke_logs_validation_and_saves(tmp_path: Path) -> None
     assert (tmp_path / "checkpoint-epoch-0001" / "pytorch_model.bin").exists()
     assert (tmp_path / "checkpoint-epoch-0001" / "modeling_gpt_bert.py").exists()
     assert (tmp_path / "final" / "pytorch_model.bin").exists()
+    assert (tmp_path / "model_tail_avg" / "pytorch_model.bin").exists()
 
 
 def test_train_hybrid_lm_trains_nextlat_only_on_causal_steps(

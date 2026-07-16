@@ -244,6 +244,9 @@ def build_muon_pe_optimizer(
     muon_nesterov: bool,
     muon_split_qkv: bool,
     muon_batch_updates: bool,
+    variant: str = "muon",
+    variant_beta2: float = 0.95,
+    variant_eps: float = 1e-8,
     extra_learning_rate: float | None = None,
     extra_modules: tuple[torch.nn.Module, ...] = (),
 ) -> tuple[MuonWithAuxAdamPE, OptimizerBuildInfo]:
@@ -261,6 +264,9 @@ def build_muon_pe_optimizer(
         muon_ns_steps=int(muon_ns_steps),
         muon_nesterov=bool(muon_nesterov),
         split_qkv=bool(muon_split_qkv),
+        variant=variant,
+        variant_beta2=float(variant_beta2),
+        variant_eps=float(variant_eps),
     )
     extra_params = _trainable_extra_parameters(extra_modules)
     resolved_extra_lr = (
@@ -302,7 +308,7 @@ def build_muon_pe_optimizer(
         batch_muon_updates=bool(muon_batch_updates),
     )
     info = OptimizerBuildInfo(
-        name="muon_pe",
+        name="adamuon" if variant == "adamuon" else "muon_pe",
         primary_tensors=groups.muon_tensors,
         auxiliary_tensors=groups.aux_tensors + len(extra_params),
         qkv_split_tensors=groups.qkv_split_tensors,
@@ -348,7 +354,7 @@ def build_optimizer(
             extra_modules=extra_modules,
         )
 
-    if optimizer_name == "muon_pe":
+    if optimizer_name in {"muon_pe", "adamuon"}:
         muon_lr = float(settings.get("muon_lr", 0.02))
         return build_muon_pe_optimizer(
             model,
@@ -363,6 +369,9 @@ def build_optimizer(
             muon_nesterov=bool(settings.get("muon_nesterov", True)),
             muon_split_qkv=bool(settings.get("muon_split_qkv", True)),
             muon_batch_updates=bool(settings.get("muon_batch_updates", True)),
+            variant="adamuon" if optimizer_name == "adamuon" else "muon",
+            variant_beta2=float(settings.get("adamuon_beta2", 0.95)),
+            variant_eps=float(settings.get("adamuon_eps", 1e-8)),
             extra_learning_rate=(
                 None
                 if settings.get("extra_learning_rate") is None
@@ -372,5 +381,6 @@ def build_optimizer(
         )
 
     raise ValueError(
-        f"Unsupported optimizer={optimizer_name!r}. Expected 'adamw', 'lamb', or 'muon_pe'."
+        f"Unsupported optimizer={optimizer_name!r}. Expected 'adamw', 'lamb', "
+        "'muon_pe', or 'adamuon'."
     )

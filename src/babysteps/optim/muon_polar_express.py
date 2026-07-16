@@ -84,8 +84,19 @@ def build_muon_pe_param_groups(
     muon_ns_steps: int,
     muon_nesterov: bool,
     split_qkv: bool = True,
+    variant: str = "muon",
+    variant_beta2: float = 0.95,
+    variant_eps: float = 1e-8,
 ) -> MuonParameterGroups:
     """Build Muon and auxiliary AdamW parameter groups from model names."""
+
+    variant = str(variant).strip().lower()
+    if variant not in {"muon", "adamuon"}:
+        raise ValueError("Muon variant must be 'muon' or 'adamuon'.")
+    if not 0.0 <= float(variant_beta2) < 1.0:
+        raise ValueError("variant_beta2 must be in [0, 1).")
+    if float(variant_eps) <= 0.0:
+        raise ValueError("variant_eps must be positive.")
 
     muon_params: list[torch.nn.Parameter] = []
     aux_decay_params: list[torch.nn.Parameter] = []
@@ -118,6 +129,9 @@ def build_muon_pe_param_groups(
                 "weight_decay": float(muon_weight_decay),
                 "ns_steps": int(muon_ns_steps),
                 "nesterov": bool(muon_nesterov),
+                "variant": variant,
+                "variant_beta2": float(variant_beta2),
+                "variant_eps": float(variant_eps),
             }
         )
     if aux_decay_params:
@@ -260,6 +274,39 @@ def _same_shape_batch_key(
     return param.device, param.dtype, grad.dtype, tuple(param.shape)
 
 
+def _adamuon_rescale(
+    update: torch.Tensor,
+    state: dict,
+    *,
+    beta2: float,
+    eps: float,
+) -> torch.Tensor:
+    """Apply norm-preserving AdaMuon second-moment scaling to a Muon update."""
+
+    step = int(state.get("adamuon_step", 0)) + 1
+    state["adamuon_step"] = step
+
+    update_fp32 = update.float()
+    exp_avg_sq = state.get("adamuon_exp_avg_sq")
+    if exp_avg_sq is None:
+        exp_avg_sq = torch.zeros_like(update_fp32)
+        state["adamuon_exp_avg_sq"] = exp_avg_sq
+    exp_avg_sq.mul_(beta2).addcmul_(
+        update_fp32,
+        update_fp32,
+        value=1.0 - beta2,
+    )
+
+    bias_correction = 1.0 - beta2**step
+    normalized = update_fp32 / (
+        (exp_avg_sq / bias_correction).sqrt() + eps
+    )
+    reference_norm = update_fp32.norm()
+    normalized_norm = normalized.norm().clamp_min(1e-12)
+    normalized.mul_(reference_norm / normalized_norm)
+    return normalized.to(update.dtype)
+
+
 class MuonWithAuxAdamPE(torch.optim.Optimizer):
     """Muon for hidden matrices, auxiliary AdamW for the remaining parameters."""
 
@@ -297,6 +344,9 @@ class MuonWithAuxAdamPE(torch.optim.Optimizer):
         beta = float(group.get("momentum", 0.95))
         ns_steps = int(group.get("ns_steps", 5))
         nesterov = bool(group.get("nesterov", True))
+        variant = str(group.get("variant", "muon"))
+        variant_beta2 = float(group.get("variant_beta2", 0.95))
+        variant_eps = float(group.get("variant_eps", 1e-8))
 
         batches: dict[
             tuple[torch.device, torch.dtype, torch.dtype, tuple[int, ...]],
@@ -315,6 +365,7 @@ class MuonWithAuxAdamPE(torch.optim.Optimizer):
             qkv_split = self.qkv_split_dims.get(id(param))
             if (
                 self.batch_muon_updates
+                and variant == "muon"
                 and qkv_split is None
                 and param.ndim == 2
                 and grad.ndim == 2
@@ -329,6 +380,9 @@ class MuonWithAuxAdamPE(torch.optim.Optimizer):
                     ns_steps=ns_steps,
                     nesterov=nesterov,
                     qkv_split=qkv_split,
+                    variant=variant,
+                    variant_beta2=variant_beta2,
+                    variant_eps=variant_eps,
                 )
 
         for params in batches.values():
@@ -341,6 +395,9 @@ class MuonWithAuxAdamPE(torch.optim.Optimizer):
                     ns_steps=ns_steps,
                     nesterov=nesterov,
                     qkv_split=None,
+                    variant=variant,
+                    variant_beta2=variant_beta2,
+                    variant_eps=variant_eps,
                 )
             else:
                 self._step_batched_muon_params(
@@ -362,6 +419,9 @@ class MuonWithAuxAdamPE(torch.optim.Optimizer):
         ns_steps: int,
         nesterov: bool,
         qkv_split: tuple[int, tuple[int, ...]] | None,
+        variant: str = "muon",
+        variant_beta2: float = 0.95,
+        variant_eps: float = 1e-8,
     ) -> None:
         grad = param.grad
         if grad is None:
@@ -375,6 +435,13 @@ class MuonWithAuxAdamPE(torch.optim.Optimizer):
             nesterov=nesterov,
             qkv_split=qkv_split,
         )
+        if variant == "adamuon":
+            update = _adamuon_rescale(
+                update.reshape_as(param),
+                state,
+                beta2=variant_beta2,
+                eps=variant_eps,
+            )
         if weight_decay:
             param.mul_(1.0 - lr * weight_decay)
         param.add_(update.reshape_as(param), alpha=-lr)

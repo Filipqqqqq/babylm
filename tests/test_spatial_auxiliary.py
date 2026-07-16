@@ -10,6 +10,7 @@ from torch import nn
 from babysteps.spatial_synth.generate import generate_context_pairs, write_items
 from babysteps.training.spatial_auxiliary import (
     ContextRankExample,
+    CounterfactualRankExample,
     SpatialAuxiliarySampler,
     build_spatial_branches,
     compute_spatial_auxiliary_loss,
@@ -129,6 +130,28 @@ def test_context_rank_loss_and_eval_prefer_matched_contexts() -> None:
     assert metrics["k1_score"] == 1.0
     assert metrics["k2_score"] == 1.0
     assert metrics["mean_margin"] > 0.0
+
+
+def test_counterfactual_rank_loss_and_eval_prefer_full_diagonal() -> None:
+    tokenizer = TinySpatialTokenizer()
+    model = MatchedBranchModel()
+    examples = [CounterfactualRankExample("1", "c1", "c2", "t1", "t2")]
+
+    loss = compute_spatial_auxiliary_loss(
+        model=model,
+        tokenizer=tokenizer,
+        examples=examples,
+    )
+    metrics = evaluate_spatial_auxiliary(
+        model=model,
+        tokenizer=tokenizer,
+        examples=examples,
+    )
+
+    assert loss.item() < 1e-3
+    assert metrics["objective"] == "counterfactual_rank"
+    assert metrics["score"] == 1.0
+    assert metrics["comparisons"] == 4
 
 
 def test_read_spatial_auxiliary_rejects_objective_mismatch(tmp_path: Path) -> None:

@@ -264,6 +264,48 @@ def test_build_optimizer_accepts_muon_config() -> None:
     assert optimizer.param_groups[0]["base_lr"] == 0.03
 
 
+def test_build_optimizer_accepts_adamuon_config_and_tracks_second_moment() -> None:
+    torch.manual_seed(7)
+    model = _TinyGPTLike()
+    optimizer, info = build_optimizer(
+        model,
+        {
+            "optimizer": "adamuon",
+            "learning_rate": 0.006,
+            "betas": [0.9, 0.98],
+            "eps": 1e-8,
+            "weight_decay": 0.1,
+            "muon_lr": 0.02,
+            "muon_weight_decay": 0.1,
+            "muon_momentum": 0.95,
+            "muon_ns_steps": 2,
+            "muon_split_qkv": False,
+            "adamuon_beta2": 0.95,
+            "adamuon_eps": 1e-8,
+        },
+    )
+
+    assert isinstance(optimizer, MuonWithAuxAdamPE)
+    assert info.name == "adamuon"
+    muon_group = next(group for group in optimizer.param_groups if group["use_muon"])
+    aux_groups = [group for group in optimizer.param_groups if not group["use_muon"]]
+    assert muon_group["lr"] == pytest.approx(0.02)
+    assert muon_group["variant"] == "adamuon"
+    assert muon_group["variant_beta2"] == pytest.approx(0.95)
+    assert all(group["lr"] == pytest.approx(0.006) for group in aux_groups)
+
+    for param in model.parameters():
+        param.grad = torch.randn_like(param)
+    optimizer.step()
+
+    muon_param = muon_group["params"][0]
+    state = optimizer.state[muon_param]
+    assert state["adamuon_step"] == 1
+    assert state["adamuon_exp_avg_sq"].dtype == torch.float32
+    assert state["adamuon_exp_avg_sq"].shape == muon_param.shape
+    assert torch.isfinite(muon_param).all()
+
+
 def test_build_optimizer_includes_extra_module_params() -> None:
     model = _TinyGPTLike()
     nextlat = LatentDynamicsMLP(

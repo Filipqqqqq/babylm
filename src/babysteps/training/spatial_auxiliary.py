@@ -18,10 +18,15 @@ from babysteps.training.branch_scoring import (
 from babysteps.training.spatial_contrastive import (
     completion_rank_loss,
     context_rank_loss,
+    counterfactual_rank_loss,
 )
 
 
-SpatialAuxiliaryObjective = Literal["completion_rank", "context_rank"]
+SpatialAuxiliaryObjective = Literal[
+    "completion_rank",
+    "context_rank",
+    "counterfactual_rank",
+]
 
 
 @dataclass(frozen=True)
@@ -47,7 +52,21 @@ class ContextRankExample:
     template_family: str = ""
 
 
-SpatialAuxiliaryExample = CompletionRankExample | ContextRankExample
+@dataclass(frozen=True)
+class CounterfactualRankExample:
+    """A minimal context pair with different correct completions."""
+
+    item_id: str
+    context1: str
+    context2: str
+    target1: str
+    target2: str
+    template_family: str = ""
+
+
+SpatialAuxiliaryExample = (
+    CompletionRankExample | ContextRankExample | CounterfactualRankExample
+)
 
 
 class SpatialAuxiliarySampler:
@@ -102,7 +121,11 @@ def _row_objective(row: dict[str, Any]) -> SpatialAuxiliaryObjective:
         objective = "context_rank"
     else:
         objective = "completion_rank"
-    if objective not in {"completion_rank", "context_rank"}:
+    if objective not in {
+        "completion_rank",
+        "context_rank",
+        "counterfactual_rank",
+    }:
         raise ValueError(f"Unsupported spatial auxiliary rank_objective={objective!r}.")
     return objective  # type: ignore[return-value]
 
@@ -131,7 +154,12 @@ def parse_spatial_auxiliary_row(
             template_family=template_family,
         )
 
-    return ContextRankExample(
+    example_class = (
+        CounterfactualRankExample
+        if row_objective == "counterfactual_rank"
+        else ContextRankExample
+    )
+    return example_class(
         item_id=item_id,
         context1=str(row["Context1"]),
         context2=str(row["Context2"]),
@@ -208,6 +236,8 @@ def objective_for_examples(
     first = examples[0]
     if isinstance(first, CompletionRankExample):
         return "completion_rank"
+    if isinstance(first, CounterfactualRankExample):
+        return "counterfactual_rank"
     return "context_rank"
 
 
@@ -228,7 +258,7 @@ def build_spatial_branches(
             )
     else:
         for example in examples:
-            if not isinstance(example, ContextRankExample):
+            if not isinstance(example, (ContextRankExample, CounterfactualRankExample)):
                 raise ValueError("Mixed spatial auxiliary objectives are not supported.")
             branches.extend(
                 [
@@ -271,7 +301,12 @@ def compute_spatial_auxiliary_loss(
         )
 
     matrix_scores = scores.reshape(len(examples), 4)
-    return context_rank_loss(
+    loss_function = (
+        counterfactual_rank_loss
+        if objective == "counterfactual_rank"
+        else context_rank_loss
+    )
+    return loss_function(
         s11=matrix_scores[:, 0],
         s21=matrix_scores[:, 1],
         s22=matrix_scores[:, 2],
@@ -345,7 +380,12 @@ def evaluate_spatial_auxiliary(
                     margin_sum += float(margins.sum().item())
                 else:
                     matrix_scores = scores.reshape(len(batch), 4)
-                    batch_loss = context_rank_loss(
+                    loss_function = (
+                        counterfactual_rank_loss
+                        if objective == "counterfactual_rank"
+                        else context_rank_loss
+                    )
+                    batch_loss = loss_function(
                         s11=matrix_scores[:, 0],
                         s21=matrix_scores[:, 1],
                         s22=matrix_scores[:, 2],
@@ -353,17 +393,32 @@ def evaluate_spatial_auxiliary(
                         temperature=temperature,
                     )
                     total_loss += float(batch_loss.item()) * len(batch)
-                    k1 = matrix_scores[:, 0] - matrix_scores[:, 1]
-                    k2 = matrix_scores[:, 2] - matrix_scores[:, 3]
+                    context_k1 = matrix_scores[:, 0] - matrix_scores[:, 1]
+                    context_k2 = matrix_scores[:, 2] - matrix_scores[:, 3]
+                    if objective == "counterfactual_rank":
+                        completion_k1 = matrix_scores[:, 0] - matrix_scores[:, 3]
+                        completion_k2 = matrix_scores[:, 2] - matrix_scores[:, 1]
+                        margins = torch.stack(
+                            [context_k1, context_k2, completion_k1, completion_k2]
+                        )
+                        correct += int((margins > 0).sum().item())
+                        comparisons += 4 * len(batch)
+                        margin_sum += float(margins.mean(dim=0).sum().item())
+                    else:
+                        correct += int((context_k1 > 0).sum().item())
+                        correct += int((context_k2 > 0).sum().item())
+                        comparisons += 2 * len(batch)
+                        margin_sum += float(
+                            (0.5 * (context_k1 + context_k2)).sum().item()
+                        )
+                    k1 = context_k1
+                    k2 = context_k2
                     batch_k1_correct = int((k1 > 0).sum().item())
                     batch_k2_correct = int((k2 > 0).sum().item())
                     k1_correct += batch_k1_correct
                     k2_correct += batch_k2_correct
-                    correct += batch_k1_correct + batch_k2_correct
-                    comparisons += 2 * len(batch)
                     k1_margin_sum += float(k1.sum().item())
                     k2_margin_sum += float(k2.sum().item())
-                    margin_sum += float((0.5 * (k1 + k2)).sum().item())
     finally:
         if was_training:
             model.train()
@@ -377,7 +432,7 @@ def evaluate_spatial_auxiliary(
         "loss": total_loss / max(1, total_items),
         "mean_margin": margin_sum / max(1, total_items),
     }
-    if objective == "context_rank":
+    if objective in {"context_rank", "counterfactual_rank"}:
         result.update(
             {
                 "k1_correct": k1_correct,
@@ -394,6 +449,7 @@ def evaluate_spatial_auxiliary(
 __all__ = [
     "CompletionRankExample",
     "ContextRankExample",
+    "CounterfactualRankExample",
     "SpatialAuxiliaryExample",
     "SpatialAuxiliaryObjective",
     "SpatialAuxiliarySampler",

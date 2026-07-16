@@ -105,15 +105,19 @@ def load_domain_rows(
                 panel = "average"
             else:
                 continue
+            row_score_reduction = row.get("score_reduction", "")
+            series = row.get("run_name") or row.get("checkpoint") or "score"
+            if row_score_reduction and score_reduction is None:
+                series = f"{series} ({row_score_reduction})"
 
             rows.append(
                 {
                     "panel": panel,
-                    "series": row.get("run_name") or row.get("checkpoint") or "score",
+                    "series": series,
                     "step": step,
                     "score": score,
                     "items": parse_optional_int(row.get("items")),
-                    "score_reduction": row.get("score_reduction", ""),
+                    "score_reduction": row_score_reduction,
                     "summary_csv": str(summary_csv),
                 }
             )
@@ -296,3 +300,134 @@ def plot_ewok_context_summary(
         title=title,
         x_axis=x_axis,
     )
+
+
+def load_full_and_spatial_rows(
+    summary_csv: str | Path,
+    *,
+    run_name: str | None = None,
+    score_reduction: str | None = None,
+    x_axis: str = "step",
+) -> tuple[str, dict[str, list[tuple[float | int, float]]]]:
+    """Load overall and spatial EWoK rows for a compact dynamics plot."""
+
+    candidate_rows: list[dict[str, Any]] = []
+    with Path(summary_csv).open("r", encoding="utf-8", newline="") as f:
+        for row in csv.DictReader(f):
+            if run_name and row.get("run_name") != run_name:
+                continue
+            group_scope = row.get("group_scope", "")
+            group_name = row.get("group_name", "")
+            if not (
+                (group_scope == "overall" and group_name == "all")
+                or (group_scope == "domain" and group_name == "spatial-relations")
+            ):
+                continue
+            candidate_rows.append(row)
+
+    if not candidate_rows:
+        raise ValueError(f"No overall/spatial EWoK rows found in {summary_csv}.")
+
+    available_reductions = {row.get("score_reduction", "") for row in candidate_rows}
+    if score_reduction is None:
+        active_reduction = (
+            "mean"
+            if "mean" in available_reductions
+            else "sum"
+            if "sum" in available_reductions
+            else sorted(available_reductions)[0]
+        )
+    else:
+        active_reduction = score_reduction
+
+    series: dict[str, list[tuple[float | int, float]]] = defaultdict(list)
+    for row in candidate_rows:
+        if row.get("score_reduction", "") != active_reduction:
+            continue
+        x_value = parse_x_value(row.get(x_axis), x_axis=x_axis)
+        score = parse_optional_float(row.get("score"))
+        if x_value is None or score is None:
+            continue
+        if row.get("group_scope") == "overall":
+            series["EWoK full macro"].append((x_value, score))
+        else:
+            series["EWoK spatial-relations"].append((x_value, score))
+
+    if not any(series.values()):
+        raise ValueError(
+            "No plottable overall/spatial EWoK rows found for "
+            f"score_reduction={active_reduction!r} in {summary_csv}."
+        )
+    return active_reduction, {name: sorted(points) for name, points in series.items()}
+
+
+def plot_full_vs_spatial_summary(
+    *,
+    summary_csv: str | Path,
+    output_path: str | Path,
+    run_name: str | None = None,
+    score_reduction: str | None = None,
+    title: str = "EWoK Full vs Spatial Relations",
+    x_axis: str = "step",
+) -> None:
+    """Write a compact plot of overall EWoK and spatial-relations scores."""
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    active_reduction, series = load_full_and_spatial_rows(
+        summary_csv,
+        run_name=run_name,
+        score_reduction=score_reduction,
+        x_axis=x_axis,
+    )
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fig, axis = plt.subplots(figsize=(9, 5.2))
+    colors = {
+        "EWoK full macro": "#4c78a8",
+        "EWoK spatial-relations": "#f28e2b",
+    }
+    all_scores: list[float] = []
+    for name, points in series.items():
+        if not points:
+            continue
+        xs = [point[0] for point in points]
+        scores = [point[1] for point in points]
+        all_scores.extend(scores)
+        axis.plot(
+            xs,
+            scores,
+            marker="o" if len(points) <= 40 else None,
+            markersize=4.0,
+            linewidth=2.0,
+            color=colors.get(name),
+            label=name,
+        )
+    axis.axhline(
+        RANDOM_CHANCE_SCORE,
+        color="#6f6f6f",
+        linestyle="--",
+        linewidth=1.2,
+        alpha=0.75,
+        label="Random chance",
+    )
+    axis.set_title(f"{title} ({active_reduction})")
+    axis.set_xlabel(x_axis_label(x_axis))
+    axis.set_ylabel("Context sensitivity score")
+    axis.grid(True, axis="both", alpha=0.25)
+    if all_scores:
+        low = max(0.0, min(min(all_scores), RANDOM_CHANCE_SCORE) - 0.05)
+        high = min(1.0, max(max(all_scores), RANDOM_CHANCE_SCORE) + 0.05)
+        if high - low < 0.2:
+            midpoint = 0.5 * (low + high)
+            low = max(0.0, midpoint - 0.1)
+            high = min(1.0, midpoint + 0.1)
+        axis.set_ylim(low, high)
+    axis.legend(loc="best")
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=180)
+    plt.close(fig)

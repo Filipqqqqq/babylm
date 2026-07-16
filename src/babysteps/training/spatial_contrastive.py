@@ -68,8 +68,35 @@ def context_rank_loss(
     return _reduce_loss(loss, reduction)
 
 
+def counterfactual_rank_loss(
+    *,
+    s11: torch.Tensor,
+    s21: torch.Tensor,
+    s22: torch.Tensor,
+    s12: torch.Tensor,
+    temperature: float = 1.0,
+    reduction: RankReduction = "mean",
+) -> torch.Tensor:
+    """Symmetric rank loss for a paired counterfactual 2x2 score matrix.
+
+    The row term ranks the correct answer above the counterfactual answer for
+    each context. The column term ranks the context that produced an answer
+    above the paired context for that same answer. Averaging the two keeps the
+    scale comparable to the existing one-directional ranking objectives.
+    """
+
+    temperature = _validate_temperature(temperature)
+    row1_loss = F.softplus((s12 - s11) / temperature)
+    row2_loss = F.softplus((s21 - s22) / temperature)
+    column1_loss = F.softplus((s21 - s11) / temperature)
+    column2_loss = F.softplus((s12 - s22) / temperature)
+    loss = 0.25 * (row1_loss + row2_loss + column1_loss + column2_loss)
+    return _reduce_loss(loss, reduction)
+
+
 __all__ = [
     "RankReduction",
     "completion_rank_loss",
     "context_rank_loss",
+    "counterfactual_rank_loss",
 ]

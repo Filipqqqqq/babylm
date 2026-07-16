@@ -319,15 +319,37 @@ def apply_llama_training_dropout(model, hf_config: PretrainedConfig):
 def build_causal_lm_model(config: dict[str, Any], tokenizer: Any):
     """Instantiate a Hugging Face causal LM from a BabySteps config dict."""
 
+    model_config = config["model"]
     architecture = normalize_model_arch(
-        _first_present(config["model"], ("architecture", "model_arch"), "gpt2")
+        _first_present(model_config, ("architecture", "model_arch"), "gpt2")
     )
+    pretrained_path = _first_present(
+        model_config,
+        ("init_from", "pretrained_path", "checkpoint_path"),
+    )
+    if pretrained_path:
+        if architecture == "gpt_bert":
+            model = AutoModelForMaskedLM.from_pretrained(
+                str(pretrained_path),
+                trust_remote_code=True,
+            )
+            model.config.use_cache = False
+            return model
+
+        model_kwargs: dict[str, Any] = {}
+        attn_implementation = model_config.get("attn_implementation")
+        if attn_implementation:
+            model_kwargs["attn_implementation"] = str(attn_implementation)
+        model = AutoModelForCausalLM.from_pretrained(str(pretrained_path), **model_kwargs)
+        model.config.use_cache = False
+        return apply_llama_training_dropout(model, model.config)
+
     hf_config = build_causal_lm_config_from_dict(config, tokenizer)
     if architecture == "gpt_bert":
         return AutoModelForMaskedLM.from_config(hf_config, trust_remote_code=True)
 
     model_kwargs: dict[str, Any] = {}
-    attn_implementation = config["model"].get("attn_implementation")
+    attn_implementation = model_config.get("attn_implementation")
     if attn_implementation:
         model_kwargs["attn_implementation"] = str(attn_implementation)
     model = AutoModelForCausalLM.from_config(hf_config, **model_kwargs)

@@ -347,6 +347,7 @@ def main() -> None:
     hybrid_config = config.get("hybrid", {})
     logging_config = config.get("logging", {})
     checkpoint_config = config.get("checkpointing", {})
+    tail_average_config = checkpoint_config.get("tail_average", {}) or {}
     progress_config = config.get("progress", {})
     if "ewok_context_sensitivity" in config:
         raise ValueError(
@@ -540,9 +541,14 @@ def main() -> None:
     spatial_auxiliary_objective = str(
         spatial_auxiliary_config.get("objective", "context_rank")
     ).strip()
-    if spatial_auxiliary_objective not in {"completion_rank", "context_rank"}:
+    if spatial_auxiliary_objective not in {
+        "completion_rank",
+        "context_rank",
+        "counterfactual_rank",
+    }:
         raise ValueError(
-            "spatial_auxiliary.objective must be 'completion_rank' or 'context_rank'."
+            "spatial_auxiliary.objective must be 'completion_rank', 'context_rank', "
+            "or 'counterfactual_rank'."
         )
     spatial_auxiliary_loss_weight = float(
         spatial_auxiliary_config.get("loss_weight", 0.03)
@@ -565,6 +571,18 @@ def main() -> None:
     spatial_auxiliary_every_steps = int(spatial_auxiliary_config.get("every_steps", 1))
     if spatial_auxiliary_enabled and spatial_auxiliary_every_steps <= 0:
         raise ValueError("spatial_auxiliary.every_steps must be positive when enabled.")
+    raw_every_causal_steps = spatial_auxiliary_config.get("every_causal_steps")
+    spatial_auxiliary_every_causal_steps = (
+        int(raw_every_causal_steps) if raw_every_causal_steps is not None else None
+    )
+    if (
+        spatial_auxiliary_enabled
+        and spatial_auxiliary_every_causal_steps is not None
+        and spatial_auxiliary_every_causal_steps <= 0
+    ):
+        raise ValueError(
+            "spatial_auxiliary.every_causal_steps must be positive when set."
+        )
     spatial_auxiliary_apply_on = str(
         spatial_auxiliary_config.get("apply_on", "causal")
     ).strip()
@@ -824,6 +842,11 @@ def main() -> None:
                 if spatial_auxiliary_eval_items is not None
                 else ""
             )
+            causal_schedule_description = (
+                f"every_causal_steps={spatial_auxiliary_every_causal_steps}, "
+                if spatial_auxiliary_every_causal_steps is not None
+                else ""
+            )
             print(
                 "Spatial auxiliary loss: "
                 f"objective={spatial_auxiliary_objective}, "
@@ -833,6 +856,7 @@ def main() -> None:
                 f"temperature={spatial_auxiliary_temperature:g}, "
                 f"score_reduction={spatial_auxiliary_score_reduction}, "
                 f"every_steps={spatial_auxiliary_every_steps}, "
+                f"{causal_schedule_description}"
                 f"apply_on={spatial_auxiliary_apply_on}"
                 f"{eval_description}",
                 flush=True,
@@ -883,7 +907,7 @@ def main() -> None:
     )
     if accelerator.is_main_process:
         print(f"Optimizer: {optimizer_info.name}", flush=True)
-        if optimizer_info.name == "muon_pe":
+        if optimizer_info.name in {"muon_pe", "adamuon"}:
             print(f"Muon hidden matrix tensors: {optimizer_info.primary_tensors}", flush=True)
             print(f"Auxiliary AdamW tensors: {optimizer_info.auxiliary_tensors}", flush=True)
             print(f"Muon split-QKV tensors: {optimizer_info.qkv_split_tensors}", flush=True)
@@ -1073,6 +1097,13 @@ def main() -> None:
         gradient_clip_norm=training_config.get("gradient_clip_norm"),
         save_every_epochs=checkpoint_config.get("save_every_epochs", 1),
         save_final=bool(checkpoint_config.get("save_final", True)),
+        tail_average_fraction=(
+            float(tail_average_config.get("fraction", 0.0))
+            if bool(tail_average_config.get("enabled", False))
+            else 0.0
+        ),
+        tail_average_every_steps=int(tail_average_config.get("every_steps", 10)),
+        tail_average_name=str(tail_average_config.get("name", "model_tail_avg")),
         benchmark_eval_at_start=bool(logging_config.get("benchmark_eval_at_start", True)),
         nextlat_dynamics=nextlat_dynamics,
         nextlat_config=nextlat_config,
@@ -1108,6 +1139,7 @@ def main() -> None:
         spatial_auxiliary_temperature=spatial_auxiliary_temperature,
         spatial_auxiliary_score_reduction=spatial_auxiliary_score_reduction,  # type: ignore[arg-type]
         spatial_auxiliary_every_steps=spatial_auxiliary_every_steps,
+        spatial_auxiliary_every_causal_steps=spatial_auxiliary_every_causal_steps,
         spatial_auxiliary_apply_on=spatial_auxiliary_apply_on,
         spatial_auxiliary_eval_items=spatial_auxiliary_eval_items,
         spatial_auxiliary_eval_every_steps=spatial_auxiliary_eval_every_steps,
