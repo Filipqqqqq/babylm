@@ -59,6 +59,23 @@ logging:
   eval_max_batches: 20
   profile_optimizer_steps: true
 
+nextlat:
+  # Experimental prototype for BabyLM ablations.
+  enabled: false
+  horizon: 1
+  lambda_next_h: 1.0
+  lambda_kl: 0.0
+  kl_mode: topk
+  kl_top_k: 256
+  kl_transition_chunk_size: 1024
+  kl_warmup_start_words: null
+  kl_warmup_end_words: null
+  detach_kl_lm_head: true
+  mlp_hidden_dim: 1024
+  mlp_layers: 3
+  detach_targets: true
+  mask_eos_bos_boundaries: true
+
 spatial_auxiliary:
   enabled: false
   path: ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/synthetic/spatial_relations/spatial_relations_synth_context_rank.jsonl
