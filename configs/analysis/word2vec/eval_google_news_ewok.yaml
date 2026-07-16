@@ -1,0 +1,18 @@
+name: google_news_ewok_word2vec
+
+vectors:
+  kind: word2vec_format
+  path: ${GOOGLE_NEWS_WORD2VEC_PATH:-~/vectors/GoogleNews-vectors-negative300.bin.gz}
+  binary: true
+
+ewok:
+  path: external/babylm-eval/strict/evaluation_data/fast_eval/ewok_fast
+
+preprocessing:
+  lowercase: false
+  split_sentences: true
+  min_token_length: 1
+
+output:
+  dir: ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/analysis/word2vec/google_news_ewok
+  timestamp: true

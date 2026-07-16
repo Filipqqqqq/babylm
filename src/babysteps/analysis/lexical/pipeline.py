@@ -190,14 +190,29 @@ def _context_window(
     *,
     neighbor_window: int,
 ) -> tuple[list[str], list[str]]:
+    return _context_window_for_span(
+        sentence,
+        start_index=token_index,
+        end_index=token_index + 1,
+        neighbor_window=neighbor_window,
+    )
+
+
+def _context_window_for_span(
+    sentence: SentenceRecord,
+    *,
+    start_index: int,
+    end_index: int,
+    neighbor_window: int,
+) -> tuple[list[str], list[str]]:
     tokens = list(sentence.tokens)
     left = [
         token.normalized
-        for token in tokens[max(0, token_index - neighbor_window) : token_index]
+        for token in tokens[max(0, start_index - neighbor_window) : start_index]
     ]
     right = [
         token.normalized
-        for token in tokens[token_index + 1 : token_index + 1 + neighbor_window]
+        for token in tokens[end_index : end_index + neighbor_window]
     ]
     return left, right
 
@@ -208,16 +223,35 @@ def _example_word_window(
     *,
     radius: int,
 ) -> tuple[str, str]:
+    return _example_word_window_for_span(
+        sentence,
+        start_index=token_index,
+        end_index=token_index + 1,
+        radius=radius,
+    )
+
+
+def _example_word_window_for_span(
+    sentence: SentenceRecord,
+    *,
+    start_index: int,
+    end_index: int,
+    radius: int,
+) -> tuple[str, str]:
     if radius <= 0:
         return "", ""
 
     tokens = list(sentence.tokens)
-    left_tokens = tokens[max(0, token_index - radius) : token_index]
-    right_tokens = tokens[token_index + 1 : token_index + 1 + radius]
+    left_tokens = tokens[max(0, start_index - radius) : start_index]
+    right_tokens = tokens[end_index : end_index + radius]
     return (
         " ".join(token.surface for token in left_tokens),
         " ".join(token.surface for token in right_tokens),
     )
+
+
+def _span_surface(sentence: SentenceRecord, start_index: int, end_index: int) -> str:
+    return " ".join(token.surface for token in sentence.tokens[start_index:end_index])
 
 
 def _iter_document_items(
@@ -342,71 +376,86 @@ def run_lexical_analysis(
         source = str(item["source"])
         for sentence_index, sentence in enumerate(sentences):
             sentence_examples: dict[str, dict[str, Any]] = {}
-            for token_index, token in enumerate(sentence.tokens):
+            for token in sentence.tokens:
                 word_counts[token.normalized] += 1
                 word_tokens += 1
-                tokenization = tokenizer_analyzer.analyze(token.normalized)
-                matches = matcher.match(surface=token.normalized, lemma=token.lemma)
-                if not matches:
-                    continue
-                target_mentions += len(matches)
+                tokenizer_analyzer.analyze(token.normalized)
 
-                left_neighbors, right_neighbors = _context_window(
+            for match in matcher.match_sentence(sentence.tokens):
+                target_mentions += 1
+                span_tokens = sentence.tokens[match.start_index : match.end_index]
+                subword_count = 0
+                token_pieces: list[str] = []
+                for span_token in span_tokens:
+                    tokenization = tokenizer_analyzer.analyze(span_token.normalized)
+                    subword_count += tokenization.fertility
+                    token_pieces.extend(tokenization.pieces)
+
+                left_neighbors, right_neighbors = _context_window_for_span(
                     sentence,
-                    token_index,
+                    start_index=match.start_index,
+                    end_index=match.end_index,
                     neighbor_window=neighbor_window,
                 )
-                left_window_words, right_window_words = _example_word_window(
+                left_window_words, right_window_words = _example_word_window_for_span(
                     sentence,
-                    token_index,
+                    start_index=match.start_index,
+                    end_index=match.end_index,
                     radius=context_word_radius,
                 )
-                for target_id, match_kinds in matches.items():
-                    stats = stats_by_target[target_id]
-                    stats.observe(
-                        doc_index=doc_index,
-                        source=source,
-                        surface=token.normalized,
-                        lemma=token.lemma,
-                        match_kinds=match_kinds,
-                        tokenization=tokenization.pieces_text,
-                        subword_count=tokenization.fertility,
-                        left_neighbors=left_neighbors,
-                        right_neighbors=right_neighbors,
+                tokenization_text = " ".join(token_pieces)
+                target_id = match.target_id
+                stats = stats_by_target[target_id]
+                stats.observe(
+                    doc_index=doc_index,
+                    source=source,
+                    surface=match.surface,
+                    lemma=match.lemma,
+                    match_kinds=set(match.match_kinds),
+                    tokenization=tokenization_text,
+                    subword_count=subword_count,
+                    left_neighbors=left_neighbors,
+                    right_neighbors=right_neighbors,
+                )
+                if target_id not in sentence_examples:
+                    matched_phrase = _span_surface(
+                        sentence,
+                        match.start_index,
+                        match.end_index,
                     )
-                    if target_id not in sentence_examples:
-                        sentence_examples[target_id] = {
-                            "target_id": target_id,
-                            "label": stats.target.label,
-                            "surface": token.normalized,
-                            "lemma": token.lemma,
-                            "source": source,
-                            "doc_index": doc_index,
-                            "sentence_index": sentence_index,
-                            "previous_sentence": _sentence_text(
-                                sentences,
-                                sentence_index - 1,
-                            ),
-                            "sentence": sentence.text,
-                            "next_sentence": _sentence_text(
-                                sentences,
-                                sentence_index + 1,
-                            ),
-                            "context_word_radius": context_word_radius,
-                            "left_window_words": left_window_words,
-                            "matched_word": token.surface,
-                            "right_window_words": right_window_words,
-                            "tokenizer_mode": tokenizer_mode,
-                            "token_pieces": list(tokenization.pieces),
-                            "subword_count": tokenization.fertility,
-                            "example_sampling_unit": "sentence",
-                            "sentence_target_occurrences": 0,
-                            "sentence_target_surface_counts": {},
-                        }
-                    example = sentence_examples[target_id]
-                    example["sentence_target_occurrences"] += 1
-                    surface_counts = example["sentence_target_surface_counts"]
-                    surface_counts[token.normalized] = surface_counts.get(token.normalized, 0) + 1
+                    sentence_examples[target_id] = {
+                        "target_id": target_id,
+                        "label": stats.target.label,
+                        "surface": match.surface,
+                        "lemma": match.lemma,
+                        "source": source,
+                        "doc_index": doc_index,
+                        "sentence_index": sentence_index,
+                        "previous_sentence": _sentence_text(
+                            sentences,
+                            sentence_index - 1,
+                        ),
+                        "sentence": sentence.text,
+                        "next_sentence": _sentence_text(
+                            sentences,
+                            sentence_index + 1,
+                        ),
+                        "context_word_radius": context_word_radius,
+                        "left_window_words": left_window_words,
+                        "matched_word": matched_phrase,
+                        "matched_phrase": matched_phrase,
+                        "right_window_words": right_window_words,
+                        "tokenizer_mode": tokenizer_mode,
+                        "token_pieces": token_pieces,
+                        "subword_count": subword_count,
+                        "example_sampling_unit": "sentence",
+                        "sentence_target_occurrences": 0,
+                        "sentence_target_surface_counts": {},
+                    }
+                example = sentence_examples[target_id]
+                example["sentence_target_occurrences"] += 1
+                surface_counts = example["sentence_target_surface_counts"]
+                surface_counts[match.surface] = surface_counts.get(match.surface, 0) + 1
             for target_id, example in sentence_examples.items():
                 samplers[target_id].add(example)
         docs_processed += 1

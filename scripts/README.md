@@ -35,6 +35,15 @@ python scripts/analysis/export_ewok_lexical_targets.py
 python scripts/analysis/report_lexical_analysis.py \
   --config configs/analysis/lexical_babylm2026_strict_small_ewok.yaml
 
+python scripts/analysis/export_comps_lexical_targets.py
+
+python scripts/analysis/report_lexical_analysis.py \
+  --config configs/analysis/lexical_babylm2026_strict_small_comps_concepts.yaml
+
+python scripts/analysis/plot_comps_lexical_frequencies.py \
+  --target-coverage /path/to/comps/target_coverage.csv \
+  --n 30
+
 python scripts/analysis/plot_domain_concept_frequencies.py \
   --target-coverage /path/to/target_coverage.csv \
   --concepts configs/analysis/targets/ewok_fast_domain_concepts.yaml
@@ -59,7 +68,7 @@ python scripts/analysis/plot_ewok_context_dynamics.py \
 The same evaluator can run during training by adding a top-level config block:
 
 ```yaml
-ewok_context_sensitivity:
+ewok_context_sensitivity_full:
   enabled: true
   every_steps: 500
   batch_size: 64
@@ -74,20 +83,14 @@ By default this uses the full-eval EWoK folder:
 external/babylm-eval/strict/evaluation_data/full_eval/ewok_filtered
 ```
 
-If that folder is absent, EWoK evaluation fails loudly. For fast eval, override
-`data_dir` explicitly:
-
-```yaml
-ewok_context_sensitivity:
-  data_dir: external/babylm-eval/strict/evaluation_data/fast_eval/ewok_fast
-```
+If that folder is absent, EWoK evaluation fails loudly.
 
 During training, EWoK context-sensitivity outputs are written under:
 
 ```text
-<run_dir>/benchmarks/ewok/context_items.jsonl
-<run_dir>/benchmarks/ewok/context_summary.csv
-<run_dir>/benchmarks/ewok/context_domain_dynamics.png
+<run_dir>/benchmarks/ewok_full/context_items.jsonl
+<run_dir>/benchmarks/ewok_full/context_summary.csv
+<run_dir>/benchmarks/ewok_full/context_domain_dynamics.png
 ```
 
 Benchmark plot x-axis:
@@ -116,7 +119,7 @@ training tokens:
 logging:
   benchmark_plot_x_axis: words_seen
   estimate_words_per_token: true
-  words_per_token_sample_tokens: 2048
+  words_per_token_sample_tokens: 4096
 ```
 
 If `benchmark_plot_x_axis: words_seen` is set without an explicit conversion,
@@ -125,6 +128,22 @@ and is written back into the saved run config.
 
 `benchmark_plot_x_axis` can be `step`, `tokens_seen`, or `words_seen`. The
 standalone plotting scripts accept the same choice with `--x-axis`.
+
+Benchmark diagnostics can be scheduled by optimizer-update step, by estimated
+training words, or by both. For example:
+
+```yaml
+logging:
+  estimate_words_per_token: true
+
+entity_tracking_likelihood:
+  enabled: true
+  every_words: 1000000
+```
+
+Validation loss also accepts `logging.eval_every_words`. Word-based scheduling
+uses `words_seen = tokens_seen * words_per_token`; if no conversion is supplied,
+training estimates it automatically when a word interval is configured.
 
 BLiMP likelihood diagnostics:
 
@@ -193,16 +212,6 @@ By default this evaluates the local full-eval folder:
 external/babylm-eval/strict/evaluation_data/full_eval/entity_tracking
 ```
 
-For fast eval, override `data_dir`:
-
-```yaml
-entity_tracking_likelihood:
-  enabled: true
-  every_steps: 500
-  data_dir: external/babylm-eval/strict/evaluation_data/fast_eval/entity_tracking_fast
-  plot: true
-```
-
 During training, Entity Tracking likelihood outputs are written under:
 
 ```text
@@ -250,6 +259,20 @@ During training, COMPS likelihood outputs are written under:
 <run_dir>/benchmarks/comps/subtask_dynamics.png
 <run_dir>/benchmarks/comps/negative_sample_type_dynamics.png
 ```
+
+MNTP Hugging Face likelihood diagnostics:
+
+```bash
+python scripts/eval/eval_mntp_likelihood_hf.py \
+  --model BabyLM-community/babylm-baseline-10m-gpt-bert-causal-focus \
+  --trust-remote-code \
+  --score-reduction both
+```
+
+This mirrors the BabyLM zero-shot MNTP convention: mask each scored token and
+read that token's log probability from the previous position's logits. It writes
+one summary CSV and, unless `--no-items` is set, one per-item JSONL under the
+chosen output directory.
 
 Removed deprecated aliases:
 

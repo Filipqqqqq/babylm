@@ -5,6 +5,13 @@ import json
 
 import pytest
 
+from babysteps.analysis.lexical.comps_targets import (
+    build_concept_targets_payload,
+    build_property_targets_payload,
+    export_comps_targets,
+    read_comps_targets,
+    unsupported_rows as comps_unsupported_rows,
+)
 from babysteps.analysis.lexical.domain_frequency import (
     DomainConcept,
     build_domain_frequency_rows,
@@ -94,7 +101,7 @@ def test_parse_targets_rejects_multiword_entries() -> None:
 
 
 def test_ewok_target_export_payloads_keep_unsupported_concepts_visible(tmp_path) -> None:
-    ewok_dir = tmp_path / "ewok_fast"
+    ewok_dir = tmp_path / "ewok_filtered"
     ewok_dir.mkdir()
     _write_jsonl(
         ewok_dir / "toy.jsonl",
@@ -131,6 +138,128 @@ def test_ewok_target_export_payloads_keep_unsupported_concepts_visible(tmp_path)
     unsupported_by_concept = {row["concept"]: row for row in unsupported}
     assert unsupported_by_concept["slow down"]["reason"] == "multiword"
     assert unsupported_by_concept["-"]["reason"] == "placeholder"
+
+
+def test_comps_target_export_payloads_aggregate_roles_and_properties(tmp_path) -> None:
+    comps_dir = tmp_path / "comps"
+    comps_dir.mkdir()
+    _write_jsonl(
+        comps_dir / "comps_base.jsonl",
+        [
+            {
+                "id": 1,
+                "property": "absorbs sweat",
+                "acceptable_concept": "sock",
+                "unacceptable_concept": "stocking",
+                "property_phrase": "absorbs sweat.",
+                "negative_sample_type": "taxonomic",
+            },
+            {
+                "id": 2,
+                "property": "absorbs sweat",
+                "acceptable_concept": "sock",
+                "unacceptable_concept": "ice cream",
+                "property_phrase": "absorbs sweat.",
+                "negative_sample_type": "overlap",
+            },
+        ],
+    )
+    _write_jsonl(
+        comps_dir / "comps_wugs_dist-before.jsonl",
+        [
+            {
+                "id": 3,
+                "property": "attaches to rocks",
+                "acceptable_concept": "mussel",
+                "unacceptable_concept": "clam",
+                "property_phrase": "attaches to rocks.",
+                "negative_sample_type": "taxonomic",
+                "distraction_type": "before",
+            },
+        ],
+    )
+
+    concept_summaries, property_summaries = read_comps_targets(comps_dir)
+    concept_payload = build_concept_targets_payload(concept_summaries)
+    property_payload = build_property_targets_payload(property_summaries)
+    unsupported = comps_unsupported_rows(
+        concept_summaries=concept_summaries,
+        property_summaries=property_summaries,
+    )
+
+    targets_by_label = {
+        target["label"]: target for target in concept_payload["targets"]
+    }
+    assert targets_by_label["sock"]["metadata"]["eval_count"] == 2
+    assert targets_by_label["sock"]["metadata"]["concept_roles"] == {
+        "acceptable_concept": 2
+    }
+    assert targets_by_label["sock"]["metadata"]["negative_sample_types"] == {
+        "overlap": 1,
+        "taxonomic": 1,
+    }
+    assert targets_by_label["ice cream"]["target_type"] == "phrase"
+
+    properties_by_label = {
+        target["label"]: target for target in property_payload["targets"]
+    }
+    assert properties_by_label["absorbs sweat"]["target_type"] == "phrase"
+    assert properties_by_label["absorbs sweat"]["metadata"]["eval_count"] == 2
+    assert properties_by_label["attaches to rocks"]["metadata"]["subtasks"] == {
+        "wugs_dist_before": 1
+    }
+    assert unsupported == []
+
+    concept_yaml = tmp_path / "concepts.yaml"
+    property_yaml = tmp_path / "properties.yaml"
+    unsupported_csv = tmp_path / "unsupported.csv"
+    result = export_comps_targets(
+        comps_dir=comps_dir,
+        concept_targets_yaml=concept_yaml,
+        property_targets_yaml=property_yaml,
+        unsupported_csv=unsupported_csv,
+    )
+
+    assert result["concept_targets"] == 5
+    assert result["property_targets"] == 2
+    assert "comps_concept_sock" in concept_yaml.read_text(encoding="utf-8")
+    assert "comps_property_absorbs_sweat" in property_yaml.read_text(encoding="utf-8")
+    assert _read_csv(unsupported_csv) == []
+
+
+def test_v2_targets_match_words_and_phrases_without_breaking_v1() -> None:
+    targets = parse_targets(
+        {
+            "version": 2,
+            "targets": [
+                {
+                    "id": "dog",
+                    "target_type": "word",
+                    "surfaces": ["dog"],
+                    "lemmas": ["dog"],
+                },
+                {
+                    "id": "dog_runs",
+                    "target_type": "phrase",
+                    "surfaces": ["dog runs"],
+                    "lemmas": ["dog runs"],
+                },
+            ],
+        }
+    )
+    sentence = RegexTextProcessor().process("The dog runs fast.")[0]
+
+    matcher = TargetMatcher(targets)
+    matches = matcher.match_sentence(sentence.tokens)
+
+    assert matcher.match(surface="dog", lemma="dog") == {"dog": {"surface", "lemma"}}
+    assert [
+        (match.target_id, match.start_index, match.end_index, set(match.match_kinds))
+        for match in matches
+    ] == [
+        ("dog", 1, 2, {"surface", "lemma"}),
+        ("dog_runs", 1, 3, {"surface", "lemma"}),
+    ]
 
 
 def test_tokenizer_analyzer_caches_word_types() -> None:
@@ -287,3 +416,80 @@ targets:
     assert manifest["analysis"]["context_neighbor_stopword_count"] > 0
     assert manifest["analysis"]["progress_logging"] is True
     assert manifest["analysis"]["progress_interval_docs"] == 10000
+
+
+def test_run_lexical_analysis_writes_phrase_target_reports(tmp_path) -> None:
+    corpus_path = tmp_path / "corpus.jsonl"
+    _write_jsonl(
+        corpus_path,
+        [
+            {
+                "source": "comps-smoke",
+                "text": "A sock absorbs sweat. The sock absorbs sweat quickly.",
+            },
+            {
+                "source": "comps-smoke",
+                "text": "Sweat absorbs water.",
+            },
+        ],
+    )
+    targets_path = tmp_path / "targets.yaml"
+    targets_path.write_text(
+        """
+version: 2
+targets:
+  - id: absorbs_sweat
+    label: absorbs sweat
+    target_type: phrase
+    surfaces: [absorbs sweat]
+    lemmas: [absorbs sweat]
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "reports"
+    config = {
+        "name": "toy_phrase_lexical",
+        "dataset": {
+            "kind": "local_jsonl",
+            "files": str(corpus_path),
+            "text_field": "text",
+        },
+        "tokenizer": {"path": "fake-tokenizer"},
+        "targets": {"path": str(targets_path)},
+        "lemmatizer": {"kind": "regex"},
+        "analysis": {
+            "source_field": "source",
+            "examples_per_target": 5,
+            "neighbor_window": 2,
+            "context_word_radius": 3,
+            "seed": 7,
+            "tokenizer_mode": "isolated",
+        },
+        "output": {"timestamp": False},
+    }
+
+    run_lexical_analysis(
+        config,
+        root_dir=tmp_path,
+        output_dir=output_dir,
+        tokenizer=FakeTokenizer(),
+        text_processor=RegexTextProcessor(),
+    )
+
+    target_rows = {row["target_id"]: row for row in _read_csv(output_dir / "target_coverage.csv")}
+    assert target_rows["absorbs_sweat"]["total_mentions"] == "2"
+    assert target_rows["absorbs_sweat"]["top_surfaces"] == "absorbs sweat:2"
+    assert target_rows["absorbs_sweat"]["mean_subwords_per_occurrence"] == "3.0000"
+
+    context_rows = {row["target_id"]: row for row in _read_csv(output_dir / "context_summary.csv")}
+    assert context_rows["absorbs_sweat"]["top_left_neighbors"] == "sock:2; a:1; the:1"
+    assert "quickly:1" in context_rows["absorbs_sweat"]["top_right_neighbors"]
+
+    examples = _read_jsonl(output_dir / "context_examples.jsonl")
+    assert len(examples) == 2
+    assert {row["matched_phrase"] for row in examples} == {"absorbs sweat"}
+    assert {row["matched_word"] for row in examples} == {"absorbs sweat"}
+    assert all(row["token_pieces"] == ["abs", "orbs", "sweat"] for row in examples)
+    assert all(row["sentence_target_surface_counts"] == {"absorbs sweat": 1} for row in examples)

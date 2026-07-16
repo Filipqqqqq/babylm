@@ -23,6 +23,8 @@ The analysis currently focuses on four questions:
 src/babysteps/analysis/lexical/       reusable lexical-analysis package
 scripts/analysis/report_lexical_analysis.py
 scripts/analysis/export_ewok_lexical_targets.py
+scripts/analysis/export_comps_lexical_targets.py
+scripts/analysis/plot_comps_lexical_frequencies.py
 scripts/analysis/plot_domain_concept_frequencies.py
 scripts/analysis/benchmark_spacy_pipe.py
 configs/analysis/                    dataset/report configs and target lists
@@ -42,6 +44,7 @@ sampling.py        bounded example sampling
 domain_frequency.py
                    per-domain concept frequency tables and plots
 ewok_targets.py    EWoK ConceptA/ConceptB export helpers
+comps_targets.py   COMPS concept/property export helpers
 ```
 
 ## Running
@@ -192,7 +195,7 @@ Lexical targets are YAML files under:
 configs/analysis/targets/
 ```
 
-The current matcher supports single-token targets. Each target can define
+Version 1 target files support single-token targets. Each target can define
 surface forms and lemmas:
 
 ```yaml
@@ -206,6 +209,20 @@ targets:
 
 Surface matches count exact observed forms. Lemma matches use the configured
 text processor, usually spaCy, to group inflected forms when possible.
+
+Version 2 target files add an explicit `target_type` field. Use
+`target_type: word` for single-token targets and `target_type: phrase` for
+contiguous multi-token phrase targets:
+
+```yaml
+version: 2
+targets:
+  - id: absorbs_sweat
+    label: absorbs sweat
+    target_type: phrase
+    surfaces: [absorbs sweat]
+    lemmas: [absorbs sweat]
+```
 
 ## EWoK Targets
 
@@ -228,6 +245,53 @@ placeholders are written to the unsupported CSV instead of being silently
 dropped. The domain concepts YAML can be used with the domain-frequency plotting
 script.
 
+## COMPS Targets
+
+COMPS concepts and property phrases can be exported from the full-eval JSONL
+files:
+
+```bash
+python scripts/analysis/export_comps_lexical_targets.py
+```
+
+This creates:
+
+```text
+configs/analysis/targets/comps_concept_lexical_targets.yaml
+configs/analysis/targets/comps_property_phrase_lexical_targets.yaml
+configs/analysis/targets/comps_unsupported_targets.csv
+```
+
+Run concept and property-phrase reports separately:
+
+```bash
+python scripts/analysis/report_lexical_analysis.py \
+  --config configs/analysis/lexical_babylm2026_strict_small_comps_concepts.yaml
+
+python scripts/analysis/report_lexical_analysis.py \
+  --config configs/analysis/lexical_babylm2026_strict_small_comps_properties.yaml
+```
+
+After either report completes, plot top/middle/bottom target frequencies and
+the exposure-bucket distribution:
+
+```bash
+python scripts/analysis/plot_comps_lexical_frequencies.py \
+  --target-coverage /path/to/target_coverage.csv \
+  --n 30
+```
+
+This writes:
+
+```text
+frequency_top_middle_bottom.csv
+frequency_top_middle_bottom.png
+frequency_top.png
+frequency_middle.png
+frequency_bottom.png
+exposure_buckets.png
+```
+
 ## Domain Frequency Plots
 
 After running a lexical report, plot concept frequencies by domain:
@@ -238,8 +302,9 @@ python scripts/analysis/plot_domain_concept_frequencies.py \
   --concepts configs/analysis/targets/ewok_fast_domain_concepts.yaml
 ```
 
-Multiword concepts are currently marked as unsupported in the frequency table
-and plotted as missing values.
+The domain-frequency plotter is intended for domain-grouped target sets such as
+EWoK. For COMPS target-coverage files, use
+`plot_comps_lexical_frequencies.py`.
 
 ## Important Config Options
 
@@ -278,7 +343,6 @@ word-initial tokens may differ depending on whitespace.
 
 ## Current Limitations
 
-- Multiword concepts are exported but not directly matched yet.
 - Lexical exposure is evidence of availability, not evidence of learning.
 - Context examples are sampled and row-local.
 - Lemmatization quality depends on the configured text processor.
