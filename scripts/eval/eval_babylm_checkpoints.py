@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run BabyLM strict fast zero-shot eval over all checkpoints in a run."""
+"""Run BabyLM strict full zero-shot eval over Hugging Face checkpoints."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from babysteps.evaluation.babylm_fast_eval import (  # noqa: E402
+from babysteps.evaluation.babylm_zero_shot_eval import (  # noqa: E402
     DEFAULT_PIPELINE_DIR,
     EvalSettings,
     discover_checkpoints,
@@ -37,8 +37,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--config",
-        default=str(ROOT / "configs" / "eval" / "fast_eval.yaml"),
-        help="Path to the BabyLM fast-eval config.",
+        default=str(ROOT / "configs" / "eval" / "full_eval.yaml"),
+        help="Path to the BabyLM zero-shot eval config.",
     )
     parser.add_argument("--run-dir", help="Training run directory containing HF checkpoints.")
     parser.add_argument(
@@ -51,7 +51,7 @@ def main() -> None:
     parser.add_argument("--eval-data-dir", help="Override data.eval_dir.")
     parser.add_argument("--output-dir", help="Override outputs.result_dir.")
     parser.add_argument("--backend", help="Override evaluation.backend.")
-    parser.add_argument("--tasks", nargs="+", help="Tasks to run, e.g. blimp_fast ewok_fast.")
+    parser.add_argument("--tasks", nargs="+", help="Tasks to run, e.g. blimp ewok comps.")
     parser.add_argument("--batch-size", type=int, help="Sentence zero-shot eval batch size.")
     parser.add_argument("--device", help="CUDA_VISIBLE_DEVICES value, e.g. 0 or 1.")
     parser.add_argument("--python", dest="python_executable", help="Python executable for eval subprocesses.")
@@ -72,7 +72,7 @@ def main() -> None:
     eval_data_dir = resolve_path(
         args.eval_data_dir
         or data_config.get("eval_dir")
-        or pipeline_dir / "evaluation_data" / "fast_eval"
+        or pipeline_dir / "evaluation_data" / "full_eval"
     )
     output_dir = resolve_path(
         args.output_dir
@@ -81,7 +81,7 @@ def main() -> None:
             os.environ.get("BABYSTEPS_RUNS_DIR", "~/babylm-baby-steps-runs")
         ).expanduser()
         / "evaluation"
-        / eval_config.get("name", "babylm_fast_eval")
+        / eval_config.get("name", "babylm_full_zero_shot")
     )
 
     explicit_checkpoints = [resolve_path(item) for item in (args.checkpoints or [])]
@@ -101,12 +101,12 @@ def main() -> None:
         if not pipeline_dir.exists():
             raise SystemExit(f"BabyLM eval pipeline directory not found: {pipeline_dir}")
         if not eval_data_dir.exists():
-            raise SystemExit(f"BabyLM fast eval data directory not found: {eval_data_dir}")
+            raise SystemExit(f"BabyLM eval data directory not found: {eval_data_dir}")
         for checkpoint in checkpoints:
             if not is_hf_checkpoint(checkpoint):
                 raise SystemExit(f"Not a Hugging Face checkpoint directory: {checkpoint}")
 
-    tasks = tuple(args.tasks or config.get("tasks") or ["blimp_fast", "reading"])
+    tasks = tuple(args.tasks or config.get("tasks") or ["blimp", "reading"])
     settings = EvalSettings(
         pipeline_dir=pipeline_dir,
         eval_data_dir=eval_data_dir,

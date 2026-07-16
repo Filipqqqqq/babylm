@@ -1,4 +1,4 @@
-"""Post-training wrappers for the BabyLM strict fast evaluation pipeline."""
+"""Post-training wrappers for the BabyLM strict zero-shot evaluation pipeline."""
 
 from __future__ import annotations
 
@@ -26,10 +26,11 @@ HF_MODEL_FILES = {
 }
 
 SENTENCE_TASKS = {
-    "blimp_fast": ("blimp", "blimp_fast"),
-    "supplement_fast": ("blimp", "supplement_fast"),
-    "ewok_fast": ("ewok", "ewok_fast"),
-    "entity_tracking_fast": ("entity_tracking", "entity_tracking_fast"),
+    "blimp": ("blimp", "blimp_filtered"),
+    "supplement": ("blimp", "supplement_filtered"),
+    "ewok": ("ewok", "ewok_filtered"),
+    "entity_tracking": ("entity_tracking", "entity_tracking"),
+    "comps": ("comps", "comps"),
 }
 
 
@@ -47,10 +48,11 @@ class EvalSettings:
     backend: str = "causal"
     batch_size: int = 64
     tasks: tuple[str, ...] = (
-        "blimp_fast",
-        "supplement_fast",
-        "ewok_fast",
-        "entity_tracking_fast",
+        "blimp",
+        "supplement",
+        "ewok",
+        "entity_tracking",
+        "comps",
         "reading",
     )
     python_executable: str = sys.executable
@@ -145,7 +147,7 @@ def expected_report_path(
     if task == "reading":
         return base / backend_for_reading(backend) / "reading" / "report.txt"
 
-    raise ValueError(f"Unsupported BabyLM fast-eval task: {task!r}")
+    raise ValueError(f"Unsupported BabyLM zero-shot task: {task!r}")
 
 
 def build_task_command(
@@ -189,7 +191,7 @@ def build_task_command(
             str(settings.output_dir),
         ]
     else:
-        raise ValueError(f"Unsupported BabyLM fast-eval task: {task!r}")
+        raise ValueError(f"Unsupported BabyLM zero-shot task: {task!r}")
 
     if settings.revision_name:
         command += ["--revision_name", settings.revision_name]
@@ -415,6 +417,23 @@ def write_summary(summary: dict[str, Any], output_dir: str | Path) -> None:
 
 def evaluate_checkpoints(checkpoints: list[Path], settings: EvalSettings) -> dict[str, Any]:
     """Run configured tasks over checkpoints and write parsed summaries."""
+
+    output_names: dict[str, list[Path]] = {}
+    for checkpoint in checkpoints:
+        output_names.setdefault(checkpoint.stem, []).append(checkpoint)
+    duplicate_names = {
+        name: paths for name, paths in output_names.items() if len(paths) > 1
+    }
+    if duplicate_names:
+        details = "; ".join(
+            f"{name}: {', '.join(str(path) for path in paths)}"
+            for name, paths in sorted(duplicate_names.items())
+        )
+        raise ValueError(
+            "Multiple checkpoints would write to the same BabyLM output name. "
+            "Use separate --output-dir runs or unique checkpoint directory names. "
+            f"Duplicates: {details}"
+        )
 
     settings.output_dir.mkdir(parents=True, exist_ok=True)
     summaries: list[dict[str, Any]] = []

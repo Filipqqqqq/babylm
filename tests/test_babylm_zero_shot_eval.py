@@ -2,8 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from babysteps.evaluation.babylm_fast_eval import (
+import pytest
+
+from babysteps.evaluation.babylm_zero_shot_eval import (
+    EvalSettings,
+    build_task_command,
     discover_checkpoints,
+    evaluate_checkpoints,
+    expected_report_path,
     flatten_summary_rows,
     parse_best_temperature_report,
     parse_reading_report,
@@ -74,7 +80,7 @@ def test_flatten_summary_rows_includes_average_and_subtasks() -> None:
                 "checkpoint": "checkpoint-epoch-0001",
                 "checkpoint_path": "/tmp/checkpoint-epoch-0001",
                 "tasks": {
-                    "blimp_fast": {
+                    "blimp": {
                         "average": 81.13,
                         "sections": {
                             "uid": {
@@ -96,7 +102,7 @@ def test_flatten_summary_rows_includes_average_and_subtasks() -> None:
     assert {
         "checkpoint": "checkpoint-epoch-0001",
         "checkpoint_path": "/tmp/checkpoint-epoch-0001",
-        "task": "blimp_fast",
+        "task": "blimp",
         "metric_scope": "average",
         "metric_name": "average",
         "value": 81.13,
@@ -104,8 +110,85 @@ def test_flatten_summary_rows_includes_average_and_subtasks() -> None:
     assert {
         "checkpoint": "checkpoint-epoch-0001",
         "checkpoint_path": "/tmp/checkpoint-epoch-0001",
-        "task": "blimp_fast",
+        "task": "blimp",
         "metric_scope": "uid",
         "metric_name": "determiner_noun_agreement_1",
         "value": 99.50,
     } in rows
+
+
+def test_full_zero_shot_task_commands_use_full_eval_datasets(tmp_path: Path) -> None:
+    checkpoint = tmp_path / "checkpoint-epoch-0001"
+    eval_data_dir = tmp_path / "full_eval"
+    output_dir = tmp_path / "outputs"
+    settings = EvalSettings(
+        pipeline_dir=tmp_path / "pipeline",
+        eval_data_dir=eval_data_dir,
+        output_dir=output_dir,
+        python_executable="python",
+    )
+
+    expected = {
+        "blimp": ("blimp", "blimp_filtered"),
+        "supplement": ("blimp", "supplement_filtered"),
+        "ewok": ("ewok", "ewok_filtered"),
+        "entity_tracking": ("entity_tracking", "entity_tracking"),
+        "comps": ("comps", "comps"),
+    }
+    for task, (official_task, dataset) in expected.items():
+        command = build_task_command(
+            checkpoint=checkpoint,
+            task=task,
+            settings=settings,
+        )
+
+        assert "--task" in command
+        assert command[command.index("--task") + 1] == official_task
+        assert "--data_path" in command
+        assert command[command.index("--data_path") + 1] == str(eval_data_dir / dataset)
+        assert expected_report_path(
+            output_dir=output_dir,
+            checkpoint=checkpoint,
+            task=task,
+            backend="causal",
+        ) == (
+            output_dir
+            / checkpoint.name
+            / "main"
+            / "zero_shot"
+            / "causal"
+            / official_task
+            / dataset
+            / "best_temperature_report.txt"
+        )
+
+
+def test_fast_eval_task_aliases_are_not_supported(tmp_path: Path) -> None:
+    settings = EvalSettings(
+        pipeline_dir=tmp_path / "pipeline",
+        eval_data_dir=tmp_path / "full_eval",
+        output_dir=tmp_path / "outputs",
+    )
+
+    with pytest.raises(ValueError, match="Unsupported BabyLM zero-shot task"):
+        build_task_command(
+            checkpoint=tmp_path / "checkpoint-epoch-0001",
+            task="blimp_fast",
+            settings=settings,
+        )
+
+
+def test_evaluate_checkpoints_rejects_duplicate_output_names(tmp_path: Path) -> None:
+    checkpoints = [
+        tmp_path / "run_a" / "final",
+        tmp_path / "run_b" / "final",
+    ]
+    settings = EvalSettings(
+        pipeline_dir=tmp_path / "pipeline",
+        eval_data_dir=tmp_path / "full_eval",
+        output_dir=tmp_path / "outputs",
+        dry_run=True,
+    )
+
+    with pytest.raises(ValueError, match="same BabyLM output name"):
+        evaluate_checkpoints(checkpoints, settings)

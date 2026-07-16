@@ -1,6 +1,6 @@
 """Evaluation helpers."""
 
-from babysteps.evaluation.babylm_fast_eval import (
+from babysteps.evaluation.babylm_zero_shot_eval import (
     EvalSettings,
     discover_checkpoints,
     evaluate_checkpoints,

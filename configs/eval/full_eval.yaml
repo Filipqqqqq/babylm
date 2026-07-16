@@ -1,0 +1,25 @@
+evaluation:
+  name: babylm_full_zero_shot
+  pipeline_dir: external/babylm-eval/strict
+  suite: full_eval
+  backend: causal
+  batch_size: 64
+
+model:
+  # Set this to a completed training run directory, or pass --run-dir.
+  run_dir:
+
+data:
+  # Full BabyLM zero-shot data.
+  eval_dir: external/babylm-eval/strict/evaluation_data/full_eval
+
+tasks:
+  - blimp
+  - supplement
+  - ewok
+  - entity_tracking
+  - comps
+  - reading
+
+outputs:
+  result_dir: ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/evaluation/babylm_full_zero_shot
