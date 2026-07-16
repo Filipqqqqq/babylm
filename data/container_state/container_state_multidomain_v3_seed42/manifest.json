@@ -1,0 +1,200 @@
+{
+  "audit": {
+    "counts": {
+      "empty_targets": 0,
+      "eval_items_per_split": {
+        "compositional_ood": 2400,
+        "domain_ood": 2400,
+        "iid": 2400,
+        "lexical_ood": 2400,
+        "template_ood": 2400
+      },
+      "eval_pairs_per_split": {
+        "compositional_ood": 1200,
+        "domain_ood": 1200,
+        "iid": 1200,
+        "lexical_ood": 1200,
+        "template_ood": 1200
+      },
+      "identical_targets": 0,
+      "train_documents": 9600,
+      "train_pairs": 4800,
+      "train_words": 852841
+    },
+    "leakage": {
+      "normalized_cross_split_collisions": 0,
+      "normalized_within_split_duplicates": {
+        "compositional_ood": 0,
+        "domain_ood": 0,
+        "iid": 0,
+        "lexical_ood": 0,
+        "template_ood": 0,
+        "train": 0
+      },
+      "train_validation_surface_overlap": [],
+      "training_heldout_domain_overlap": []
+    },
+    "name": "container_state_multidomain_v3_seed42",
+    "split_design": {
+      "compositional_ood": {
+        "domains": "heldout",
+        "styles": [
+          "timestamped_log",
+          "passive_inspection_report"
+        ],
+        "vocabulary": "validation"
+      },
+      "domain_ood": {
+        "domains": "heldout",
+        "styles": [
+          "narrative",
+          "observer_dialogue",
+          "field_notes",
+          "status_report",
+          "procedural_recap",
+          "question_answer_recount"
+        ],
+        "vocabulary": "train"
+      },
+      "iid": {
+        "domains": "training",
+        "styles": [
+          "narrative",
+          "observer_dialogue",
+          "field_notes",
+          "status_report",
+          "procedural_recap",
+          "question_answer_recount"
+        ],
+        "vocabulary": "train"
+      },
+      "lexical_ood": {
+        "domains": "training",
+        "styles": [
+          "narrative",
+          "observer_dialogue",
+          "field_notes",
+          "status_report",
+          "procedural_recap",
+          "question_answer_recount"
+        ],
+        "vocabulary": "validation"
+      },
+      "template_ood": {
+        "domains": "training",
+        "styles": [
+          "timestamped_log",
+          "passive_inspection_report"
+        ],
+        "vocabulary": "train"
+      }
+    },
+    "surface_classifier": {
+      "max_allowed_auc": 0.55,
+      "passed": true,
+      "roc_auc": 0.5,
+      "task": "predict counterfactual branch index from context bag-of-words"
+    },
+    "training_common_operation_counts": {
+      "0": 1600,
+      "1": 1600,
+      "2": 1600
+    },
+    "training_counterfactual_kind_counts": {
+      "add": 800,
+      "identity_move": 2400,
+      "move": 800,
+      "remove": 800
+    },
+    "training_domain_counts": {
+      "dog_belongings": 400,
+      "garden": 400,
+      "harbor": 400,
+      "kitchen": 400,
+      "library": 400,
+      "museum": 400,
+      "robotics_lab": 400,
+      "school": 400,
+      "squirrel_cache": 400,
+      "train": 400,
+      "warehouse": 400,
+      "zoo": 400
+    },
+    "training_equal_cardinality_counts": {
+      "False": 2400,
+      "True": 2400
+    },
+    "training_renderer_counts": {
+      "field_notes": 800,
+      "narrative": 800,
+      "observer_dialogue": 800,
+      "procedural_recap": 800,
+      "question_answer_recount": 800,
+      "status_report": 800
+    }
+  },
+  "design": "multi-domain paired counterfactual entity tracking",
+  "generated_at_utc": "2026-07-16T00:14:54.041810+00:00",
+  "name": "container_state_multidomain_v3_seed42",
+  "outputs": {
+    "audit_report": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/audit_report.json",
+    "catalog": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/multidomain_catalog.yaml",
+    "compositional_ood_completion_rank": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/auxiliary/compositional_ood_completion_rank.jsonl",
+    "compositional_ood_counterfactual_rank": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/auxiliary/compositional_ood_counterfactual_rank.jsonl",
+    "compositional_ood_entity_tracking": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/entity_tracking/compositional_ood.jsonl",
+    "compositional_ood_pairs": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/pairs/compositional_ood.jsonl",
+    "config": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/multidomain_config.yaml",
+    "domain_ood_completion_rank": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/auxiliary/domain_ood_completion_rank.jsonl",
+    "domain_ood_counterfactual_rank": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/auxiliary/domain_ood_counterfactual_rank.jsonl",
+    "domain_ood_entity_tracking": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/entity_tracking/domain_ood.jsonl",
+    "domain_ood_pairs": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/pairs/domain_ood.jsonl",
+    "iid_completion_rank": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/auxiliary/iid_completion_rank.jsonl",
+    "iid_counterfactual_rank": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/auxiliary/iid_counterfactual_rank.jsonl",
+    "iid_entity_tracking": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/entity_tracking/iid.jsonl",
+    "iid_pairs": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/pairs/iid.jsonl",
+    "lexical_ood_completion_rank": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/auxiliary/lexical_ood_completion_rank.jsonl",
+    "lexical_ood_counterfactual_rank": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/auxiliary/lexical_ood_counterfactual_rank.jsonl",
+    "lexical_ood_entity_tracking": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/entity_tracking/lexical_ood.jsonl",
+    "lexical_ood_pairs": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/pairs/lexical_ood.jsonl",
+    "manifest": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/manifest.json",
+    "template_ood_completion_rank": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/auxiliary/template_ood_completion_rank.jsonl",
+    "template_ood_counterfactual_rank": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/auxiliary/template_ood_counterfactual_rank.jsonl",
+    "template_ood_entity_tracking": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/entity_tracking/template_ood.jsonl",
+    "template_ood_pairs": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/pairs/template_ood.jsonl",
+    "train": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/train.txt",
+    "train_completion_rank": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/auxiliary/train_completion_rank.jsonl",
+    "train_counterfactual_rank": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/auxiliary/train_counterfactual_rank.jsonl",
+    "train_pairs": "/home/jorge/snap/babylm-baby-steps/data/container_state/container_state_multidomain_v3_seed42/pairs/train.jsonl"
+  },
+  "seed": 42,
+  "sha256": {
+    "audit_report": "0f9c94567473ffca96396267abed830999ff93f17acbe95b19b932aef44024ba",
+    "catalog": "4725159b3fe7fbec17e059475da266ff680534dff4c4489d0adb46a14f4aa772",
+    "compositional_ood_completion_rank": "e73044b0f72eacf4f75b1a137ac71a84400d7da2f0ba523738a08ee7a66e7307",
+    "compositional_ood_counterfactual_rank": "603073a59af88c7bf8fe38f7fdcfed1eeadccafa5edb96baddb72bd2ed3389c5",
+    "compositional_ood_entity_tracking": "6d4ecfd17994d77025e8e2d36c36604f618b6adc6fb11803baa22b144495f1b1",
+    "compositional_ood_pairs": "bf55e343234fba8a57da50db27779c8a848cd63674fdada393362c01802825ff",
+    "config": "acbe1e76c8264284ff678a0b68bac320c26a781b9e8197fde0495c084e5d9c0f",
+    "domain_ood_completion_rank": "c509513e769549cdc4846ed1c35515f561cab7e250d66d78fdae41c087edb636",
+    "domain_ood_counterfactual_rank": "ec6e6b6f38548f2cd7924a75bc39d9e4a3e803a23e73b88e9b3433bbdb82723a",
+    "domain_ood_entity_tracking": "9a4373e3f45997890c21a5ddbba641b8786f98597a13198c21fa43ff6f78b135",
+    "domain_ood_pairs": "4bcd3dcfc136ed89aa1d8900b13a68efcbcc68bd985c2beea91c62a9aea8e816",
+    "iid_completion_rank": "8bd7959fac3c36bcad2ee79edee046bf042cb6312dfb00ddb79ffc5b991e976f",
+    "iid_counterfactual_rank": "ecf56e9ed262a92cecb209612295538672564b8e8744b51df2f23f6d21cd8ab0",
+    "iid_entity_tracking": "c1ebe76761c928687851c400d012ea1d69473de2715d609a06d4eb0bbf4e35aa",
+    "iid_pairs": "303417b4f44a3df6846fbcd737f4191f0920279409eb1cca24722a7e0c33adfc",
+    "lexical_ood_completion_rank": "c4a48bd7e76b54d06932eca3bb024a2367f2de7b93256f5f63236ee150ea32b5",
+    "lexical_ood_counterfactual_rank": "cc4a43252e427c17ecede1280feb5cd9efe023b629798d4f4ca852171d6a3abe",
+    "lexical_ood_entity_tracking": "01bd4c34b0367d9039d4c737d36decd942bdc9c77cbdb25eeb07f465d04dbb43",
+    "lexical_ood_pairs": "d68288566d29a51c66ab0dbeec20eb82c1896f0cf91ef7dd0be544bf85b064f2",
+    "template_ood_completion_rank": "d1d1246e421fe2461fac1d60a714d63ac61b4c947503c2fafc08573546b4a82f",
+    "template_ood_counterfactual_rank": "09cb173f348a234d1ca2c17ea916c582b2306d1b1d2b56da4c03dc5006b872f7",
+    "template_ood_entity_tracking": "d017b5ac58234b834564020c8b9fde7b601cd439ea09a1fccd05abf2c229a2ed",
+    "template_ood_pairs": "31c7538a3df088800e9b4d677d6b9142dba3e632c982c4eb1d91f740a0f1ab93",
+    "train": "8a2a1a33e1498c20730a960a58243e3f415c64ab690c94ee975097f63589365d",
+    "train_completion_rank": "f4851622d04fe9e3853a31f0fb4d212f90e2964b97ed1b5faa94c3a51b2f1852",
+    "train_counterfactual_rank": "85adaa7ef738b749a69c0ee0b3f47ea82e4afb0e8a68b2067e73565e826ff900",
+    "train_pairs": "08122de103a6bc91872fae98ee6d713d19a9770628a2480e2c1be220a5400774"
+  },
+  "version": 3
+}

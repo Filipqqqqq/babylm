@@ -9,6 +9,9 @@ linguistic_repair/
 
 concept_curriculum/
   Concept-focused repairs, especially EWoK-style physical and material data.
+
+container_state/
+  Deterministic naturalized state-tracking documents and held-out diagnostics.
 ```
 
 Both branches share the same downstream workflow: generate text, audit it, mix
@@ -45,6 +48,7 @@ configs/train/
 
 data/linguistic_repair/
 data/concept_curriculum/
+data/container_state/
 data/text_mixes/
   Generated text, sidecar manifests, audit reports, and final text mixes.
 ```
@@ -94,6 +98,35 @@ Related config docs:
 ```text
 configs/concept_curriculum/physical_dynamics/README.md
 ```
+
+### Container State
+
+Use `container_state/` for small symbolic storage worlds rendered as ordinary
+narratives, inventories, cleanup summaries, and conversations. The v1
+curriculum uses three to five labeled containers, one to three objects per
+container, and zero or one state-changing operation. Its object vocabulary and
+surface templates are disjoint from the public Entity Tracking benchmark.
+
+Generate the 130k-word unique source pool and custom validation slices:
+
+```bash
+python scripts/synthetic_data_generation/container_state/generate_container_state.py \
+  --config configs/container_state/container_state_v1_seed42.yaml
+```
+
+The custom `iid`, `lexical_ood`, `template_ood`, and `two_operations` JSONL
+files are written under:
+
+```text
+data/container_state/container_state_v1_pool_seed42/validation/entity_tracking/
+```
+
+They intentionally reuse the repository's generic continuation-likelihood
+schema, but they are never included in `train.txt`.
+
+See the [container-state experiment guide](container_state/README.md) for the
+full generation, 1% mixing, fixed-tokenizer, GPT-BERT mixed-training, and
+custom-validation workflow.
 
 ## Shared Workflow
 

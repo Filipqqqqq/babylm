@@ -1,0 +1,158 @@
+version: 3
+
+# Each entry is a small, hand-authored world rather than a noun substitution.
+# `train` surfaces are used by train/IID/template-OOD. `validation` surfaces
+# are used by lexical-OOD and compositional-OOD.
+training_domains:
+  - id: zoo
+    setting: the city zoo
+    agents: [Amara, Ben, Cora, Dinesh]
+    containers:
+      train: [otter habitat, panda enclosure, lemur shelter, crane pen, tortoise yard, fox den]
+      validation: [meerkat burrow, tapir stall, ibis aviary, lynx habitat, capybara pool, badger lodge]
+    objects:
+      train: [bamboo bundle, feeding bowl, rope toy, nesting mat, water tub, mineral block, keeper brush, fruit tray, shade cloth, medicine pouch, wooden perch, enrichment ball]
+      validation: [reed bundle, grooming comb, seed hopper, scent cloth, cooling stone, hay rack, keeper glove, puzzle feeder, climbing branch, salt lick, bedding roll, transport sling]
+    verbs: {add: delivered, remove: collected, move: transferred}
+  - id: warehouse
+    setting: the north warehouse
+    agents: [Inez, Malik, Petra, Tomas]
+    containers:
+      train: [receiving bay, blue pallet, packing station, cold rack, dispatch cage, returns shelf]
+      validation: [freight alcove, amber skid, sorting bench, reserve rack, loading cage, claims shelf]
+    objects:
+      train: [valve crate, cable spool, gasket carton, lamp case, bolt tray, filter pack, hinge box, sensor tube, clamp bundle, pump housing, seal kit, bearing tin]
+      validation: [relay carton, conduit coil, washer case, nozzle pack, bracket bin, meter tube, latch box, pulley crate, fuse sleeve, rotor shell, coupling kit, spring tin]
+    verbs: {add: stocked, remove: pulled, move: rerouted}
+  - id: squirrel_cache
+    setting: the oak grove
+    agents: [Pip, Nori, Sable, Tuck]
+    containers:
+      train: [hollow stump, mossy fork, stone crevice, leaf nest, root hollow, bark pocket]
+      validation: [fallen log, fern nook, wall crack, twig drey, soil hollow, branch pocket]
+    objects:
+      train: [acorn cluster, hazelnut, pine cone, walnut, chestnut, beech nut, dried berry, seed pod, mushroom cap, corn kernel, apple chip, bark strip]
+      validation: [almond shell, pecan, fir cone, hickory nut, maple seed, rose hip, plum stone, oat cluster, crabapple slice, sunflower head, moss tuft, lichen scrap]
+    verbs: {add: cached, remove: retrieved, move: carried}
+  - id: dog_belongings
+    setting: the neighborhood dog center
+    agents: [Luna, Milo, Roxy, Scout]
+    containers:
+      train: [sleeping crate, toy basket, grooming cubby, treat cabinet, porch bed, travel carrier]
+      validation: [resting kennel, play hamper, wash locker, snack hutch, patio mat, transit cage]
+    objects:
+      train: [tennis ball, chew rope, rubber bone, plaid blanket, food bowl, red collar, grooming brush, treat pouch, rain coat, squeaky duck, paw towel, leather leash]
+      validation: [foam ring, tug strap, antler chew, fleece throw, water dish, blue harness, nail file, biscuit tin, wool sweater, plush fox, bath cloth, long lead]
+    verbs: {add: dropped, remove: fetched, move: carried}
+  - id: library
+    setting: the community library
+    agents: [Aya, Felix, Greta, Jonah]
+    containers:
+      train: [history cart, returns desk, atlas shelf, reading nook, archive trolley, repair table]
+      validation: [biography rack, intake counter, map cabinet, study alcove, records cart, mending bench]
+    objects:
+      train: [poetry volume, atlas folio, index cards, book stand, date stamp, linen marker, repair tape, catalog binder, reading lamp, story anthology, exhibit label, journal bundle]
+      validation: [essay collection, chart folder, loan slips, display cradle, ink pad, shelf flag, binding cloth, accession ledger, desk light, drama anthology, gallery card, gazette stack]
+    verbs: {add: shelved, remove: checked out, move: reshelved}
+  - id: train
+    setting: the overnight train
+    agents: [Conductor Lee, Hana, Jules, Soren]
+    containers:
+      train: [dining car locker, coach rack, sleeper cabinet, service cart, rear compartment, conductor closet]
+      validation: [cafe car cupboard, cabin shelf, berth locker, supply trolley, luggage compartment, crew cabinet]
+    objects:
+      train: [linen bundle, tea caddy, ticket roll, travel pillow, route folder, signal flag, blanket pack, cup sleeve, lantern case, menu stack, first aid tin, luggage tag]
+      validation: [towel bale, coffee box, receipt spool, neck cushion, timetable binder, warning paddle, quilt roll, glass rack, torch case, placard stack, bandage kit, baggage label]
+    verbs: {add: loaded, remove: unloaded, move: shifted}
+  - id: kitchen
+    setting: the teaching kitchen
+    agents: [Chef Emi, Kai, Marta, Rohan]
+    containers:
+      train: [prep drawer, spice rack, cooling shelf, pastry cart, utensil crock, pantry bin]
+      validation: [worktop cabinet, seasoning ledge, resting rack, baking trolley, tool jar, larder basket]
+    objects:
+      train: [whisk, rolling pin, cinnamon jar, dough scraper, oven mitt, pastry brush, flour scoop, cooling grid, piping bag, wooden spatula, recipe card, sugar tin]
+      validation: [masher, pastry wheel, paprika pot, bench knife, pot holder, glazing brush, grain measure, roasting rack, icing tube, bamboo turner, menu sheet, salt cellar]
+    verbs: {add: placed, remove: took, move: shifted}
+  - id: harbor
+    setting: the working harbor
+    agents: [Alba, Kento, Mira, Pavel]
+    containers:
+      train: [dock locker, repair shed, buoy rack, harbor cart, net bin, fuel store]
+      validation: [pier cabinet, maintenance hut, marker shelf, quay trolley, rope hamper, supply depot]
+    objects:
+      train: [mooring line, orange buoy, deck brush, flare case, net float, shackle box, tide chart, oil cloth, winch handle, radio pouch, anchor pin, glove pair]
+      validation: [tow rope, channel marker, scrub broom, beacon kit, cork float, clevis tin, current map, canvas sheet, crank bar, handset sleeve, chain hook, gauntlet pair]
+    verbs: {add: stowed, remove: issued, move: hauled}
+  - id: school
+    setting: the primary school
+    agents: [Ms. Aoki, Nia, Owen, Zayd]
+    containers:
+      train: [art cubby, science cabinet, reading basket, supply closet, music shelf, project cart]
+      validation: [craft locker, discovery hutch, story hamper, stationery cupboard, rhythm rack, activity trolley]
+    objects:
+      train: [paint palette, magnifying lens, alphabet cards, glue bottle, rhythm sticks, poster roll, clay block, specimen jar, picture book, ruler set, hand bell, felt sheet]
+      validation: [color wheel, prism lens, spelling tiles, paste pot, shaker pair, chart tube, wax slab, sample vial, rhyme booklet, compass set, chime bar, foam sheet]
+    verbs: {add: put away, remove: borrowed, move: carried}
+  - id: robotics_lab
+    setting: the robotics laboratory
+    agents: [Dr. Chen, Idris, Mei, Sol]
+    containers:
+      train: [parts cabinet, assembly bench, battery locker, sensor tray, test cart, tool chest]
+      validation: [component hutch, build table, power cupboard, detector rack, trial trolley, instrument case]
+    objects:
+      train: [servo motor, ribbon cable, wheel hub, battery cell, range sensor, control board, hex driver, gear pack, camera mount, switch module, solder spool, chassis plate]
+      validation: [stepper unit, wire harness, axle collar, power pack, light detector, logic board, torque key, sprocket set, lens bracket, relay module, flux coil, frame panel]
+    verbs: {add: installed, remove: detached, move: transferred}
+  - id: museum
+    setting: the history museum
+    agents: [Curator Ana, Basil, Noor, Yuki]
+    containers:
+      train: [textile case, coin drawer, pottery shelf, study table, archive crate, exhibit cart]
+      validation: [fabric cabinet, medal tray, ceramic rack, research bench, records chest, gallery trolley]
+    objects:
+      train: [woven sash, bronze token, clay shard, catalog card, cotton glove, seal fragment, display mount, linen pouch, photo plate, label strip, bead strand, wax tablet]
+      validation: [silk band, copper medal, glazed piece, registry slip, nitrile glove, crest chip, acrylic stand, muslin bag, glass negative, caption card, shell necklace, slate panel]
+    verbs: {add: accessioned, remove: examined, move: relocated}
+  - id: garden
+    setting: the botanical garden
+    agents: [Eli, Farah, Gwen, Hiro]
+    containers:
+      train: [seed drawer, potting bench, bulb basket, tool shed, orchid cart, compost bay]
+      validation: [grain cabinet, planting table, tuber hamper, equipment hut, fern trolley, mulch stall]
+    objects:
+      train: [bean packet, clay pot, tulip bulb, hand trowel, orchid clip, compost scoop, twine coil, plant label, watering rose, moss tray, pruning glove, soil sieve]
+      validation: [pea envelope, fiber planter, dahlia tuber, garden fork, fern tie, mulch shovel, jute spool, bed marker, hose nozzle, bark flat, work gauntlet, grit screen]
+    verbs: {add: planted, remove: gathered, move: carried}
+
+heldout_domains:
+  - id: airport_baggage
+    setting: the airport baggage hall
+    agents: [Ari, Bo, Celia, Dev]
+    containers:
+      train: [arrival belt, transfer cage, inspection table, oversize bay, claim cart, sorting chute]
+      validation: [carousel lane, routing bin, screening bench, special rack, recovery trolley, dispatch slide]
+    objects:
+      train: [navy suitcase, red duffel, stroller frame, ski tube, hat box, camera case, green backpack, sample trunk, guitar bag, parcel sack, folding chair, tool valise]
+      validation: [silver case, canvas holdall, buggy base, poster tube, round carton, lens satchel, yellow rucksack, display chest, cello cover, courier pouch, walking frame, sample attaché]
+    verbs: {add: loaded, remove: claimed, move: routed}
+  - id: aquarium
+    setting: the coastal aquarium
+    agents: [Dr. Ito, Lena, Marco, Priya]
+    containers:
+      train: [reef tank, nursery pool, quarantine basin, feeding station, transport tub, research pen]
+      validation: [coral habitat, hatchery vat, isolation tank, diet counter, transfer bath, observation enclosure]
+    objects:
+      train: [coral branch, kelp bundle, feeding ring, shell shelter, water probe, sponge block, gravel tray, air stone, algae clip, sample jar, divider screen, cleaning wand]
+      validation: [rock arch, seaweed bunch, diet hoop, ceramic cave, salinity meter, filter pad, sand pan, bubble bar, lettuce clamp, specimen vial, mesh panel, scrub rod]
+    verbs: {add: introduced, remove: retrieved, move: transferred}
+  - id: space_station
+    setting: the orbital research station
+    agents: [Commander Vale, Jin, Mara, Theo]
+    containers:
+      train: [galley locker, experiment rack, airlock bin, medical drawer, cargo module, tool cradle]
+      validation: [meal cabinet, science frame, hatch basket, clinic tray, freight pod, equipment bracket]
+    objects:
+      train: [meal pouch, sample canister, tether reel, bandage pack, water cartridge, torque wrench, sensor cube, filter sleeve, tablet mount, cable bundle, glove liner, repair patch]
+      validation: [ration bag, culture tube, safety line, dressing kit, coolant capsule, socket driver, detector block, scrubber roll, screen clamp, wire loom, suit insert, seal sheet]
+    verbs: {add: secured, remove: released, move: floated}

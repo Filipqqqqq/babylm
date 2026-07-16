@@ -50,6 +50,56 @@ synthetic corpora before a partial repeat, shuffles selected documents
 deterministically, and trims only the final combined corpus if needed to stay
 under the 10,000,000-word cap.
 
+### Entity-Tracking Multidomain v3 Result (2026-07-16)
+
+The latest entity-tracking experiment was a matched three-seed comparison
+(42, 43, and 44) between the local-text GPT-BERT mixed baseline and an LM-only
+treatment that replaced 1% of the 10M-word corpus with multidomain v3 synthetic
+state-tracking text. Both arms used the same model, 1:1 causal/MNTP objective,
+Muon optimizer, and ten-epoch training schedule. The treatment contained
+100,000 synthetic words (1,123 selected documents) and did not yet use an
+auxiliary ranking objective.
+
+Multidomain v3 fixed the main design failures of container-state v1. It has no
+empty targets or invariant answer phrase, varies vocabulary, domain, and
+rendering style, and defines separate IID, lexical-OOD, template-OOD,
+domain-OOD, and compositional-OOD evaluations. The generator audit found no
+normalized train/evaluation collisions, and a context bag-of-words classifier
+could not identify the counterfactual branch (ROC AUC 0.50). See
+`data/container_state/container_state_multidomain_v3_seed42/audit_report.json`
+for the complete audit.
+
+Final summed-likelihood five-choice scores, averaged across the three matched
+seeds, were:
+
+| Evaluation | Baseline | 1% v3 LM-only | Delta |
+| --- | ---: | ---: | ---: |
+| Custom v1 | 18.88% | 18.49% | -0.39 pp |
+| Legacy all-9,483 Entity Tracking | 21.52% | 25.74% | +4.22 pp |
+| Multidomain v3 IID | 29.21% | 24.21% | -5.00 pp |
+| Lexical OOD | 22.72% | 22.49% | -0.24 pp |
+| Template OOD | 29.85% | 23.49% | -6.36 pp |
+| Domain OOD | 40.01% | 28.42% | -11.60 pp |
+| Compositional OOD | 16.13% | 22.47% | +6.35 pp |
+
+The intervention failed its predefined initial gate. IID accuracy declined for
+all three seeds (-7.33, -6.50, and -1.17 points), while template and domain OOD
+also regressed sharply. Compositional OOD was encouraging for seeds 42 and 43
+but reversed slightly for seed 44, so it was not a stable general improvement.
+Paired counterfactual scoring showed small gains in symmetric preference on
+some splits, but side-level completion and both-sides-correct performance were
+mostly flat or worse.
+
+The +4.22-point all-9,483 score is not a reliable headline: that legacy summed
+metric includes the known `nothing`/continuation-length confound and varied
+substantially by seed. The cleaner custom result was essentially flat. The
+current conclusion is therefore that v3 successfully removed obvious surface
+shortcuts, but 1% LM-only exposure did not teach robust online state tracking.
+The gate selected `stop`, so the completion-ranking and symmetric-ranking
+auxiliary stages were not advanced. The launcher and gate calculation live in
+`scripts/sweeps/launch_entity_tracking_multidomain_v3.sh` and
+`scripts/analysis/summarize_entity_tracking_multidomain_v3.py`.
+
 ### 8.5% COMPS + Targeted QA Mix
 
 This is the current recommended strict-small GPT-BERT synthetic mix. It keeps

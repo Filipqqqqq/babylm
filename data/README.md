@@ -16,6 +16,9 @@ concept_curriculum/
   Synthetic concept-curriculum datasets, mostly for EWoK-style physical and
   material-affordance behavior.
 
+container_state/
+  Naturalized container-state training pools and held-out diagnostics.
+
 text_mixes/
   Final mixed training corpora built from BabyLM base text plus synthetic
   sources. These are the inputs to tokenization.
@@ -75,6 +78,22 @@ audit_report.json        aggregate audit summary
 manifest.json            generation settings and provenance
 train.txt                plain text used by text mixing
 ```
+
+## Container State
+
+Use `data/container_state/` for deterministic state-tracking corpora generated
+from symbolic storage worlds. The v1 source directory contains:
+
+```text
+train.txt                       naturalized pretraining documents
+documents.jsonl                 initial states, operations, final states, and text
+audit_report.json               replay, leakage, vocabulary, and distribution checks
+manifest.json                   generation settings and provenance
+validation/entity_tracking/     held-out likelihood diagnostics, never training data
+```
+
+The active 1% strict-small experiment samples exactly 100,000 unique words from
+the larger generated pool and combines them with 9,900,000 BabyLM words.
 
 Renderer checkpoint and failure folders, such as `render_checkpoints/`,
 `render_failures/`, `repair_checkpoints/`, and `repair_failures/`, are local

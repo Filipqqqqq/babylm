@@ -26,6 +26,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--run-name", help="Optional run_name filter.")
     parser.add_argument(
+        "--score-reduction",
+        choices=("sum", "mean", "both"),
+        help="Filter to one score reduction. Omit or pass both to plot all rows.",
+    )
+    parser.add_argument(
         "--x-axis",
         choices=("step", "tokens_seen", "words_seen"),
         default="step",
@@ -38,10 +43,12 @@ def main() -> None:
     args = parse_args()
     summary = resolve_path(args.summary, base_dir=ROOT)
     output_dir = resolve_path(args.output_dir, base_dir=ROOT) if args.output_dir else summary.parent
+    score_reduction = None if args.score_reduction in {None, "both"} else args.score_reduction
     plot_entity_tracking_summary(
         summary_csv=summary,
         output_dir=output_dir,
         run_name=args.run_name,
+        score_reduction=score_reduction,
         x_axis=args.x_axis,
     )
     print(f"Wrote Entity Tracking plots: {output_dir}")
