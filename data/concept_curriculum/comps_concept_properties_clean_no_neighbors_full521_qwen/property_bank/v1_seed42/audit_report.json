@@ -1,0 +1,225 @@
+{
+  "counts": {
+    "concepts": 521,
+    "extraction_prompts": 528,
+    "filtered_facts": 5715,
+    "filtered_templates": 16396,
+    "parse_errors": 26,
+    "raw_facts": 6223,
+    "raw_templates": 16398,
+    "source_paragraphs": 1574,
+    "surface_template_prompts": 520
+  },
+  "coverage": {
+    "concepts_with_min_facts": 520,
+    "concepts_with_min_facts_fraction": 0.9980806142034548,
+    "deficient_concept_count": 1,
+    "mean_filtered_facts_per_concept": 10.969289827255277,
+    "min_filtered_facts_per_concept": 0
+  },
+  "deficient_concepts": [
+    {
+      "concept": "hair",
+      "concept_id": "hair",
+      "filtered_fact_count": 0
+    }
+  ],
+  "fact_rejection_counts": {
+    "concept_leak": 40,
+    "duplicate": 9,
+    "generic_fact": 4,
+    "low_specificity": 9,
+    "missing_evidence": 1,
+    "missing_fact": 1,
+    "over_max_facts": 12,
+    "taxonomy_only": 397,
+    "unsupported_evidence": 35
+  },
+  "parse_errors": [
+    {
+      "concept": "cap",
+      "concept_id": "cap",
+      "error": "Expecting ',' delimiter: line 12 column 2 (char 358)",
+      "selection_round": "initial",
+      "stage": "extraction"
+    },
+    {
+      "concept": "hair",
+      "concept_id": "hair",
+      "error": "Expecting ',' delimiter: line 12 column 2 (char 309)",
+      "selection_round": "initial",
+      "stage": "extraction"
+    },
+    {
+      "concept": "hair",
+      "concept_id": "hair",
+      "error": "Expecting ',' delimiter: line 12 column 2 (char 316)",
+      "selection_round": "fill_in",
+      "stage": "extraction"
+    },
+    {
+      "concept": "lily",
+      "concept_id": "lily",
+      "error": "Expecting ',' delimiter: line 12 column 2 (char 321)",
+      "selection_round": "initial",
+      "stage": "extraction"
+    },
+    {
+      "concept": "ant",
+      "concept_id": "ant",
+      "error": "template response must include an items list",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "box",
+      "concept_id": "box",
+      "error": "Unterminated string starting at: line 5 column 1 (char 27)",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "buzzard",
+      "concept_id": "buzzard",
+      "error": "Expecting value: line 1638 column 2 (char 4916)",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "crossbow",
+      "concept_id": "crossbow",
+      "error": "template response must include an items list",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "eucalyptus",
+      "concept_id": "eucalyptus",
+      "error": "Unterminated string starting at: line 4 column 1 (char 23)",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "gerbil",
+      "concept_id": "gerbil",
+      "error": "Unterminated string starting at: line 3 column 3 (char 9)",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "gherkin",
+      "concept_id": "gherkin",
+      "error": "template response must include an items list",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "gin",
+      "concept_id": "gin",
+      "error": "Unterminated string starting at: line 3 column 3 (char 9)",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "grasshopper",
+      "concept_id": "grasshopper",
+      "error": "Unterminated string starting at: line 4 column 1 (char 9)",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "hyacinth",
+      "concept_id": "hyacinth",
+      "error": "Unterminated string starting at: line 5 column 1 (char 32)",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "iguana",
+      "concept_id": "iguana",
+      "error": "template response must include an items list",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "mackerel",
+      "concept_id": "mackerel",
+      "error": "Unterminated string starting at: line 3 column 3 (char 9)",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "ox",
+      "concept_id": "ox",
+      "error": "Expecting value: line 1638 column 2 (char 4916)",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "parakeet",
+      "concept_id": "parakeet",
+      "error": "Unterminated string starting at: line 3 column 3 (char 9)",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "penguin",
+      "concept_id": "penguin",
+      "error": "template response must include an items list",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "pine",
+      "concept_id": "pine",
+      "error": "template response must include an items list",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "rattle",
+      "concept_id": "rattle",
+      "error": "Unterminated string starting at: line 3 column 3 (char 9)",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "raven",
+      "concept_id": "raven",
+      "error": "Unterminated string starting at: line 1260 column 1 (char 9751)",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "rollerskate",
+      "concept_id": "rollerskate",
+      "error": "template response must include an items list",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "sledge",
+      "concept_id": "sledge",
+      "error": "Unterminated string starting at: line 3 column 3 (char 9)",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "tangerine",
+      "concept_id": "tangerine",
+      "error": "Unterminated string starting at: line 5 column 1 (char 33)",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    },
+    {
+      "concept": "toe",
+      "concept_id": "toe",
+      "error": "template response must include an items list",
+      "selection_round": "filtered_facts",
+      "stage": "templates"
+    }
+  ],
+  "template_rejection_counts": {
+    "missing_handle": 2
+  }
+}
