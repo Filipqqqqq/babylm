@@ -19,6 +19,10 @@ from babysteps.linguistic_repair.where_local_prep_frames import (
     QaWhereLocalPrepFrameResult,
     build_qa_where_local_prep_frames,
 )
+from babysteps.linguistic_repair.where_what_hardconfound_frames import (
+    QaWhereWhatHardConfoundFrameResult,
+    build_qa_wherewhat_hardconfound_frames,
+)
 from babysteps.linguistic_repair.who_person_frames import (
     QaWhoPersonFrameResult,
     build_qa_who_person_frames,
@@ -53,6 +57,7 @@ __all__ = [
     "QaRepairResult",
     "QaLocationVerbFrameResult",
     "QaWhereLocalPrepFrameResult",
+    "QaWhereWhatHardConfoundFrameResult",
     "ScenePlan",
     "TemplateQaRenderer",
     "QaWhatObjectFrameResult",
@@ -64,6 +69,7 @@ __all__ = [
     "build_qa_congruence_repair",
     "build_qa_location_verb_frames",
     "build_qa_where_local_prep_frames",
+    "build_qa_wherewhat_hardconfound_frames",
     "build_qa_what_object_frames",
     "build_qa_who_person_frames",
     "build_qa_who_common_name_frames",

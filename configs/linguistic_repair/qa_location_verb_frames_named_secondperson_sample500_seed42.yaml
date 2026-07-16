@@ -1,0 +1,67 @@
+name: qa_location_verb_frames_named_secondperson_sample500_seed42
+seed: 42
+document_count: 500
+direct_dialogue_ratio: 0.7
+named_location_ratio: 0.7
+second_person_ratio: 0.75
+second_person_full_answer_ratio: 0.6
+second_person_pronoun_weights:
+  leave: 0.65
+output_dir: data/linguistic_repair/qa_location_verb_frames_named_secondperson_sample500_seed42
+
+# Experimental: testing whether richer named locations plus BLIMP-like
+# second-person where questions help the model learn where-answer typing.
+excluded_named_locations:
+  - Canada
+  - Europe
+  - California
+
+named_locations:
+  - name: France
+    kind: country
+  - name: Germany
+    kind: country
+  - name: Spain
+    kind: country
+  - name: India
+    kind: country
+  - name: China
+    kind: country
+  - name: Japan
+    kind: country
+  - name: Mexico
+    kind: country
+  - name: Brazil
+    kind: country
+  - name: Chicago
+    kind: city
+  - name: New York
+    kind: city
+  - name: Paris
+    kind: city
+  - name: Boston
+    kind: city
+  - name: Seattle
+    kind: city
+  - name: Denver
+    kind: city
+  - name: London
+    kind: city
+  - name: Arizona
+    kind: state
+  - name: Texas
+    kind: state
+  - name: Oregon
+    kind: state
+  - name: Florida
+    kind: state
+
+verb_families:
+  - send_mail_ship_deliver
+  - go_walk_head_return
+  - travel_ride_fly
+  - drive_park
+  - find_discover_spot_notice
+  - leave_drop_hide_store
+  - carry_bring_take
+  - put_place_set

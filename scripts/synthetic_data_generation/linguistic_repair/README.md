@@ -17,6 +17,9 @@ generate_qa_congruence.py
 generate_qa_location_verb_frames.py
   Deterministic where-question verb-frame examples.
 
+generate_qa_wherewhat_hardconfound_frames.py
+  Deterministic same-event where/what hard-confound examples.
+
 generate_qa_who_person_frames.py
   Deterministic who-question person/role examples.
 

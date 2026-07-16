@@ -1,0 +1,43 @@
+experiment:
+  name: gpt_bert_linguistic_repair_dose_response_v1
+  output_root: ${BABYSTEPS_LINGUISTIC_REPAIR_EXPERIMENT_ROOT:-${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/experiments/gpt_bert_linguistic_repair_dose_response_v1}
+  base_shards_dir: ${BABYSTEPS_BABYLM2026_STRICT_SMALL_GPT_BERT_BASELINE_MIXED_SHARDS_DIR:-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_shards/babylm2026_strict_small_gpt_bert_baseline_mixed}
+  tokenizer_dir: ${BABYSTEPS_GPT_BERT_BASELINE_MIXED_TOKENIZER_DIR:-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/tokenizers/gpt_bert_baseline_mixed}
+  trust_remote_code: true
+  selection_seed: 20260714
+
+# These values match the actual GPT-BERT pretraining loader. A full treatment
+# block therefore contains 32 * 512 = 16,384 tokens. With the canonical 1,038
+# train blocks, round(1%) selects 10 blocks and round(1.5%) selects 16 blocks.
+loader:
+  batch_size: 32
+  seq_len: 512
+
+# Conditions are nested by construction: repair_1pct is a strict subset of
+# repair_1p5pct, while repair_0pct is the byte-identical local-pipeline control.
+conditions:
+  - name: repair_0pct
+    fraction: 0.0
+  - name: repair_1pct
+    fraction: 0.01
+  - name: repair_1p5pct
+    fraction: 0.015
+
+# Preserve the original 1.5% repair recipe's relative allocation. The builder
+# uses these values as weights, so the same proportions apply at 1% and 1.5%.
+synthetic_components:
+  - name: qa_congruence_repair_original_roles
+    path: data/linguistic_repair/qa_congruence_qwen3p7plus_roles_sample1000_seed42/train.txt
+    allocation_words: 50000
+  - name: qa_turntaking_pronoun_frames
+    path: data/linguistic_repair/qa_turntaking_pronoun_frames_50k_seed42/train.txt
+    allocation_words: 50000
+  - name: qa_where_destination_frames
+    path: data/linguistic_repair/qa_where_destination_frames_named_secondperson_sample500_seed42/train.txt
+    allocation_words: 15000
+  - name: qa_where_local_prep_frames
+    path: data/linguistic_repair/qa_where_local_prep_frames_sample500_seed42/train.txt
+    allocation_words: 10000
+  - name: qa_who_common_name_frames
+    path: data/linguistic_repair/qa_who_common_name_frames_sample500_seed42/train.txt
+    allocation_words: 25000
