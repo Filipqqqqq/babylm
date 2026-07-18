@@ -39,7 +39,7 @@ ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/training/
 Set `BABYSTEPS_RUNS_DIR` and `BABYSTEPS_CACHE_DIR` to move runs and generated
 caches on another machine.
 
-## GPT-BERT Synthetic Mixes
+## Constructed Datasets And GPT-BERT Mixes
 
 The current GPT-BERT synthetic-data recipes keep the same model and training
 setup: `BabyLM-community/babylm-baseline-10m-gpt-bert-mixed`, the
@@ -49,6 +49,21 @@ non-empty line as a document, uses `seed: 42` and `order_seed: 1`, repeats
 synthetic corpora before a partial repeat, shuffles selected documents
 deterministically, and trims only the final combined corpus if needed to stay
 under the 10,000,000-word cap.
+
+The constructed-data families are organized by intended capability, with source
+recipes in git and generated text, shards, and checkpoints kept outside it:
+
+| Dataset or mix | Primary target | Starting point |
+| --- | --- | --- |
+| Linguistic repair (1%) | BLIMP Supplement / QA congruence | [Nested dose-response recipe](configs/experiments/linguistic_repair_dose_response_v1/README.md) |
+| Linguistic repair (1.5%) | BLIMP Supplement / QA congruence | [Standalone text-mix config](configs/data_mixes/babylm2026_strict_small_linguistic_repair_1p5pct_seed42.yaml) |
+| Targeted QA + physical/material (5.5%) | BLIMP Supplement, EWoK | `configs/data_mixes/*replace5p5pct*` |
+| COMPS + targeted QA (8.5%) | COMPS, BLIMP Supplement, EWoK | `configs/data_mixes/*replace8p5pct*` |
+| Entity Tracking multidomain v3 | Online state tracking | `data/container_state/container_state_multidomain_v3_seed42/` |
+
+The first three are reusable training recipes below. The Entity Tracking result
+is an experiment report, kept near the end of this README so it does not get in
+the way of finding the datasets and launch commands.
 
 ### Linguistic-Repair Mixes: Nested 1% and 1.5%
 
