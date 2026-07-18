@@ -59,7 +59,7 @@ recipes in git and generated text, shards, and checkpoints kept outside it:
 | Linguistic repair (1.5%) | BLIMP Supplement / QA congruence | [Standalone text-mix config](configs/data_mixes/babylm2026_strict_small_linguistic_repair_1p5pct_seed42.yaml) |
 | Targeted QA + physical/material (5.5%) | BLIMP Supplement, EWoK | `configs/data_mixes/*replace5p5pct*` |
 | COMPS + targeted QA (8.5%) | COMPS, BLIMP Supplement, EWoK | `configs/data_mixes/*replace8p5pct*` |
-| Entity Tracking multidomain v3 | Online state tracking | `data/container_state/container_state_multidomain_v3_seed42/` |
+| Entity Tracking multidomain v3 | Online state tracking | [Experiment report](docs/entity_tracking_experiment_report.md) · [Dataset](data/container_state/container_state_multidomain_v3_seed42/) |
 
 The first three are reusable training recipes below. The Entity Tracking result
 is an experiment report, kept near the end of this README so it does not get in
@@ -112,56 +112,6 @@ bash scripts/sweeps/launch_adamuon_linguistic_repair_1pct_curriculum_gpu0.sh
 
 That launcher requires a free GPU 0 by default. Its post-hoc final benchmark
 queue is `scripts/sweeps/run_adamuon_linguistic_repair_final_benchmarks_gpu0.sh`.
-
-### Entity-Tracking Multidomain v3 Result (2026-07-16)
-
-The latest entity-tracking experiment was a matched three-seed comparison
-(42, 43, and 44) between the local-text GPT-BERT mixed baseline and an LM-only
-treatment that replaced 1% of the 10M-word corpus with multidomain v3 synthetic
-state-tracking text. Both arms used the same model, 1:1 causal/MNTP objective,
-Muon optimizer, and ten-epoch training schedule. The treatment contained
-100,000 synthetic words (1,123 selected documents) and did not yet use an
-auxiliary ranking objective.
-
-Multidomain v3 fixed the main design failures of container-state v1. It has no
-empty targets or invariant answer phrase, varies vocabulary, domain, and
-rendering style, and defines separate IID, lexical-OOD, template-OOD,
-domain-OOD, and compositional-OOD evaluations. The generator audit found no
-normalized train/evaluation collisions, and a context bag-of-words classifier
-could not identify the counterfactual branch (ROC AUC 0.50). See
-`data/container_state/container_state_multidomain_v3_seed42/audit_report.json`
-for the complete audit.
-
-Final summed-likelihood five-choice scores, averaged across the three matched
-seeds, were:
-
-| Evaluation | Baseline | 1% v3 LM-only | Delta |
-| --- | ---: | ---: | ---: |
-| Custom v1 | 18.88% | 18.49% | -0.39 pp |
-| Legacy all-9,483 Entity Tracking | 21.52% | 25.74% | +4.22 pp |
-| Multidomain v3 IID | 29.21% | 24.21% | -5.00 pp |
-| Lexical OOD | 22.72% | 22.49% | -0.24 pp |
-| Template OOD | 29.85% | 23.49% | -6.36 pp |
-| Domain OOD | 40.01% | 28.42% | -11.60 pp |
-| Compositional OOD | 16.13% | 22.47% | +6.35 pp |
-
-The intervention failed its predefined initial gate. IID accuracy declined for
-all three seeds (-7.33, -6.50, and -1.17 points), while template and domain OOD
-also regressed sharply. Compositional OOD was encouraging for seeds 42 and 43
-but reversed slightly for seed 44, so it was not a stable general improvement.
-Paired counterfactual scoring showed small gains in symmetric preference on
-some splits, but side-level completion and both-sides-correct performance were
-mostly flat or worse.
-
-The +4.22-point all-9,483 score is not a reliable headline: that legacy summed
-metric includes the known `nothing`/continuation-length confound and varied
-substantially by seed. The cleaner custom result was essentially flat. The
-current conclusion is therefore that v3 successfully removed obvious surface
-shortcuts, but 1% LM-only exposure did not teach robust online state tracking.
-The gate selected `stop`, so the completion-ranking and symmetric-ranking
-auxiliary stages were not advanced. The launcher and gate calculation live in
-`scripts/sweeps/launch_entity_tracking_multidomain_v3.sh` and
-`scripts/analysis/summarize_entity_tracking_multidomain_v3.py`.
 
 ### 8.5% COMPS + Targeted QA Mix
 
@@ -785,6 +735,21 @@ The wrapper writes raw BabyLM outputs plus parsed summaries:
 summary.json  # averages and subtask scores by checkpoint
 summary.csv   # flattened score table for plotting
 ```
+
+## Experiment Results
+
+### Entity Tracking
+
+The historical score audit, counterfactual pilots, multidomain-v3 design, and
+complete result tables are maintained in the
+[Entity Tracking experiment report](docs/entity_tracking_experiment_report.md).
+
+The latest matched three-seed result is a negative transfer finding. Replacing
+1% of the corpus with multidomain-v3 text left the clean custom score nearly
+flat (-0.39 points), reduced IID accuracy by 5.00 points, and did not produce a
+stable OOD improvement. The apparent +4.22-point legacy gain is confounded by
+the known `nothing` and continuation-length effects, so the experiment stopped
+before the ranking stages.
 
 ## Developer Checks
 
