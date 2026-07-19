@@ -50,20 +50,38 @@ synthetic corpora before a partial repeat, shuffles selected documents
 deterministically, and trims only the final combined corpus if needed to stay
 under the 10,000,000-word cap.
 
-The constructed-data families are organized by intended capability, with source
-recipes in git and generated text, shards, and checkpoints kept outside it:
+The constructed-data families are organized by intended capability. Most large
+generated artifacts stay outside git; the exact 1% linguistic-repair shards are
+the exception and are stored with Git LFS so that run can be reproduced.
+
+### Start Here: GPT-BERT 1% and 1.5% Linguistic Repair
+
+| Goal | Dataset entry point | Training entry point |
+| --- | --- | --- |
+| Reproduce the exact 1% AdamMuon curriculum run | [1% token-shard README](data/token_shards/gpt_bert_linguistic_repair_1pct_v1/README.md) | [AdamMuon config](configs/train/gpt_bert_baseline_mixed_babylm2026_strict_small_adamuon_lr0p02_aux0p006_tailavg_seed42.yaml) · [launcher](scripts/sweeps/launch_adamuon_linguistic_repair_1pct_curriculum_gpu0.sh) |
+| Train the standalone 1.5% UTF-8 mix | [1.5% text-mix recipe](configs/data_mixes/babylm2026_strict_small_linguistic_repair_1p5pct_seed42.yaml) | [tokenization config](configs/tokenization/babylm2026_strict_small_linguistic_repair_1p5pct_gpt_bert_mixed_shards.yaml) · [Muon config](configs/train/gpt_bert_mixed_babylm2026_strict_small_linguistic_repair_1p5pct_muon.yaml) |
+| Recreate the matched 0%/1%/1.5% comparison | [dose-response README](configs/experiments/linguistic_repair_dose_response_v1/README.md) | [dose-response launcher](scripts/sweeps/launch_gptbert_linguistic_repair_dose_response_tmux.sh) |
+
+For a modified GPT-BERT that keeps the original tokenizer vocabulary and
+special-token IDs, the exact 1% `.bin` shards can be reused directly; change
+the model configuration without rebuilding the data. If the modified model
+uses a different tokenizer or vocabulary, do **not** feed it those token IDs.
+Start from the UTF-8 1.5% text-mix recipe, point a copy of its tokenization
+config at the new tokenizer, build new shards, and point the training config at
+those shards. That preserves the text mixture, although it is no longer the
+byte-identical token-block intervention used by the exact 1% run.
+
+Other constructed-data families are indexed here:
 
 | Dataset or mix | Primary target | Starting point |
 | --- | --- | --- |
-| Linguistic repair (1%) | BLIMP Supplement / QA congruence | [Nested dose-response recipe](configs/experiments/linguistic_repair_dose_response_v1/README.md) |
-| Linguistic repair (1.5%) | BLIMP Supplement / QA congruence | [Standalone text-mix config](configs/data_mixes/babylm2026_strict_small_linguistic_repair_1p5pct_seed42.yaml) |
 | Targeted QA + physical/material (5.5%) | BLIMP Supplement, EWoK | `configs/data_mixes/*replace5p5pct*` |
 | COMPS + targeted QA (8.5%) | COMPS, BLIMP Supplement, EWoK | `configs/data_mixes/*replace8p5pct*` |
 | Entity Tracking multidomain v3 | Online state tracking | [Experiment report](docs/entity_tracking_experiment_report.md) · [Dataset](data/container_state/container_state_multidomain_v3_seed42/) |
 
-The first three are reusable training recipes below. The Entity Tracking result
-is an experiment report, kept near the end of this README so it does not get in
-the way of finding the datasets and launch commands.
+The Entity Tracking result is an experiment report, kept near the end of this
+README so it does not get in the way of finding the datasets and launch
+commands.
 
 ### Linguistic-Repair Mixes: Nested 1% and 1.5%
 
@@ -73,9 +91,10 @@ loader blocks and the 1.5% condition contains those same 10 blocks plus 6
 more. The untreated blocks, validation data, tokenizer, loader shape, and
 training configuration remain fixed, so the comparison isolates repair dose.
 The source recipe is
-`configs/experiments/linguistic_repair_dose_response_v1/`; generated paired
-shards and all run outputs live under `${BABYSTEPS_RUNS_DIR}/experiments/` and
-are intentionally not versioned.
+`configs/experiments/linguistic_repair_dose_response_v1/`. The exact 1% shards
+are versioned under `data/token_shards/gpt_bert_linguistic_repair_1pct_v1/`;
+the generated 0% and 1.5% paired shards and all run outputs live under
+`${BABYSTEPS_RUNS_DIR}/experiments/` and are intentionally not versioned.
 
 The established 1.5% Muon recipe is fully specified by these configs:
 
