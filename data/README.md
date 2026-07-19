@@ -23,6 +23,10 @@ text_mixes/
   Final mixed training corpora built from BabyLM base text plus synthetic
   sources. These are the inputs to tokenization.
 
+token_shards/
+  Blessed, directly reusable tokenized corpora committed only when an exact
+  training-input reproduction is more important than repository size.
+
 analysis/
   Local analysis inputs, intermediate data, model outputs, and reports.
 
@@ -126,6 +130,19 @@ It repeats metadata for every selected line and is much larger than `train.txt`.
 The plain `train.txt` plus sidecars are enough for teammates to tokenize and
 train.
 
+## Token Shards
+
+The deliberate exception to the usual cache-only policy is:
+
+```text
+data/token_shards/gpt_bert_linguistic_repair_1pct_v1/
+```
+
+It contains the byte-identical GPT-BERT shards used by the nested 1% linguistic-
+repair experiment. Binary shards are tracked with Git LFS; the accompanying
+README, manifests, hashes, and pinned tokenizer/model revision make the artifact
+portable without duplicating the already tracked human-readable repair sources.
+
 ## Analysis Data
 
 Use `data/analysis/` for local analysis corpora, word2vec inputs/outputs,
@@ -148,7 +165,7 @@ inputs unless a config or manifest explicitly points to them.
   they make an experiment reproducible.
 - Use Git LFS for large plain text artifacts that teammates need directly.
 - Do not commit token shards, checkpoints, run logs, large analysis outputs, or
-  full provenance JSONL files unless there is a deliberate reason.
+  full provenance JSONL files unless there is a deliberate reproduction reason.
 - Keep generated training runs under
   `${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}`.
 - Keep tokenizers, token shards, and other reusable caches under

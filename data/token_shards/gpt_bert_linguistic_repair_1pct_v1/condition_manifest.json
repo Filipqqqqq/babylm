@@ -1,0 +1,104 @@
+{
+  "actual_block_fraction": 0.009633911368015413,
+  "boundary_note": "TokenShardDataset uses one-token overlap between adjacent blocks. Replacement regions cover each selected block's input span; the shared boundary target remains canonical.",
+  "eligible_train_blocks": 1038,
+  "name": "repair_1pct",
+  "replacement_blocks": 10,
+  "replacement_tokens": 163840,
+  "requested_fraction": 0.01,
+  "selected_blocks": [
+    {
+      "block_index": 1,
+      "shard_name": "train_000010.bin",
+      "start_token": 16384,
+      "stride_tokens": 16384
+    },
+    {
+      "block_index": 53,
+      "shard_name": "train_000011.bin",
+      "start_token": 868352,
+      "stride_tokens": 16384
+    },
+    {
+      "block_index": 56,
+      "shard_name": "train_000012.bin",
+      "start_token": 917504,
+      "stride_tokens": 16384
+    },
+    {
+      "block_index": 16,
+      "shard_name": "train_000010.bin",
+      "start_token": 262144,
+      "stride_tokens": 16384
+    },
+    {
+      "block_index": 15,
+      "shard_name": "train_000005.bin",
+      "start_token": 245760,
+      "stride_tokens": 16384
+    },
+    {
+      "block_index": 6,
+      "shard_name": "train_000003.bin",
+      "start_token": 98304,
+      "stride_tokens": 16384
+    },
+    {
+      "block_index": 27,
+      "shard_name": "train_000004.bin",
+      "start_token": 442368,
+      "stride_tokens": 16384
+    },
+    {
+      "block_index": 12,
+      "shard_name": "train_000001.bin",
+      "start_token": 196608,
+      "stride_tokens": 16384
+    },
+    {
+      "block_index": 37,
+      "shard_name": "train_000015.bin",
+      "start_token": 606208,
+      "stride_tokens": 16384
+    },
+    {
+      "block_index": 51,
+      "shard_name": "train_000007.bin",
+      "start_token": 835584,
+      "stride_tokens": 16384
+    }
+  ],
+  "selection_seed": 20260714,
+  "shard_sha256": {
+    "train_000001.bin": "32a5bf5ffce201cc7d12ce9a41d38aed7864ab5e5c5c669cded382a31a593a74",
+    "train_000002.bin": "05a763afd112cd4823937d1d7ef5908938852946a607d279e179381d74e7137c",
+    "train_000003.bin": "28dad5c52b8e474a27ff3d3e7773051cfcad8f8e38bc10126ae5cf1960f7099d",
+    "train_000004.bin": "dc50c6b0df6db9220ca3e54d8c4f6f2aec2751478601c0f641094f2db8e5811d",
+    "train_000005.bin": "c6cc533af5e1a569b28f631b297837c4c7db415871a39ba537232173f10de020",
+    "train_000006.bin": "f17b71eb8ce4c021223783b8bae9cc6917e8b0bcdacc540f7e5ae6efd33d9620",
+    "train_000007.bin": "e9a3cbe7af24aef0e48c914b9a661690111a0ee6b44f8a2f9b5cda22cc79f780",
+    "train_000008.bin": "61338dad954fece330d94feb79b8ff407940428faf3782f9bebc61c52f8d2571",
+    "train_000009.bin": "a235825906f5f92214360c3526ce8abcdbcfada83007c944947e2c6d4f179772",
+    "train_000010.bin": "b1d494f99d30cf8675f2e616e59a7dc2e558419d1ef2f6db949d11f6f313ffb6",
+    "train_000011.bin": "5e7f5da291f39642d2bc48af614551799a6bb7b45a258eb197071905baa687e5",
+    "train_000012.bin": "821b8862a8ccd637e8658033e56deeb1b93de08a45f9aa2ffc52d9e5f0042a1c",
+    "train_000013.bin": "53054ce2a46b1d44311a92826925ec8c249142614c7eded714e9f7316c047026",
+    "train_000014.bin": "c0b4519aca27065dd4a389140105905bc660bceed274c542d3cf1ee09448a739",
+    "train_000015.bin": "99b9f0dbd1a11b09d41628321fd28fdca6b07f0b7792fc0ec451707c39c74615",
+    "train_000016.bin": "a2e4d1649cefdd6a202a0a2cee96fe6ca85498c47adc9cfca5acf31dd02ed749",
+    "train_000017.bin": "f8f04ba308a3d149f78b5e4c275fbe26f83e771308daaaadec760069505124f1",
+    "train_000018.bin": "0d12fc56b2139d579d62f4421bcb7e252d3249a6f30d86e5763219caeb7ff5b6",
+    "val_000000.bin": "6b44269878313e83733bc16bea41536e5ab18c832ca6afd8b716f28de5ffe563"
+  },
+  "stride_tokens": 16384,
+  "synthetic_component_tokens": {
+    "qa_congruence_repair_original_roles": 54637,
+    "qa_turntaking_pronoun_frames": 54584,
+    "qa_where_destination_frames": 16381,
+    "qa_where_local_prep_frames": 10941,
+    "qa_who_common_name_frames": 27297
+  },
+  "validation_sha256": {
+    "val_000000.bin": "6b44269878313e83733bc16bea41536e5ab18c832ca6afd8b716f28de5ffe563"
+  }
+}
