@@ -51,14 +51,14 @@ deterministically, and trims only the final combined corpus if needed to stay
 under the 10,000,000-word cap.
 
 The constructed-data families are organized by intended capability. Most large
-generated artifacts stay outside git; the exact 1% linguistic-repair shards are
-the exception and are stored with Git LFS so that run can be reproduced.
+generated artifacts stay outside git; the 1% linguistic-repair artifacts below
+are the exception and are stored with Git LFS for exact reuse or retokenization.
 
 ### Start Here: GPT-BERT 1% and 1.5% Linguistic Repair
 
 | Goal | Dataset entry point | Training entry point |
 | --- | --- | --- |
-| Reproduce the exact 1% AdamMuon curriculum run | [1% token-shard README](data/token_shards/gpt_bert_linguistic_repair_1pct_v1/README.md) | [AdamMuon config](configs/train/gpt_bert_baseline_mixed_babylm2026_strict_small_adamuon_lr0p02_aux0p006_tailavg_seed42.yaml) · [launcher](scripts/sweeps/launch_adamuon_linguistic_repair_1pct_curriculum_gpu0.sh) |
+| Reproduce or adapt the 1% run | [Exact token shards](data/token_shards/gpt_bert_linguistic_repair_1pct_v1/README.md) · [Comparable UTF-8 `train.txt`](data/text_mixes/babylm2026_strict_small_linguistic_repair_1pct_seed42/README.md) | [AdamMuon config](configs/train/gpt_bert_baseline_mixed_babylm2026_strict_small_adamuon_lr0p02_aux0p006_tailavg_seed42.yaml) · [launcher](scripts/sweeps/launch_adamuon_linguistic_repair_1pct_curriculum_gpu0.sh) |
 | Train the standalone 1.5% UTF-8 mix | [1.5% text-mix recipe](configs/data_mixes/babylm2026_strict_small_linguistic_repair_1p5pct_seed42.yaml) | [tokenization config](configs/tokenization/babylm2026_strict_small_linguistic_repair_1p5pct_gpt_bert_mixed_shards.yaml) · [Muon config](configs/train/gpt_bert_mixed_babylm2026_strict_small_linguistic_repair_1p5pct_muon.yaml) |
 | Recreate the matched 0%/1%/1.5% comparison | [dose-response README](configs/experiments/linguistic_repair_dose_response_v1/README.md) | [dose-response launcher](scripts/sweeps/launch_gptbert_linguistic_repair_dose_response_tmux.sh) |
 
@@ -66,10 +66,11 @@ For a modified GPT-BERT that keeps the original tokenizer vocabulary and
 special-token IDs, the exact 1% `.bin` shards can be reused directly; change
 the model configuration without rebuilding the data. If the modified model
 uses a different tokenizer or vocabulary, do **not** feed it those token IDs.
-Start from the UTF-8 1.5% text-mix recipe, point a copy of its tokenization
+Start from the comparable UTF-8 1% `train.txt`, point a copy of its tokenization
 config at the new tokenizer, build new shards, and point the training config at
-those shards. That preserves the text mixture, although it is no longer the
-byte-identical token-block intervention used by the exact 1% run.
+those shards. That preserves the repair dose and component proportions,
+although it is not the byte-identical token-block intervention used by the
+exact 1% run.
 
 Other constructed-data families are indexed here:
 
