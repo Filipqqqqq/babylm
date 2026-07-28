@@ -1,0 +1,135 @@
+run:
+  name: llama_12l896_bpe16384_babylm2026_strict_muon_liger_submission_auxlr1e4_bos_seed42
+  seed: 42
+  deterministic: true
+  output_root: ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/training
+  append_timestamp: false
+
+data:
+  format: token_shards
+  data_dir: ${BABYSTEPS_BABYLM2026_SHARDS_DIR:-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_shards/babylm2026_strict_byte_bpe_16384_bos_eos}
+  train_split: train
+  val_split: val
+  seq_len: 1024
+  max_train_blocks:
+  max_val_blocks:
+  num_workers: 0
+
+tokenizer:
+  # Same vocabulary and IDs as the training shards, with a saved TemplateProcessing
+  # rule that prepends BOS for the official zero-shot and finetuning evaluators.
+  name: ${BABYSTEPS_BABYLM2026_BOS_TOKENIZER_DIR:-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/tokenizers/babylm2026_strict_byte_bpe_16384_bos_default}
+
+model:
+  architecture: llama
+  size: 12l896
+  vocab_size: 16384
+  context_length: 1024
+  n_layer: 12
+  n_head: 14
+  n_embd: 896
+  llama_intermediate_size: 2304
+  llama_num_key_value_heads: 14
+  llama_tie_word_embeddings: true
+  rope_theta: 10000.0
+  llama_dropout: 0.1
+  use_liger_kernel: true
+
+training:
+  epochs: 10
+  # Canonical Chatty BERT run behind the scores reported in the paper:
+  # micro-batch 16 * accumulation 4 = 64 sequences/update, and
+  # 64 * 1,024 tokens = 65,536 tokens/update. The completed 10-epoch run
+  # performed 27,010 updates. The paper configuration table should report
+  # 27,010 x 65,536 rather than the batch-128 retrain's 13,510 x 131,072.
+  batch_size: 16
+  optimizer: muon_pe
+  # Muon remains 0.01; this is the selected auxiliary AdamW learning rate.
+  learning_rate: 0.0001
+  betas: [0.9, 0.95]
+  eps: 0.00000001
+  weight_decay: 0.1
+  muon_lr: 0.01
+  muon_weight_decay: 0.1
+  muon_momentum: 0.95
+  muon_ns_steps: 5
+  muon_nesterov: true
+  muon_split_qkv: true
+  muon_batch_updates: true
+  warmup_ratio: 0.03
+  gradient_accumulation_steps: 4
+  gradient_clip_norm: 1.0
+  mixed_precision: bf16
+
+logging:
+  log_every_steps: 50
+  eval_every_steps: 500
+  eval_max_batches: 20
+  profile_optimizer_steps: true
+
+progress:
+  # One complete pass through the fixed shards represents 100M challenge words.
+  # 10,804 batches * 16 * 1,024 tokens = 177,012,736 tokens per epoch.
+  words_per_token: 0.5649311019067013
+
+nextlat:
+  enabled: false
+  horizon: 1
+  lambda_next_h: 1.0
+  lambda_kl: 0.0
+  kl_mode: topk
+  kl_top_k: 256
+  kl_transition_chunk_size: 1024
+  kl_warmup_start_words: null
+  kl_warmup_end_words: null
+  detach_kl_lm_head: true
+  mlp_hidden_dim: 1024
+  mlp_layers: 3
+  detach_targets: true
+  mask_eos_bos_boundaries: true
+
+spatial_auxiliary:
+  enabled: false
+  path: ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/synthetic/spatial_relations/spatial_relations_synth_context_rank.jsonl
+  objective: context_rank
+  batch_size: 16
+  loss_weight: 0.03
+  temperature: 1.0
+  score_reduction: mean
+  every_steps: 1
+  eval_items: 300
+  eval_every_steps: 50
+  eval_batch_size: 64
+
+checkpointing:
+  save_every_epochs: 0
+  word_milestones_millions:
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+    - 10
+    - 20
+    - 30
+    - 40
+    - 50
+    - 60
+    - 70
+    - 80
+    - 90
+    - 100
+    - 200
+    - 300
+    - 400
+    - 500
+    - 600
+    - 700
+    - 800
+    - 900
+    - 1000
+  save_final: true
