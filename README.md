@@ -88,10 +88,10 @@ The wrappers run full zero-shot evaluation, SuperGLUE finetuning, milestone
 evaluation, Global-PIQA, Age-of-Acquisition, and result collation through the
 pinned [official BabyLM evaluator](external/babylm-eval/).
 
-### 2. Run a smoke test
+### 2. Quick training example (smoke test)
 
-Use a tiny causal recipe to validate model construction, Muon, logging, and
-checkpoint writing before starting a full run:
+**Start here to train a model.** This tiny causal recipe validates model
+construction, Muon, logging, and checkpoint writing before a full run:
 
 ```bash
 pip install -e ".[dev,liger]"
@@ -100,7 +100,7 @@ python scripts/train/train_causal_lm.py \
   --config configs/train/smoke/llama_tiny_bpe16384_10m_muon_liger_smoke.yaml
 ```
 
-### 3. Retrain a paper system
+### 3. Full paper-model training
 
 Full runs require the official BabyLM corpus, prepared token shards, bf16-capable
 NVIDIA GPUs, and substantial compute. By default, reusable artifacts and run
@@ -123,8 +123,8 @@ Do not substitute the 100M masked-focus LAMB example for SidBert: it is a
 different objective and optimizer. The missing standalone SidBert mapping is a
 known release-blocking documentation task rather than an implied recipe.
 
-Prepare datasets and token shards using the [data guide](data/README.md), then
-run a configured trainer:
+**Training commands.** Prepare datasets and token shards using the
+[data guide](data/README.md), then run a configured trainer:
 
 ```bash
 python scripts/train/train_hybrid_lm.py --config <gpt-bert-config.yaml>
