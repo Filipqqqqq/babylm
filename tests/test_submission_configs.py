@@ -6,18 +6,13 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MURPHYSLAW_CONFIG = (
-    ROOT
-    / "configs"
-    / "train"
-    / "gpt_bert_baseline_mixed_babylm2026_strict_small_adamuon_lr0p02_aux0p006_tailavg_seed42.yaml"
-)
-CHATTY_BERT_CONFIG = (
-    ROOT
-    / "configs"
-    / "train"
-    / "llama_12l896_bpe16384_babylm2026_strict_muon_liger_submission_auxlr1e4_bos_seed42.yaml"
-)
+TRAIN_DIR = ROOT / "configs" / "train" / "submission"
+TOKENIZATION_DIR = ROOT / "configs" / "tokenization" / "submission"
+MURPHYSLAW_CONFIG = TRAIN_DIR / "murphyslaw_strict_small.yaml"
+CHATTY_BERT_CONFIG = TRAIN_DIR / "chatty_bert_strict.yaml"
+SIDBERT_CONFIG = TRAIN_DIR / "sidbert_strict.yaml"
+STRICT_SMALL_MILESTONES = (*range(1, 11), *range(20, 101, 10))
+STRICT_MILESTONES = (*STRICT_SMALL_MILESTONES, *range(200, 1001, 100))
 
 
 def _load(path: Path) -> dict:
@@ -25,49 +20,108 @@ def _load(path: Path) -> dict:
         return yaml.safe_load(stream)
 
 
-def test_murphyslaw_submission_recipe() -> None:
+def test_murphyslaw_exact_public_recipe() -> None:
     config = _load(MURPHYSLAW_CONFIG)
+    training = config["training"]
+    checkpointing = config["checkpointing"]
 
-    assert config["model"]["architecture"] == "gpt_bert"
+    assert config["model"] == {
+        "architecture": "gpt_bert",
+        "repo": "BabyLM-community/babylm-baseline-10m-gpt-bert-mixed",
+        "context_length": 512,
+    }
     assert config["data"]["format"] == "token_shards"
+    assert config["data"]["seq_len"] == 512
     assert config["hybrid"]["causal_steps"] == 1
     assert config["hybrid"]["masked_steps"] == 1
-    assert config["training"]["optimizer"] == "adamuon"
-    assert config["training"]["muon_lr"] == 0.02
-    assert config["training"]["learning_rate"] == 0.006
-    assert config["training"]["batch_size"] == 32
-    assert config["checkpointing"]["tail_average"] == {
+    assert training["optimizer"] == "adamuon"
+    assert training["muon_lr"] == 0.02
+    assert training["learning_rate"] == 0.006
+    assert training["batch_size"] == 32
+    assert training["gradient_accumulation_steps"] == 1
+    assert training["sequence_length_curriculum"] == {
+        "enabled": True,
+        "phases": [
+            {"until_fraction": 0.60, "seq_len": 128},
+            {"until_fraction": 0.80, "seq_len": 256},
+            {"until_fraction": 1.00, "seq_len": 512},
+        ],
+    }
+    assert config["progress"]["estimate_words_per_token"] is False
+    assert config["progress"]["words_per_token"] == 0.615646119124470
+    assert tuple(checkpointing["word_milestones_millions"]) == STRICT_SMALL_MILESTONES
+    assert checkpointing["save_final"] is False
+    assert checkpointing["tail_average"] == {
         "enabled": True,
         "fraction": 0.20,
         "every_steps": 10,
-        "name": "model_tail_avg",
+        "name": "final",
     }
+    assert config["logging"]["benchmark_eval_mode"] == "final_only"
 
 
-def test_chatty_bert_submission_recipe_and_batch_accounting() -> None:
+def test_chatty_bert_exact_public_recipe_and_batch_accounting() -> None:
     config = _load(CHATTY_BERT_CONFIG)
     model = config["model"]
     training = config["training"]
 
     assert model["architecture"] == "llama"
+    assert model["vocab_size"] == 16_384
+    assert model["context_length"] == 1_024
     assert model["n_layer"] == 12
+    assert model["n_head"] == 14
     assert model["n_embd"] == 896
+    assert model["llama_intermediate_size"] == 2_304
     assert model["use_liger_kernel"] is True
     assert training["optimizer"] == "muon_pe"
     assert training["muon_lr"] == 0.01
     assert training["learning_rate"] == 0.0001
 
-    effective_batch_size = (
-        training["batch_size"] * training["gradient_accumulation_steps"]
-    )
-    tokens_per_update = effective_batch_size * config["data"]["seq_len"]
-
-    assert effective_batch_size == 64
+    effective_batch = training["batch_size"] * training["gradient_accumulation_steps"]
+    tokens_per_update = effective_batch * config["data"]["seq_len"]
+    assert effective_batch == 64
     assert tokens_per_update == 65_536
+    assert tuple(config["checkpointing"]["word_milestones_millions"]) == STRICT_MILESTONES
+    assert config["checkpointing"]["save_final"] is True
 
 
-def test_sidbert_recipe_is_still_marked_as_unresolved() -> None:
+def test_matching_public_tokenization_recipes() -> None:
+    murphyslaw = _load(TOKENIZATION_DIR / "murphyslaw_strict_small_shards.yaml")
+    chatty = _load(TOKENIZATION_DIR / "chatty_bert_strict_shards.yaml")
+
+    assert murphyslaw["dataset"]["name"] == "BabyLM-community/BabyLM-2026-Strict-Small"
+    assert murphyslaw["tokenizer"]["kind"] == "pretrained"
+    assert murphyslaw["tokenizer"]["source"] == config_repo(MURPHYSLAW_CONFIG)
+    assert chatty["dataset"]["name"] == "BabyLM-community/BabyLM-2026-Strict"
+    assert chatty["tokenizer"]["kind"] == "byte_bpe"
+    assert chatty["tokenizer"]["vocab_size"] == 16_384
+    assert chatty["tokenizer"]["bos_token"] == "<s>"
+
+
+def config_repo(path: Path) -> str:
+    return _load(path)["model"]["repo"]
+
+
+def test_sidbert_exact_recipe_is_an_explicit_release_gate() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
-    assert "| SidBert |" in readme
-    assert "Exact standalone 100M submission config still needs consolidation" in readme
+    assert not SIDBERT_CONFIG.exists()
+    assert "The original standalone 100M SidBert YAML has not yet been supplied" in readme
+    assert "does not guess or relabel another experiment" in readme
+
+
+def test_public_config_surface_is_deliberately_small() -> None:
+    yaml_paths = {
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "configs").rglob("*.yaml")
+    }
+    assert yaml_paths == {
+        "configs/eval/full_eval.yaml",
+        "configs/tokenization/submission/chatty_bert_strict_shards.yaml",
+        "configs/tokenization/submission/murphyslaw_strict_small_shards.yaml",
+        "configs/train/smoke/llama_tiny_bpe16384_10m_muon_liger_smoke.yaml",
+        "configs/train/submission/chatty_bert_strict.yaml",
+        "configs/train/submission/murphyslaw_strict_small.yaml",
+    }
+    for removed_surface in ("archive", "docs", "scripts/sweeps", "scripts/analysis"):
+        assert not (ROOT / removed_surface).exists()

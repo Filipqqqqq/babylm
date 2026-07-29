@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import torch
 from torch import nn
 
+from babysteps.data.hybrid_packing import build_training_batch_packer
 from babysteps.models import build_causal_lm_model
 from babysteps.training.hybrid_lm_loop import (
     build_special_mask,
@@ -14,6 +15,7 @@ from babysteps.training.hybrid_lm_loop import (
     set_gpt_bert_is_causal,
 )
 from babysteps.training.optimizers import build_optimizer
+from babysteps.training.objective_batching import plan_objective_microbatches
 
 
 class _TinyLlamaTokenizer:
@@ -143,3 +145,45 @@ def test_murphyslaw_style_gpt_bert_completes_causal_and_masked_updates() -> None
     assert torch.isfinite(causal_loss)
     assert torch.isfinite(masked_loss)
     assert model.model.is_causal is False
+
+
+def test_training_batch_packers_report_consumed_source_tokens() -> None:
+    input_ids = torch.arange(16).reshape(2, 8)
+    attention_mask = torch.ones_like(input_ids)
+
+    continuous = build_training_batch_packer("continuous").pack(
+        input_ids,
+        attention_mask,
+        seq_len=4,
+    )
+    wrapped = build_training_batch_packer(
+        "sid_wrapped",
+        cls_token_id=101,
+        sep_token_id=102,
+    ).pack(input_ids, attention_mask, seq_len=8)
+
+    assert continuous.input_ids.shape == (4, 4)
+    assert continuous.source_tokens == 16
+    assert wrapped.input_ids.tolist() == [
+        [101, 0, 1, 2, 3, 4, 5, 102],
+        [101, 6, 7, 8, 9, 10, 11, 102],
+    ]
+    assert wrapped.source_tokens == 12
+
+
+def test_objectives_can_cycle_per_microbatch() -> None:
+    plan = plan_objective_microbatches(
+        batch_size=8,
+        cursor=1,
+        causal_steps=1,
+        masked_steps=1,
+        granularity="microbatch",
+        micro_batch_size=2,
+    )
+
+    assert [(item.start, item.stop, item.objective) for item in plan] == [
+        (0, 2, "masked"),
+        (2, 4, "causal"),
+        (4, 6, "masked"),
+        (6, 8, "causal"),
+    ]

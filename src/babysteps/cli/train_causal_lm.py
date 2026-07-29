@@ -39,6 +39,7 @@ from babysteps.models import (
 )
 from babysteps.training.causal_lm_loop import (
     EwokContextEvalSpec,
+    normalize_benchmark_eval_mode,
     save_json_atomic,
     set_all_seeds,
     train_causal_lm,
@@ -201,9 +202,52 @@ def read_every_words(config: dict[str, Any], section_name: str) -> float | None:
     )
 
 
-def format_eval_interval(every_steps: int, every_words: float | None) -> str:
+def read_checkpoint_word_milestones(
+    config: dict[str, Any],
+) -> tuple[tuple[float, str], ...]:
+    """Read ordered BabyLM word milestones and their checkpoint names."""
+
+    raw_milestones = config.get("word_milestones_millions", ())
+    if raw_milestones is None:
+        return ()
+    if not isinstance(raw_milestones, (list, tuple)):
+        raise ValueError(
+            "checkpointing.word_milestones_millions must be a list of "
+            "positive integers."
+        )
+
+    milestones: list[tuple[float, str]] = []
+    previous: int | None = None
+    for raw_millions in raw_milestones:
+        if isinstance(raw_millions, bool) or not isinstance(raw_millions, int):
+            raise ValueError(
+                "checkpointing.word_milestones_millions must contain only "
+                "positive integers."
+            )
+        if raw_millions <= 0:
+            raise ValueError(
+                "checkpointing.word_milestones_millions must contain only "
+                "positive integers."
+            )
+        if previous is not None and raw_millions <= previous:
+            raise ValueError(
+                "checkpointing.word_milestones_millions must be strictly increasing."
+            )
+        milestones.append((float(raw_millions) * 1_000_000.0, f"chck_{raw_millions}M"))
+        previous = raw_millions
+    return tuple(milestones)
+
+
+def format_eval_interval(
+    every_steps: int,
+    every_words: float | None,
+    *,
+    benchmark_eval_mode: str = "scheduled",
+) -> str:
     """Return a compact human-readable evaluation interval."""
 
+    if benchmark_eval_mode == "final_only":
+        return "at final checkpoint only"
     pieces: list[str] = []
     if every_steps > 0:
         pieces.append(f"every {every_steps} steps")
@@ -445,7 +489,11 @@ def main() -> None:
     data_config = config["data"]
     training_config = config["training"]
     logging_config = config.get("logging", {})
+    benchmark_eval_mode = normalize_benchmark_eval_mode(
+        logging_config.get("benchmark_eval_mode", "scheduled")
+    )
     checkpoint_config = config.get("checkpointing", {})
+    checkpoint_word_milestones = read_checkpoint_word_milestones(checkpoint_config)
     if "ewok_context_sensitivity" in config:
         raise ValueError(
             "ewok_context_sensitivity has been removed from causal LM configs. "
@@ -502,16 +550,18 @@ def main() -> None:
         "entity_tracking_likelihood",
     )
     comps_every_words = read_every_words(comps_config, "comps_likelihood")
-    word_interval_requested = any(
-        value is not None
-        for value in (
-            eval_every_words,
+    benchmark_word_intervals = ()
+    if benchmark_eval_mode == "scheduled":
+        benchmark_word_intervals = (
             ewok_context_spatial_every_words,
             ewok_context_full_every_words,
             blimp_likelihood_every_words,
             entity_tracking_every_words,
             comps_every_words,
         )
+    word_interval_requested = bool(checkpoint_word_milestones) or any(
+        value is not None
+        for value in (eval_every_words, *benchmark_word_intervals)
     )
 
     benchmark_plot_x_axis = str(
@@ -587,6 +637,7 @@ def main() -> None:
         ewok_context_spatial_enabled
         and ewok_context_spatial_every_steps <= 0
         and ewok_context_spatial_every_words is None
+        and benchmark_eval_mode != "final_only"
     ):
         raise ValueError(
             "Set ewok_context_sensitivity_spatial.every_steps or "
@@ -658,7 +709,12 @@ def main() -> None:
             print(
                 "Spatial EWoK context-sensitivity diagnostics: "
                 f"{len(ewok_context_spatial_items):,} items, "
-                f"{format_eval_interval(ewok_context_spatial_every_steps, ewok_context_spatial_every_words)}, "
+                + format_eval_interval(
+                    ewok_context_spatial_every_steps,
+                    ewok_context_spatial_every_words,
+                    benchmark_eval_mode=benchmark_eval_mode,
+                )
+                + ", "
                 f"reductions={','.join(ewok_context_spatial_score_reductions)}, "
                 f"metric_name={ewok_context_spatial_metric_name}",
                 flush=True,
@@ -684,6 +740,7 @@ def main() -> None:
         ewok_context_full_enabled
         and ewok_context_full_every_steps <= 0
         and ewok_context_full_every_words is None
+        and benchmark_eval_mode != "final_only"
     ):
         raise ValueError(
             "Set ewok_context_sensitivity_full.every_steps or "
@@ -745,7 +802,12 @@ def main() -> None:
             print(
                 "Full EWoK context-sensitivity diagnostics: "
                 f"{len(ewok_context_full_items):,} items, "
-                f"{format_eval_interval(ewok_context_full_every_steps, ewok_context_full_every_words)}, "
+                + format_eval_interval(
+                    ewok_context_full_every_steps,
+                    ewok_context_full_every_words,
+                    benchmark_eval_mode=benchmark_eval_mode,
+                )
+                + ", "
                 f"reductions={','.join(ewok_context_full_score_reductions)}, "
                 f"metric_name={ewok_context_full_metric_name}",
                 flush=True,
@@ -770,6 +832,7 @@ def main() -> None:
         blimp_likelihood_enabled
         and blimp_likelihood_every_steps <= 0
         and blimp_likelihood_every_words is None
+        and benchmark_eval_mode != "final_only"
     ):
         raise ValueError(
             "Set blimp_likelihood.every_steps or blimp_likelihood.every_words "
@@ -862,6 +925,7 @@ def main() -> None:
                 + format_eval_interval(
                     blimp_likelihood_every_steps,
                     blimp_likelihood_every_words,
+                    benchmark_eval_mode=benchmark_eval_mode,
                 )
                 + ", "
                 + f"reductions={','.join(blimp_likelihood_score_reductions)}",
@@ -886,6 +950,7 @@ def main() -> None:
         entity_tracking_enabled
         and entity_tracking_every_steps <= 0
         and entity_tracking_every_words is None
+        and benchmark_eval_mode != "final_only"
     ):
         raise ValueError(
             "Set entity_tracking_likelihood.every_steps or "
@@ -926,7 +991,12 @@ def main() -> None:
             print(
                 "Entity Tracking likelihood diagnostics: "
                 f"{len(entity_tracking_items):,} items, "
-                f"{format_eval_interval(entity_tracking_every_steps, entity_tracking_every_words)}, "
+                + format_eval_interval(
+                    entity_tracking_every_steps,
+                    entity_tracking_every_words,
+                    benchmark_eval_mode=benchmark_eval_mode,
+                )
+                + ", "
                 f"reductions={','.join(entity_tracking_score_reductions)}",
                 flush=True,
             )
@@ -945,7 +1015,12 @@ def main() -> None:
             comps_every_steps > 0 or comps_every_words is not None,
         )
     )
-    if comps_enabled and comps_every_steps <= 0 and comps_every_words is None:
+    if (
+        comps_enabled
+        and comps_every_steps <= 0
+        and comps_every_words is None
+        and benchmark_eval_mode != "final_only"
+    ):
         raise ValueError(
             "Set comps_likelihood.every_steps or comps_likelihood.every_words "
             "when diagnostics are enabled."
@@ -975,7 +1050,12 @@ def main() -> None:
             print(
                 "COMPS likelihood diagnostics: "
                 f"{len(comps_items):,} items, "
-                f"{format_eval_interval(comps_every_steps, comps_every_words)}, "
+                + format_eval_interval(
+                    comps_every_steps,
+                    comps_every_words,
+                    benchmark_eval_mode=benchmark_eval_mode,
+                )
+                + ", "
                 f"reductions={','.join(comps_score_reductions)}",
                 flush=True,
             )
@@ -1161,6 +1241,7 @@ def main() -> None:
             num_workers=num_workers,
             seed=seed,
             pin_memory=torch.cuda.is_available(),
+            span_shards=bool(data_config.get("span_shards", False)),
         )
         val_loader, val_dataset = build_token_shard_loader(
             data_dir,
@@ -1173,6 +1254,7 @@ def main() -> None:
             num_workers=num_workers,
             seed=seed,
             pin_memory=torch.cuda.is_available(),
+            span_shards=bool(data_config.get("span_shards", False)),
         )
     else:
         raise ValueError(
@@ -1214,7 +1296,7 @@ def main() -> None:
 
     if words_per_token is None and word_interval_requested:
         raise ValueError(
-            "Word-count evaluation intervals require words_per_token. Set "
+            "Word-count schedules require words_per_token. Set "
             "logging.words_per_token, logging.tokens_per_word, or "
             "logging.estimate_words_per_token=true."
         )
@@ -1351,6 +1433,7 @@ def main() -> None:
         eval_max_batches=logging_config.get("eval_max_batches", 20),
         gradient_clip_norm=training_config.get("gradient_clip_norm"),
         save_every_epochs=checkpoint_config.get("save_every_epochs", 1),
+        checkpoint_word_milestones=checkpoint_word_milestones,
         save_final=bool(checkpoint_config.get("save_final", True)),
         profile_optimizer_steps=bool(logging_config.get("profile_optimizer_steps", False)),
         nextlat_dynamics=nextlat_dynamics,
@@ -1371,6 +1454,7 @@ def main() -> None:
         spatial_auxiliary_eval_batch_size=spatial_auxiliary_eval_batch_size,
         spatial_auxiliary_eval_at_start=spatial_auxiliary_eval_at_start,
         benchmark_eval_at_start=benchmark_eval_at_start,
+        benchmark_eval_mode=benchmark_eval_mode,
         extra_ewok_context_evals=extra_ewok_context_evals,
         blimp_likelihood_items=blimp_likelihood_items,
         blimp_likelihood_every_steps=blimp_likelihood_every_steps,

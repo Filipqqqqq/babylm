@@ -1,109 +1,77 @@
 # Scripts
 
-This folder contains the commands used to prepare data, train models, evaluate
-checkpoints, and analyze results. Run these commands from the repository root.
+These are the commands a new user needs to reproduce a BabySteps submission.
+Run them from the repository root.
 
-Most files here are small launchers. They read a YAML configuration—a plain-text
-recipe containing paths and settings—and call reusable Python code in
-`src/babysteps/`. If you want to change how an operation works, look in
-`src/babysteps/`; if you only want to run it, start here.
+The files in this folder are small launchers. They read YAML settings and call
+the reusable Python package in `src/babysteps/`. You normally choose a config
+here; you only need to edit `src/` when changing how training itself works.
 
-## New Here? Start With a Smoke Check
+## The usual path
 
-Install the project, then run the small deterministic CPU check:
-
-```bash
-pip install -e ".[dev]"
-python scripts/smoke_10_batch_deterministic.py --device cpu
-```
-
-This small test confirms that the basic model and training code work. It does
-not train a submission model or require the BabyLM dataset.
-
-## Folder Guide
-
-| Folder | What it contains |
-| --- | --- |
-| `data/` | Commands that prepare text, train tokenizers, and split tokenized text into manageable files called shards. |
-| `train/` | The supported GPT-BERT and causal-language-model training launchers. |
-| `eval/` | Checkpoint evaluation and focused diagnostic commands. |
-| `analysis/` | Commands that summarize results and create tables or plots. |
-| `hf/` | Helpers for uploading checkpoints to Hugging Face. |
-| `experiments/` | Builders for specific controlled experiments. |
-| `sweeps/` | Multi-run and machine-specific GPU launchers. Read each file before running it. |
-| `synthetic_data_generation/` | Commands for targeted curricula and synthetic training text. |
-
-## The Usual Workflow
-
-### 1. Prepare data
-
-Data preparation is controlled by a YAML file. For example, this command builds
-the tokenizer cache and token shards for the Strict-Small GPT-BERT baseline:
+### 1. Prepare token shards
 
 ```bash
 python scripts/data/build_token_shards.py \
-  --config configs/tokenization/babylm2026_strict_small_gpt_bert_baseline_mixed_shards.yaml
+  --config configs/tokenization/submission/murphyslaw_strict_small_shards.yaml
 ```
 
-This step downloads or reads the configured dataset and writes reusable files
-under `${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}`. See the
-[data guide](../data/README.md) for the expected inputs and outputs.
+Use `chatty_bert_strict_shards.yaml` instead for Chatty BERT. The command reads
+the official Hugging Face dataset and writes the tokenizer and binary shards to
+the external BabySteps cache. See the [data guide](../data/README.md).
 
-### 2. Train a model
+### 2. Train
 
-Use the hybrid launcher for GPT-BERT models and the causal launcher for GPT-2 or
-Llama-style models:
-
-```bash
-python scripts/train/train_hybrid_lm.py --config <gpt-bert-config.yaml>
-python scripts/train/train_causal_lm.py --config <causal-lm-config.yaml>
-```
-
-For example, the paper-facing MurphysLaw recipe starts with:
+GPT-BERT models use the hybrid launcher:
 
 ```bash
 python scripts/train/train_hybrid_lm.py \
-  --config configs/train/gpt_bert_baseline_mixed_babylm2026_strict_small_adamuon_lr0p02_aux0p006_tailavg_seed42.yaml
+  --config configs/train/submission/murphyslaw_strict_small.yaml
 ```
 
-Full paper runs require prepared token shards, a bf16-capable NVIDIA GPU, and
-substantial time. The [root README](../README.md) identifies the selected
-recipes and explains which launcher to use.
-
-### 3. Evaluate saved models
-
-Evaluation depends on the model objective and BabyLM track. Inspect the command
-first, then use `--dry-run` to see the external evaluation commands without
-executing them:
+Causal models use the causal launcher:
 
 ```bash
-python scripts/eval/eval_babylm_checkpoints.py --help
-
-python scripts/eval/eval_babylm_checkpoints.py \
-  --run-dir /path/to/training/run \
-  --dry-run
+python scripts/train/train_causal_lm.py \
+  --config configs/train/submission/chatty_bert_strict.yaml
 ```
 
-The official evaluation code is the pinned `external/babylm-eval/` submodule.
-GPT-BERT models use masked-next-token-prediction (MNTP) scoring; causal models
-use causal scoring. Check the root README before comparing scores produced by
-different evaluation methods or task sets.
+### 3. Validate and upload
 
-## Older Root-Level Commands
+```bash
+python scripts/hf/upload_babylm_submission.py \
+  --run-dir /path/to/run --repo-id USER/MODEL \
+  --track strict-small --dry-run
+```
 
-Files such as `scripts/train_causal_lm.py` and `scripts/build_token_shards.py`
-keep older commands working by forwarding them to the organized locations. New
-documentation and automation should use `scripts/train/`, `scripts/data/`, and
-the other folders above. The root-level smoke-check script is a real test, not
-one of these forwarding files.
+The uploader verifies the final model and every official milestone. It creates
+private repositories by default.
 
-## More Detailed Guides
+### 4. Evaluate
 
-- [Project overview and selected paper recipes](../README.md)
-- [Data layout and preparation](../data/README.md)
-- [Operational runbook](../docs/runbook.md)
-- [Synthetic-data workflows](synthetic_data_generation/README.md)
-- [Lexical-analysis guide](../src/babysteps/analysis/lexical/README.md)
+```bash
+bash scripts/eval/setup_babylm_eval.sh
+bash scripts/eval/eval_babylm_strict_small_submission.sh USER/MODEL
+```
 
-When adding a new command, keep the launcher small, put reusable logic in
-`src/babysteps/`, and put experiment settings in `configs/`.
+The Strict-Small wrapper defaults to MNTP for MurphysLaw. The Strict wrapper
+defaults to causal for Chatty BERT and accepts `mntp` as its third argument for
+SidBert.
+
+## What is kept here
+
+| Path | Purpose |
+| --- | --- |
+| `data/build_token_shards.py` | Prepare the public corpus, tokenizer, and shards. |
+| `train/train_hybrid_lm.py` | Train GPT-BERT with causal and masked objectives. |
+| `train/train_causal_lm.py` | Train GPT-2 or Llama-style causal models. |
+| `tokenization/prepare_submission_bos_tokenizer.py` | Add Chatty BERT's submitted BOS-by-default behavior. |
+| `tokenization/validate_submission_bos_tokenizer.py` | Compare a prepared tokenizer with a reference model. |
+| `hf/upload_babylm_submission.py` | Validate and upload all official revisions. |
+| `eval/setup_babylm_eval.sh` | Safely apply the pinned evaluator patch. |
+| `eval/eval_babylm_*_submission.sh` | Run the two official submission tracks. |
+
+Experiment launchers, sweeps, analysis programs, and synthetic-data generators
+are preserved on the
+[`jorge/research`](https://github.com/JorgeCMurillo/babylm-baby-steps/tree/jorge/research)
+branch. The [root README](../README.md) is the complete beginner workflow.

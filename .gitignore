@@ -35,6 +35,11 @@ logs/**
 wandb/
 mlruns/
 
+# Generated and research data are local caches on the submission branch.
+# The research branch preserves the versioned experimental datasets.
+data/*
+!data/README.md
+
 # Keep the empty cache directory visible in a fresh clone.
 !cache/.gitkeep
 

@@ -1,8 +1,0 @@
-name: container_state_multidomain_v3_seed42
-seed: 42
-output_dir: data/container_state/container_state_multidomain_v3_seed42
-catalog: configs/container_state/multidomain_catalog_v3.yaml
-train_pairs: 4800
-eval_pairs_per_split: 1200
-surface_classifier_max_auc: 0.55
-enforce_surface_gate: true

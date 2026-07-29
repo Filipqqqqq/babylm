@@ -188,6 +188,19 @@ def blimp_benchmark_group_scopes(benchmark_name: str) -> tuple[str, ...]:
 
 
 BENCHMARK_X_AXES = {"step", "tokens_seen", "words_seen"}
+BENCHMARK_EVAL_MODES = {"scheduled", "final_only"}
+
+
+def normalize_benchmark_eval_mode(value: Any) -> str:
+    """Normalize the zero-shot benchmark schedule mode."""
+
+    mode = str(value or "scheduled").strip().lower()
+    if mode not in BENCHMARK_EVAL_MODES:
+        raise ValueError(
+            "logging.benchmark_eval_mode must be 'scheduled' or 'final_only', "
+            f"got {value!r}."
+        )
+    return mode
 
 
 @dataclass
@@ -311,6 +324,7 @@ def train_causal_lm(
     eval_max_batches: int | None = 20,
     gradient_clip_norm: float | None = None,
     save_every_epochs: int | None = 1,
+    checkpoint_word_milestones: tuple[tuple[float, str], ...] = (),
     save_final: bool = True,
     profile_optimizer_steps: bool = False,
     nextlat_dynamics: LatentDynamicsMLP | None = None,
@@ -327,6 +341,7 @@ def train_causal_lm(
     spatial_auxiliary_eval_batch_size: int = 64,
     spatial_auxiliary_eval_at_start: bool = True,
     benchmark_eval_at_start: bool = True,
+    benchmark_eval_mode: str = "scheduled",
     extra_ewok_context_evals: list[EwokContextEvalSpec] | None = None,
     blimp_likelihood_items: dict[str, list[BlimpItem]] | None = None,
     blimp_likelihood_every_steps: int = 0,
@@ -357,6 +372,8 @@ def train_causal_lm(
 ) -> list[dict[str, Any]]:
     """Train a causal LM and return the metric history."""
 
+    benchmark_eval_mode = normalize_benchmark_eval_mode(benchmark_eval_mode)
+    scheduled_benchmark_evals = benchmark_eval_mode == "scheduled"
     if benchmark_plot_x_axis not in BENCHMARK_X_AXES:
         raise ValueError(
             "benchmark_plot_x_axis must be one of "
@@ -364,6 +381,30 @@ def train_causal_lm(
         )
     if benchmark_plot_x_axis == "words_seen" and words_per_token is None:
         raise ValueError("benchmark_plot_x_axis='words_seen' requires words_per_token.")
+    normalized_checkpoint_word_milestones: list[tuple[float, str]] = []
+    previous_checkpoint_words: float | None = None
+    for raw_words, raw_name in checkpoint_word_milestones:
+        milestone_words = float(raw_words)
+        checkpoint_name = str(raw_name).strip()
+        if milestone_words <= 0:
+            raise ValueError("Checkpoint word milestones must be positive.")
+        if (
+            previous_checkpoint_words is not None
+            and milestone_words <= previous_checkpoint_words
+        ):
+            raise ValueError("Checkpoint word milestones must be strictly increasing.")
+        if (
+            not checkpoint_name
+            or checkpoint_name in {".", ".."}
+            or Path(checkpoint_name).name != checkpoint_name
+        ):
+            raise ValueError("Checkpoint milestone names must be simple directory names.")
+        normalized_checkpoint_word_milestones.append(
+            (milestone_words, checkpoint_name)
+        )
+        previous_checkpoint_words = milestone_words
+    if normalized_checkpoint_word_milestones and words_per_token is None:
+        raise ValueError("Checkpoint word milestones require words_per_token.")
     if spatial_auxiliary_loss_weight < 0.0:
         raise ValueError("spatial_auxiliary_loss_weight must be non-negative.")
     if spatial_auxiliary_temperature <= 0.0:
@@ -446,6 +487,7 @@ def train_causal_lm(
     history: list[dict[str, Any]] = []
     global_step = 0
     cumulative_tokens_seen = 0.0
+    checkpoint_milestone_index = 0
     next_validation_words = eval_every_words
     next_ewok_context_words = {
         spec.name: spec.every_words for spec in ewok_context_eval_specs
@@ -641,6 +683,7 @@ def train_causal_lm(
         epoch: int,
         step: int,
         tokens_seen: float,
+        at_end: bool = False,
     ) -> None:
         accelerator.wait_for_everyone()
         if accelerator.is_main_process:
@@ -657,6 +700,9 @@ def train_causal_lm(
                 words_per_token=words_per_token,
                 run_name=spec.run_name,
             )
+            if at_end:
+                metadata["at_end"] = True
+                metadata["checkpoint_name"] = "final"
             for score_reduction in spec.score_reductions:
                 result = evaluate_ewok_context_sensitivity(
                     model=unwrapped_model,
@@ -765,7 +811,13 @@ def train_causal_lm(
             save_json_atomic(history, metrics_path)
         accelerator.wait_for_everyone()
 
-    def run_blimp_likelihood_eval(*, epoch: int, step: int, tokens_seen: float) -> None:
+    def run_blimp_likelihood_eval(
+        *,
+        epoch: int,
+        step: int,
+        tokens_seen: float,
+        at_end: bool = False,
+    ) -> None:
         nonlocal blimp_eval_count
 
         if blimp_likelihood_items is None:
@@ -780,6 +832,9 @@ def train_causal_lm(
                 words_per_token=words_per_token,
                 run_name=blimp_likelihood_run_name,
             )
+            if at_end:
+                metadata["at_end"] = True
+                metadata["checkpoint_name"] = "final"
 
             summary_csvs: dict[str, Path] = {}
             for benchmark_name, items in blimp_likelihood_items.items():
@@ -863,7 +918,13 @@ def train_causal_lm(
             save_json_atomic(history, metrics_path)
         accelerator.wait_for_everyone()
 
-    def run_entity_tracking_eval(*, epoch: int, step: int, tokens_seen: float) -> None:
+    def run_entity_tracking_eval(
+        *,
+        epoch: int,
+        step: int,
+        tokens_seen: float,
+        at_end: bool = False,
+    ) -> None:
         nonlocal entity_tracking_eval_count
 
         if entity_tracking_items is None:
@@ -878,6 +939,9 @@ def train_causal_lm(
                 words_per_token=words_per_token,
                 run_name=entity_tracking_run_name,
             )
+            if at_end:
+                metadata["at_end"] = True
+                metadata["checkpoint_name"] = "final"
             for score_reduction in entity_tracking_score_reductions:
                 result = evaluate_entity_tracking_likelihood(
                     model=unwrapped_model,
@@ -938,7 +1002,13 @@ def train_causal_lm(
             save_json_atomic(history, metrics_path)
         accelerator.wait_for_everyone()
 
-    def run_comps_eval(*, epoch: int, step: int, tokens_seen: float) -> None:
+    def run_comps_eval(
+        *,
+        epoch: int,
+        step: int,
+        tokens_seen: float,
+        at_end: bool = False,
+    ) -> None:
         nonlocal comps_eval_count
 
         if comps_items is None:
@@ -953,6 +1023,9 @@ def train_causal_lm(
                 words_per_token=words_per_token,
                 run_name=comps_run_name,
             )
+            if at_end:
+                metadata["at_end"] = True
+                metadata["checkpoint_name"] = "final"
             for score_reduction in comps_score_reductions:
                 result = evaluate_comps_likelihood(
                     model=unwrapped_model,
@@ -1014,7 +1087,7 @@ def train_causal_lm(
             save_json_atomic(history, metrics_path)
         accelerator.wait_for_everyone()
 
-    if benchmark_eval_at_start:
+    if scheduled_benchmark_evals and benchmark_eval_at_start:
         if spatial_auxiliary_eval_at_start:
             run_spatial_auxiliary_eval(epoch=0, step=0, tokens_seen=0.0)
         for spec in ewok_context_eval_specs:
@@ -1289,6 +1362,44 @@ def train_causal_lm(
                 if words_per_token is not None
                 else None
             )
+            if accelerator.sync_gradients and current_words_seen is not None:
+                while checkpoint_milestone_index < len(
+                    normalized_checkpoint_word_milestones
+                ):
+                    milestone_words, checkpoint_name = (
+                        normalized_checkpoint_word_milestones[
+                            checkpoint_milestone_index
+                        ]
+                    )
+                    if current_words_seen < milestone_words:
+                        break
+                    save_hf_checkpoint(
+                        model,
+                        tokenizer,
+                        accelerator,
+                        output_dir,
+                        name=checkpoint_name,
+                        nextlat_dynamics=nextlat_dynamics,
+                    )
+                    accelerator.wait_for_everyone()
+                    if accelerator.is_main_process:
+                        checkpoint_record = {
+                            "type": "checkpoint",
+                            "epoch": epoch,
+                            "step": global_step,
+                            "tokens_seen": int(cumulative_tokens_seen),
+                            "words_seen": current_words_seen,
+                            "milestone_words": milestone_words,
+                            "checkpoint_name": checkpoint_name,
+                        }
+                        history.append(checkpoint_record)
+                        print(
+                            f"[step {global_step:06d}] saved {checkpoint_name} "
+                            f"at {current_words_seen:,.0f} words",
+                            flush=True,
+                        )
+                        save_json_atomic(history, metrics_path)
+                    checkpoint_milestone_index += 1
             epoch_loss_sum += loss_sum_value
             epoch_total_loss_sum += total_loss_sum_value
             epoch_tokens += token_count_value
@@ -1602,7 +1713,8 @@ def train_causal_lm(
                     )
                 )
                 should_ewok_eval = (
-                    accelerator.sync_gradients
+                    scheduled_benchmark_evals
+                    and accelerator.sync_gradients
                     and (
                         (
                             spec.every_steps > 0
@@ -1633,7 +1745,8 @@ def train_causal_lm(
                 )
             )
             should_blimp_eval = (
-                blimp_likelihood_items is not None
+                scheduled_benchmark_evals
+                and blimp_likelihood_items is not None
                 and accelerator.sync_gradients
                 and (
                     (
@@ -1664,7 +1777,8 @@ def train_causal_lm(
                 )
             )
             should_entity_tracking_eval = (
-                entity_tracking_items is not None
+                scheduled_benchmark_evals
+                and entity_tracking_items is not None
                 and accelerator.sync_gradients
                 and (
                     (
@@ -1695,7 +1809,8 @@ def train_causal_lm(
                 )
             )
             should_comps_eval = (
-                comps_items is not None
+                scheduled_benchmark_evals
+                and comps_items is not None
                 and accelerator.sync_gradients
                 and (
                     (
@@ -1819,6 +1934,34 @@ def train_causal_lm(
             output_dir,
             name="final",
             nextlat_dynamics=nextlat_dynamics,
+        )
+
+    if benchmark_eval_mode == "final_only":
+        for spec in ewok_context_eval_specs:
+            run_ewok_context_eval(
+                spec,
+                epoch=epochs,
+                step=global_step,
+                tokens_seen=cumulative_tokens_seen,
+                at_end=True,
+            )
+        run_blimp_likelihood_eval(
+            epoch=epochs,
+            step=global_step,
+            tokens_seen=cumulative_tokens_seen,
+            at_end=True,
+        )
+        run_entity_tracking_eval(
+            epoch=epochs,
+            step=global_step,
+            tokens_seen=cumulative_tokens_seen,
+            at_end=True,
+        )
+        run_comps_eval(
+            epoch=epochs,
+            step=global_step,
+            tokens_seen=cumulative_tokens_seen,
+            at_end=True,
         )
 
     accelerator.wait_for_everyone()

@@ -1,0 +1,113 @@
+run:
+  name: murphyslaw_strict_small_submission_seed42
+  seed: 42
+  deterministic: false
+  output_root: ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/training
+  # Stable path so the uploader can find final and chck_<N>M directories.
+  append_timestamp: false
+
+data:
+  format: token_shards
+  data_dir: ${BABYSTEPS_BABYLM2026_STRICT_SMALL_GPT_BERT_BASELINE_MIXED_SHARDS_DIR:-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_shards/babylm2026_strict_small_gpt_bert_baseline_mixed}
+  train_split: train
+  val_split: val
+  seq_len: 512
+  max_train_blocks:
+  max_val_blocks:
+  num_workers: 0
+
+tokenizer:
+  name: ${BABYSTEPS_GPT_BERT_BASELINE_MIXED_TOKENIZER_DIR:-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/tokenizers/gpt_bert_baseline_mixed}
+  trust_remote_code: true
+
+model:
+  architecture: gpt_bert
+  repo: BabyLM-community/babylm-baseline-10m-gpt-bert-mixed
+  context_length: 512
+
+hybrid:
+  causal_steps: 1
+  masked_steps: 1
+  mask_start: 0.30
+  mask_end: 0.15
+  random_ratio: 0.10
+  keep_ratio: 0.10
+  z_loss: 0.0001
+
+progress:
+  benchmark_plot_x_axis: words_seen
+  estimate_words_per_token: false
+  # 9,914 updates * 16,384 tokens/update correspond to 100M challenge words.
+  words_per_token: 0.615646119124470
+
+training:
+  epochs: 10
+  batch_size: 32
+  optimizer: adamuon
+  # Auxiliary AdamW path for embeddings, the LM head, norms, and biases.
+  learning_rate: 0.006
+  betas: [0.9, 0.98]
+  eps: 0.00000001
+  weight_decay: 0.1
+  muon_lr: 0.02
+  muon_weight_decay: 0.1
+  muon_momentum: 0.95
+  muon_ns_steps: 5
+  muon_nesterov: true
+  muon_split_qkv: false
+  muon_batch_updates: false
+  adamuon_beta2: 0.95
+  adamuon_eps: 0.00000001
+  warmup_ratio: 0.016
+  gradient_accumulation_steps: 1
+  gradient_clip_norm: 2.0
+  mixed_precision: bf16
+  # Match Sid's 60%/20%/20% 128 -> 256 -> 512 token curriculum while
+  # preserving 16,384 input tokens per optimizer update.
+  sequence_length_curriculum:
+    enabled: true
+    phases:
+      - until_fraction: 0.60
+        seq_len: 128
+      - until_fraction: 0.80
+        seq_len: 256
+      - until_fraction: 1.00
+        seq_len: 512
+
+logging:
+  log_every_steps: 50
+  eval_every_steps: 0
+  eval_at_end: true
+  eval_max_batches:
+  benchmark_eval_at_start: false
+  benchmark_eval_mode: final_only
+
+checkpointing:
+  save_every_epochs: 0
+  word_milestones_millions:
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+    - 10
+    - 20
+    - 30
+    - 40
+    - 50
+    - 60
+    - 70
+    - 80
+    - 90
+    - 100
+  # Publish the final-20% weight average as the Hub main revision.
+  save_final: false
+  tail_average:
+    enabled: true
+    fraction: 0.20
+    every_steps: 10
+    name: final

@@ -26,15 +26,28 @@ from babysteps.analysis.loss_dynamics import DEFAULT_LOSS_KEYS
 from babysteps.analysis.loss_dynamics import write_training_loss_plots
 from babysteps.evaluation import ewok_context_sensitivity
 from babysteps.evaluation import mntp_likelihood
+from babysteps.data.hybrid_packing import (
+    ContinuousBatchPacker,
+    TrainingBatchPacker,
+)
 from babysteps.models.causal_lm import DEFAULT_GPT_BERT_REPO
 from babysteps.training.branch_scoring import BranchScoreReduction
-from babysteps.training.causal_lm_loop import save_json_atomic
+from babysteps.training.causal_lm_loop import (
+    normalize_benchmark_eval_mode,
+    save_json_atomic,
+)
 from babysteps.training.nextlat import (
     LatentDynamicsMLP,
     NextLatConfig,
     NextLatLossResult,
     compute_nextlat_loss,
     nextlat_kl_weight,
+)
+from babysteps.training.objective_batching import (
+    normalize_objective_cycle_start,
+    normalize_objective_granularity,
+    objective_for_step,
+    plan_objective_microbatches,
 )
 from babysteps.training.spatial_auxiliary import (
     SpatialAuxiliaryExample,
@@ -207,14 +220,21 @@ def objective_schedule_from_config(hybrid_config: dict[str, Any]) -> tuple[int, 
     return causal_steps, masked_steps
 
 
-def objective_for(global_micro_step: int, causal_steps: int, masked_steps: int) -> str:
+def objective_for(
+    global_micro_step: int,
+    causal_steps: int,
+    masked_steps: int,
+    *,
+    cycle_start: str = "causal",
+) -> str:
     """Return the objective for a microstep within a causal/MNTP cycle."""
 
-    period = int(causal_steps) + int(masked_steps)
-    if period <= 0:
-        raise ValueError("causal_steps + masked_steps must be positive.")
-    phase = int(global_micro_step) % period
-    return "causal" if phase < int(causal_steps) else "masked"
+    return objective_for_step(
+        global_micro_step,
+        causal_steps=causal_steps,
+        masked_steps=masked_steps,
+        cycle_start=cycle_start,
+    )
 
 
 def sequence_length_schedule_from_config(
@@ -303,20 +323,12 @@ def reshape_training_batch(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Reshape one contiguous training batch without changing its token budget."""
 
-    if input_ids.ndim != 2 or attention_mask.shape != input_ids.shape:
-        raise ValueError("Training input_ids and attention_mask must be matching 2D tensors.")
-    if int(seq_len) <= 0:
-        raise ValueError("seq_len must be positive.")
-    token_count = int(input_ids.numel())
-    if token_count % int(seq_len):
-        raise ValueError(
-            f"Training batch has {token_count} tokens, not divisible by seq_len={seq_len}."
-        )
-    batch_size = token_count // int(seq_len)
-    return (
-        input_ids.reshape(batch_size, int(seq_len)),
-        attention_mask.reshape(batch_size, int(seq_len)),
+    packed = ContinuousBatchPacker().pack(
+        input_ids,
+        attention_mask,
+        seq_len=seq_len,
     )
+    return packed.input_ids, packed.attention_mask
 
 
 def mask_ratio_for_step(global_update_step: int, total_update_steps: int, start: float, end: float) -> float:
@@ -415,6 +427,7 @@ def evaluate_hybrid_lm_loss(
     hybrid_config: dict[str, Any],
     vocab_size: int,
     max_batches: int | None = None,
+    batch_packer: TrainingBatchPacker | None = None,
 ) -> dict[str, float]:
     """Evaluate causal CE and fixed-ratio MNTP CE separately."""
 
@@ -430,8 +443,16 @@ def evaluate_hybrid_lm_loss(
     mntp_tokens = torch.tensor(0.0, device=accelerator.device)
     gen = make_torch_generator(accelerator.device, int(hybrid_config.get("validation_seed", 1234)))
     batches = dataloader if max_batches is None else islice(dataloader, int(max_batches))
+    batch_packer = batch_packer or ContinuousBatchPacker()
 
     for input_ids, _labels, _loss_mask, attention_mask in batches:
+        packed_batch = batch_packer.pack(
+            input_ids,
+            attention_mask,
+            seq_len=int(input_ids.shape[-1]),
+        )
+        input_ids = packed_batch.input_ids
+        attention_mask = packed_batch.attention_mask
         with accelerator.autocast():
             set_gpt_bert_is_causal(model, True)
             causal_input_ids, causal_labels = make_causal_batch(input_ids)
@@ -703,15 +724,19 @@ def train_hybrid_lm(
     seed: int = 42,
     log_every_steps: int = 50,
     eval_every_steps: int = 500,
+    eval_at_end: bool = False,
     eval_max_batches: int | None = 20,
     gradient_clip_norm: float | None = None,
     save_every_epochs: int | None = 1,
+    checkpoint_word_milestones: tuple[tuple[float, str], ...] = (),
     save_final: bool = True,
     tail_average_fraction: float = 0.0,
     tail_average_every_steps: int = 10,
     tail_average_name: str = "model_tail_avg",
     sequence_length_schedule: SequenceLengthSchedule = (),
+    training_batch_packer: TrainingBatchPacker | None = None,
     benchmark_eval_at_start: bool = True,
+    benchmark_eval_mode: str = "scheduled",
     nextlat_dynamics: LatentDynamicsMLP | None = None,
     nextlat_config: NextLatConfig | None = None,
     nextlat_bos_token_id: int | None = None,
@@ -768,19 +793,28 @@ def train_hybrid_lm(
 ) -> list[dict[str, Any]]:
     """Train GPT-BERT with a configurable CLM/MNTP hybrid objective."""
 
+    benchmark_eval_mode = normalize_benchmark_eval_mode(benchmark_eval_mode)
+    scheduled_benchmark_evals = benchmark_eval_mode == "scheduled"
+    training_batch_packer = training_batch_packer or ContinuousBatchPacker()
     if benchmark_plot_x_axis not in BENCHMARK_X_AXES:
         raise ValueError(
             "benchmark_plot_x_axis must be one of "
             f"{sorted(BENCHMARK_X_AXES)}, got {benchmark_plot_x_axis!r}."
         )
     ewok_context_word_interval = (
-        ewok_context_items is not None and ewok_context_every_words is not None
+        scheduled_benchmark_evals
+        and ewok_context_items is not None
+        and ewok_context_every_words is not None
     )
     ewok_mntp_word_interval = (
-        ewok_mntp_items is not None and ewok_mntp_every_words is not None
+        scheduled_benchmark_evals
+        and ewok_mntp_items is not None
+        and ewok_mntp_every_words is not None
     )
     mntp_likelihood_word_interval = (
-        bool(mntp_likelihood_items) and mntp_likelihood_every_words is not None
+        scheduled_benchmark_evals
+        and bool(mntp_likelihood_items)
+        and mntp_likelihood_every_words is not None
     )
     active_ewok_context_plot = ewok_context_items is not None and ewok_context_plot
     active_ewok_mntp_plot = ewok_mntp_items is not None and ewok_mntp_plot
@@ -863,6 +897,30 @@ def train_hybrid_lm(
         raise ValueError("tail_average_every_steps must be positive when enabled.")
     if tail_average_fraction > 0.0 and not str(tail_average_name).strip():
         raise ValueError("tail_average_name must not be empty when enabled.")
+    normalized_checkpoint_word_milestones: list[tuple[float, str]] = []
+    previous_checkpoint_words: float | None = None
+    for raw_words, raw_name in checkpoint_word_milestones:
+        milestone_words = float(raw_words)
+        checkpoint_name = str(raw_name).strip()
+        if milestone_words <= 0:
+            raise ValueError("Checkpoint word milestones must be positive.")
+        if (
+            previous_checkpoint_words is not None
+            and milestone_words <= previous_checkpoint_words
+        ):
+            raise ValueError("Checkpoint word milestones must be strictly increasing.")
+        if (
+            not checkpoint_name
+            or checkpoint_name in {".", ".."}
+            or Path(checkpoint_name).name != checkpoint_name
+        ):
+            raise ValueError("Checkpoint milestone names must be simple directory names.")
+        normalized_checkpoint_word_milestones.append(
+            (milestone_words, checkpoint_name)
+        )
+        previous_checkpoint_words = milestone_words
+    if normalized_checkpoint_word_milestones and words_per_token is None:
+        raise ValueError("Checkpoint word milestones require words_per_token.")
 
     output_dir = Path(output_dir)
     metrics_path = output_dir / "metrics_history.json"
@@ -886,12 +944,15 @@ def train_hybrid_lm(
     global_causal_update_step = 0
     global_update_step = 0
     cumulative_tokens_seen = 0.0
+    cumulative_source_tokens_seen = 0.0
+    checkpoint_milestone_index = 0
     next_ewok_context_words = ewok_context_every_words
     next_ewok_mntp_words = ewok_mntp_every_words
     next_mntp_likelihood_words = mntp_likelihood_every_words
     ewok_context_eval_count = 0
     ewok_mntp_eval_count = 0
     mntp_likelihood_eval_count = 0
+    final_benchmark_checkpoint_name = "final"
     vocab_size = int(getattr(accelerator.unwrap_model(model).config, "vocab_size", len(tokenizer)))
     mask_id = tokenizer.mask_token_id
     if mask_id is None:
@@ -928,6 +989,33 @@ def train_hybrid_lm(
 
     special_ids = special_token_ids(tokenizer)
     causal_steps, masked_steps = objective_schedule_from_config(hybrid_config)
+    objective_granularity = normalize_objective_granularity(
+        hybrid_config.get("objective_granularity", "update")
+    )
+    objective_cycle_start = normalize_objective_cycle_start(
+        hybrid_config.get("objective_cycle_start", "causal")
+    )
+    raw_objective_micro_batch_size = hybrid_config.get("objective_micro_batch_size")
+    objective_micro_batch_size = (
+        None
+        if raw_objective_micro_batch_size is None
+        else int(raw_objective_micro_batch_size)
+    )
+    if objective_granularity == "microbatch":
+        if objective_micro_batch_size is None or objective_micro_batch_size <= 0:
+            raise ValueError(
+                "Set hybrid.objective_micro_batch_size to a positive per-device "
+                "sequence count for microbatch objective granularity."
+            )
+        if nextlat_enabled:
+            raise ValueError(
+                "Microbatch objective granularity is not yet compatible with NextLat."
+            )
+        if spatial_auxiliary_sampler is not None:
+            raise ValueError(
+                "Microbatch objective granularity is not yet compatible with the "
+                "spatial auxiliary loss."
+            )
     mask_start = float(hybrid_config.get("mask_start", 0.30))
     mask_end = float(hybrid_config.get("mask_end", 0.15))
     random_ratio = float(hybrid_config.get("random_ratio", 0.10))
@@ -937,6 +1025,18 @@ def train_hybrid_lm(
 
     if accelerator.is_main_process:
         output_dir.mkdir(parents=True, exist_ok=True)
+        print(
+            "Hybrid batching: "
+            f"packing={training_batch_packer.mode} "
+            f"objective_granularity={objective_granularity} "
+            f"objective_cycle_start={objective_cycle_start}"
+            + (
+                f" objective_micro_batch_size={objective_micro_batch_size}"
+                if objective_granularity == "microbatch"
+                else ""
+            ),
+            flush=True,
+        )
 
     tail_averager = None
     if tail_average_fraction > 0.0 and accelerator.is_main_process:
@@ -976,7 +1076,13 @@ def train_hybrid_lm(
         )
         return overall_summary_row(result.summary_rows)
 
-    def run_ewok_context_eval(*, epoch: int, step: int, tokens_seen: float) -> None:
+    def run_ewok_context_eval(
+        *,
+        epoch: int,
+        step: int,
+        tokens_seen: float,
+        at_end: bool = False,
+    ) -> None:
         nonlocal ewok_context_eval_count
 
         if ewok_context_items is None:
@@ -992,6 +1098,9 @@ def train_hybrid_lm(
                 words_per_token=words_per_token,
                 run_name=ewok_context_run_name,
             )
+            if at_end:
+                metadata["at_end"] = True
+                metadata["checkpoint_name"] = final_benchmark_checkpoint_name
             for score_reduction in ewok_context_score_reductions:
                 result = ewok_context_sensitivity.evaluate_ewok_context_sensitivity(
                     model=unwrapped_model,
@@ -1070,7 +1179,13 @@ def train_hybrid_lm(
             save_json_atomic(history, metrics_path)
         accelerator.wait_for_everyone()
 
-    def run_ewok_mntp_eval(*, epoch: int, step: int, tokens_seen: float) -> None:
+    def run_ewok_mntp_eval(
+        *,
+        epoch: int,
+        step: int,
+        tokens_seen: float,
+        at_end: bool = False,
+    ) -> None:
         nonlocal ewok_mntp_eval_count
 
         if ewok_mntp_items is None:
@@ -1086,6 +1201,9 @@ def train_hybrid_lm(
                 words_per_token=words_per_token,
                 run_name=ewok_mntp_run_name,
             )
+            if at_end:
+                metadata["at_end"] = True
+                metadata["checkpoint_name"] = final_benchmark_checkpoint_name
             for score_reduction in ewok_mntp_score_reductions:
                 result = mntp_likelihood.evaluate_ewok_mntp_context_sensitivity(
                     model=unwrapped_model,
@@ -1139,7 +1257,13 @@ def train_hybrid_lm(
             save_json_atomic(history, metrics_path)
         accelerator.wait_for_everyone()
 
-    def run_mntp_likelihood_eval(*, epoch: int, step: int, tokens_seen: float) -> None:
+    def run_mntp_likelihood_eval(
+        *,
+        epoch: int,
+        step: int,
+        tokens_seen: float,
+        at_end: bool = False,
+    ) -> None:
         nonlocal mntp_likelihood_eval_count
 
         if not mntp_likelihood_items:
@@ -1155,6 +1279,9 @@ def train_hybrid_lm(
                 words_per_token=words_per_token,
                 run_name=mntp_likelihood_run_name,
             )
+            if at_end:
+                metadata["at_end"] = True
+                metadata["checkpoint_name"] = final_benchmark_checkpoint_name
             summary_paths: dict[str, Path] = {}
             for benchmark_name, items in mntp_likelihood_items.items():
                 benchmark_output_dir = benchmark_dir / benchmark_name
@@ -1296,7 +1423,7 @@ def train_hybrid_lm(
             save_json_atomic(history, metrics_path)
         accelerator.wait_for_everyone()
 
-    if benchmark_eval_at_start:
+    if scheduled_benchmark_evals and benchmark_eval_at_start:
         run_ewok_context_eval(epoch=0, step=0, tokens_seen=0.0)
         run_ewok_mntp_eval(epoch=0, step=0, tokens_seen=0.0)
         run_mntp_likelihood_eval(epoch=0, step=0, tokens_seen=0.0)
@@ -1314,6 +1441,8 @@ def train_hybrid_lm(
         epoch_mntp_loss_sum = 0.0
         epoch_mntp_ce_sum = 0.0
         epoch_mntp_tokens = 0.0
+        epoch_causal_microsteps = 0
+        epoch_masked_microsteps = 0
         epoch_nextlat_loss_sum = 0.0
         epoch_nextlat_transition_count = 0.0
         epoch_nextlat_persistence_loss_sum = 0.0
@@ -1360,19 +1489,29 @@ def train_hybrid_lm(
                 sequence_length_schedule,
                 default_seq_len=int(input_ids.shape[-1]),
             )
-            input_ids, attention_mask = reshape_training_batch(
+            packed_batch = training_batch_packer.pack(
                 input_ids,
                 attention_mask,
                 seq_len=active_sequence_length,
             )
-            objective = objective_for(global_micro_step, causal_steps, masked_steps)
+            input_ids = packed_batch.input_ids
+            attention_mask = packed_batch.attention_mask
+            objective_plan = plan_objective_microbatches(
+                batch_size=int(input_ids.shape[0]),
+                cursor=global_micro_step,
+                causal_steps=causal_steps,
+                masked_steps=masked_steps,
+                granularity=objective_granularity,
+                micro_batch_size=objective_micro_batch_size,
+                cycle_start=objective_cycle_start,
+            )
             mask_ratio = mask_ratio_for_step(
                 global_update_step,
                 total_update_steps,
                 mask_start,
                 mask_end,
             )
-            global_micro_step += 1
+            global_micro_step += len(objective_plan)
 
             spatial_auxiliary_loss = None
             nextlat_result: NextLatLossResult | None = None
@@ -1391,74 +1530,117 @@ def train_hybrid_lm(
                 if nextlat_dynamics is not None
                 else (model,)
             )
+            zero = torch.zeros((), device=accelerator.device, dtype=torch.float32)
+            loss_sum = zero.clone()
+            ce_sum = zero.clone()
+            target_tokens_float = zero.clone()
+            objective_loss_sums = {
+                "causal": zero.clone(),
+                "masked": zero.clone(),
+            }
+            objective_ce_sums = {
+                "causal": zero.clone(),
+                "masked": zero.clone(),
+            }
+            objective_target_tokens = {
+                "causal": zero.clone(),
+                "masked": zero.clone(),
+            }
+            objective_microsteps = {"causal": 0, "masked": 0}
+            display_loss = 0.0
             with accelerator.accumulate(*accumulate_models):
-                with accelerator.autocast():
-                    if objective == "masked":
-                        special_mask = build_special_mask(input_ids, special_ids)
-                        batch_input_ids, labels = make_masked_batch(
-                            input_ids,
-                            special_mask,
-                            mask_ratio,
-                            vocab_size,
-                            int(mask_id),
-                            random_ratio,
-                            keep_ratio,
-                            train_gen,
-                        )
-                        set_gpt_bert_is_causal(model, False)
-                    else:
-                        batch_input_ids, labels = make_causal_batch(input_ids)
-                        set_gpt_bert_is_causal(model, True)
-
-                    should_apply_nextlat = nextlat_enabled and objective == nextlat_apply_on
-                    if should_apply_nextlat:
-                        outputs = model(
-                            input_ids=batch_input_ids,
-                            attention_mask=attention_mask,
-                            return_dict=True,
-                            output_hidden_states=True,
-                        )
-                        loss, ce_loss, target_tokens = compute_gpt_bert_loss_from_logits(
-                            logits=outputs.logits,
-                            labels=labels,
-                            z_loss=z_loss,
-                        )
-                        if outputs.hidden_states is None:
-                            raise RuntimeError(
-                                "NextLat expected hidden states from the GPT-BERT forward."
+                for planned_microbatch in objective_plan:
+                    objective = planned_microbatch.objective
+                    micro_input_ids = input_ids[
+                        planned_microbatch.start : planned_microbatch.stop
+                    ]
+                    micro_attention_mask = attention_mask[
+                        planned_microbatch.start : planned_microbatch.stop
+                    ]
+                    with accelerator.autocast():
+                        if objective == "masked":
+                            special_mask = build_special_mask(micro_input_ids, special_ids)
+                            batch_input_ids, labels = make_masked_batch(
+                                micro_input_ids,
+                                special_mask,
+                                mask_ratio,
+                                vocab_size,
+                                int(mask_id),
+                                random_ratio,
+                                keep_ratio,
+                                train_gen,
                             )
-                        if nextlat_input_embeddings is None or nextlat_config is None:
-                            raise RuntimeError("NextLat was enabled without setup.")
-                        nextlat_result = compute_nextlat_loss(
-                            dynamics=nextlat_dynamics,
-                            input_embeddings=nextlat_input_embeddings,
-                            output_embeddings=nextlat_output_embeddings,
-                            hidden_states=outputs.hidden_states[-1],
-                            input_ids=batch_input_ids,
-                            loss_mask=labels != -100,
-                            attention_mask=attention_mask,
-                            config=nextlat_config,
-                            bos_token_id=nextlat_bos_token_id,
-                            eos_token_id=nextlat_eos_token_id,
-                            kl_weight=batch_nextlat_kl_weight,
-                        )
-                        weighted_nextlat_loss = (
-                            nextlat_config.lambda_next_h * nextlat_result.next_h_loss
-                        )
-                        weighted_nextlat_kl_loss = (
-                            batch_nextlat_kl_weight * nextlat_result.kl_loss
-                        )
-                        loss = loss + weighted_nextlat_loss + weighted_nextlat_kl_loss
-                    else:
-                        loss, ce_loss, target_tokens = compute_gpt_bert_loss(
-                            model,
-                            input_ids=batch_input_ids,
-                            labels=labels,
-                            attention_mask=attention_mask,
-                            z_loss=z_loss,
-                        )
+                            set_gpt_bert_is_causal(model, False)
+                        else:
+                            batch_input_ids, labels = make_causal_batch(micro_input_ids)
+                            set_gpt_bert_is_causal(model, True)
 
-                accelerator.backward(loss)
+                        should_apply_nextlat = nextlat_enabled and objective == nextlat_apply_on
+                        if should_apply_nextlat:
+                            outputs = model(
+                                input_ids=batch_input_ids,
+                                attention_mask=micro_attention_mask,
+                                return_dict=True,
+                                output_hidden_states=True,
+                            )
+                            loss, ce_loss, target_tokens = compute_gpt_bert_loss_from_logits(
+                                logits=outputs.logits,
+                                labels=labels,
+                                z_loss=z_loss,
+                            )
+                            if outputs.hidden_states is None:
+                                raise RuntimeError(
+                                    "NextLat expected hidden states from the GPT-BERT forward."
+                                )
+                            if nextlat_input_embeddings is None or nextlat_config is None:
+                                raise RuntimeError("NextLat was enabled without setup.")
+                            nextlat_result = compute_nextlat_loss(
+                                dynamics=nextlat_dynamics,
+                                input_embeddings=nextlat_input_embeddings,
+                                output_embeddings=nextlat_output_embeddings,
+                                hidden_states=outputs.hidden_states[-1],
+                                input_ids=batch_input_ids,
+                                loss_mask=labels != -100,
+                                attention_mask=micro_attention_mask,
+                                config=nextlat_config,
+                                bos_token_id=nextlat_bos_token_id,
+                                eos_token_id=nextlat_eos_token_id,
+                                kl_weight=batch_nextlat_kl_weight,
+                            )
+                            weighted_nextlat_loss = (
+                                nextlat_config.lambda_next_h * nextlat_result.next_h_loss
+                            )
+                            weighted_nextlat_kl_loss = (
+                                batch_nextlat_kl_weight * nextlat_result.kl_loss
+                            )
+                            loss = loss + weighted_nextlat_loss + weighted_nextlat_kl_loss
+                        else:
+                            loss, ce_loss, target_tokens = compute_gpt_bert_loss(
+                                model,
+                                input_ids=batch_input_ids,
+                                labels=labels,
+                                attention_mask=micro_attention_mask,
+                                z_loss=z_loss,
+                            )
+
+                    accelerator.backward(loss / len(objective_plan))
+                    micro_target_tokens = target_tokens.float()
+                    micro_loss_sum = (loss.detach() * micro_target_tokens).float()
+                    micro_ce_sum = (ce_loss.detach() * micro_target_tokens).float()
+                    loss_sum = loss_sum + micro_loss_sum
+                    ce_sum = ce_sum + micro_ce_sum
+                    target_tokens_float = target_tokens_float + micro_target_tokens
+                    objective_loss_sums[objective] = (
+                        objective_loss_sums[objective] + micro_loss_sum
+                    )
+                    objective_ce_sums[objective] = (
+                        objective_ce_sums[objective] + micro_ce_sum
+                    )
+                    objective_target_tokens[objective] = (
+                        objective_target_tokens[objective] + micro_target_tokens
+                    )
+                    objective_microsteps[objective] += 1
+
                 spatial_schedule_due = (
                     accelerator.sync_gradients
                     and (global_causal_update_step + 1)
@@ -1468,7 +1650,7 @@ def train_hybrid_lm(
                     else (global_update_step + 1) % spatial_auxiliary_every_steps == 0
                 )
                 should_apply_spatial_auxiliary = (
-                    objective == spatial_auxiliary_apply_on
+                    objective_plan[0].objective == spatial_auxiliary_apply_on
                     and spatial_auxiliary_sampler is not None
                     and spatial_auxiliary_loss_weight > 0.0
                     and spatial_schedule_due
@@ -1507,10 +1689,11 @@ def train_hybrid_lm(
                         step=global_update_step + 1,
                     )
 
-            target_tokens_float = target_tokens.float()
-            loss_sum = (loss.detach() * target_tokens_float).float()
-            ce_sum = (ce_loss.detach() * target_tokens_float).float()
             input_tokens = torch.tensor(float(input_ids.numel()), device=accelerator.device)
+            source_tokens = torch.tensor(
+                float(packed_batch.source_tokens),
+                device=accelerator.device,
+            )
             nextlat_loss_sum = None
             nextlat_transition_count = None
             nextlat_persistence_loss_sum = None
@@ -1556,6 +1739,20 @@ def train_hybrid_lm(
                 ce_sum = accelerator.reduce(ce_sum, reduction="sum")
                 target_tokens_float = accelerator.reduce(target_tokens_float, reduction="sum")
                 input_tokens = accelerator.reduce(input_tokens, reduction="sum")
+                source_tokens = accelerator.reduce(source_tokens, reduction="sum")
+                for objective_name in ("causal", "masked"):
+                    objective_loss_sums[objective_name] = accelerator.reduce(
+                        objective_loss_sums[objective_name],
+                        reduction="sum",
+                    )
+                    objective_ce_sums[objective_name] = accelerator.reduce(
+                        objective_ce_sums[objective_name],
+                        reduction="sum",
+                    )
+                    objective_target_tokens[objective_name] = accelerator.reduce(
+                        objective_target_tokens[objective_name],
+                        reduction="sum",
+                    )
                 if nextlat_loss_sum is not None and nextlat_transition_count is not None:
                     nextlat_loss_sum = accelerator.reduce(
                         nextlat_loss_sum,
@@ -1606,18 +1803,59 @@ def train_hybrid_lm(
 
             if accelerator.sync_gradients:
                 global_update_step += 1
-                if objective == "causal":
+                if objective_microsteps["causal"]:
                     global_causal_update_step += 1
 
             loss_sum_value = loss_sum.item()
             ce_sum_value = ce_sum.item()
             target_token_value = target_tokens_float.item()
             cumulative_tokens_seen += input_tokens.item()
+            cumulative_source_tokens_seen += source_tokens.item()
             current_words_seen = (
                 cumulative_tokens_seen * words_per_token
                 if words_per_token is not None
                 else None
             )
+            if accelerator.sync_gradients and current_words_seen is not None:
+                while checkpoint_milestone_index < len(
+                    normalized_checkpoint_word_milestones
+                ):
+                    milestone_words, checkpoint_name = (
+                        normalized_checkpoint_word_milestones[
+                            checkpoint_milestone_index
+                        ]
+                    )
+                    if current_words_seen < milestone_words:
+                        break
+                    save_gpt_bert_checkpoint(
+                        model,
+                        tokenizer,
+                        accelerator,
+                        output_dir,
+                        name=checkpoint_name,
+                        repo=model_repo,
+                    )
+                    accelerator.wait_for_everyone()
+                    if accelerator.is_main_process:
+                        checkpoint_record = {
+                            "type": "checkpoint",
+                            "epoch": epoch,
+                            "step": global_update_step,
+                            "global_micro_step": global_micro_step,
+                            "tokens_seen": int(cumulative_tokens_seen),
+                            "source_tokens_seen": int(cumulative_source_tokens_seen),
+                            "words_seen": current_words_seen,
+                            "milestone_words": milestone_words,
+                            "checkpoint_name": checkpoint_name,
+                        }
+                        history.append(checkpoint_record)
+                        print(
+                            f"[step {global_update_step:06d}] saved {checkpoint_name} "
+                            f"at {current_words_seen:,.0f} words",
+                            flush=True,
+                        )
+                        save_json_atomic(history, metrics_path)
+                    checkpoint_milestone_index += 1
             epoch_loss_sum += loss_sum_value
             epoch_ce_sum += ce_sum_value
             epoch_tokens += target_token_value
@@ -1692,27 +1930,39 @@ def train_hybrid_lm(
                     )
                 window_spatial_auxiliary_loss_sum += spatial_auxiliary_loss_value.item()
                 window_spatial_auxiliary_batches += 1
-            if objective == "masked":
-                epoch_mntp_loss_sum += loss_sum_value
-                epoch_mntp_ce_sum += ce_sum_value
-                epoch_mntp_tokens += target_token_value
-                window_mntp_loss_sum += loss_sum_value
-                window_mntp_ce_sum += ce_sum_value
-                window_mntp_tokens += target_token_value
-                window_masked_microsteps += 1
-            else:
-                epoch_causal_loss_sum += loss_sum_value
-                epoch_causal_ce_sum += ce_sum_value
-                epoch_causal_tokens += target_token_value
-                window_causal_loss_sum += loss_sum_value
-                window_causal_ce_sum += ce_sum_value
-                window_causal_tokens += target_token_value
-                window_causal_microsteps += 1
+            causal_loss_sum_value = objective_loss_sums["causal"].item()
+            causal_ce_sum_value = objective_ce_sums["causal"].item()
+            causal_token_value = objective_target_tokens["causal"].item()
+            mntp_loss_sum_value = objective_loss_sums["masked"].item()
+            mntp_ce_sum_value = objective_ce_sums["masked"].item()
+            mntp_token_value = objective_target_tokens["masked"].item()
+            epoch_causal_loss_sum += causal_loss_sum_value
+            epoch_causal_ce_sum += causal_ce_sum_value
+            epoch_causal_tokens += causal_token_value
+            window_causal_loss_sum += causal_loss_sum_value
+            window_causal_ce_sum += causal_ce_sum_value
+            window_causal_tokens += causal_token_value
+            epoch_mntp_loss_sum += mntp_loss_sum_value
+            epoch_mntp_ce_sum += mntp_ce_sum_value
+            epoch_mntp_tokens += mntp_token_value
+            window_mntp_loss_sum += mntp_loss_sum_value
+            window_mntp_ce_sum += mntp_ce_sum_value
+            window_mntp_tokens += mntp_token_value
+            epoch_causal_microsteps += objective_microsteps["causal"]
+            epoch_masked_microsteps += objective_microsteps["masked"]
+            window_causal_microsteps += objective_microsteps["causal"]
+            window_masked_microsteps += objective_microsteps["masked"]
 
             if accelerator.is_local_main_process:
+                display_loss = loss_sum_value / max(1.0, target_token_value)
+                display_objective = (
+                    objective_plan[0].objective
+                    if len(objective_plan) == 1
+                    else "mixed"
+                )
                 progress.set_postfix(
-                    loss=f"{loss.item():.4f}",
-                    obj=objective,
+                    loss=f"{display_loss:.4f}",
+                    obj=display_objective,
                     seq=active_sequence_length,
                     step=global_update_step,
                 )
@@ -1729,11 +1979,15 @@ def train_hybrid_lm(
                     "step": global_update_step,
                     "global_micro_step": global_micro_step,
                     "tokens_seen": int(cumulative_tokens_seen),
+                    "source_tokens_seen": int(cumulative_source_tokens_seen),
                     "loss": window_loss_sum / max(1.0, window_tokens),
                     "ce_loss": window_ce_sum / max(1.0, window_tokens),
                     "mask_ratio": mask_ratio,
                     "sequence_length": active_sequence_length,
                     "sequences_per_batch": int(input_ids.shape[0]),
+                    "packing_mode": training_batch_packer.mode,
+                    "objective_granularity": objective_granularity,
+                    "objective_cycle_start": objective_cycle_start,
                     "causal_microsteps": window_causal_microsteps,
                     "masked_microsteps": window_masked_microsteps,
                     "seconds": time.perf_counter() - started,
@@ -1885,6 +2139,7 @@ def train_hybrid_lm(
                     hybrid_config=hybrid_config,
                     vocab_size=vocab_size,
                     max_batches=eval_max_batches,
+                    batch_packer=training_batch_packer,
                 )
                 if accelerator.is_main_process:
                     record = {
@@ -1915,7 +2170,8 @@ def train_hybrid_lm(
                 )
             )
             should_ewok_context_eval = (
-                ewok_context_items is not None
+                scheduled_benchmark_evals
+                and ewok_context_items is not None
                 and accelerator.sync_gradients
                 and (
                     (
@@ -1946,7 +2202,8 @@ def train_hybrid_lm(
                 )
             )
             should_ewok_mntp_eval = (
-                ewok_mntp_items is not None
+                scheduled_benchmark_evals
+                and ewok_mntp_items is not None
                 and accelerator.sync_gradients
                 and (
                     (
@@ -1977,7 +2234,8 @@ def train_hybrid_lm(
                 )
             )
             should_mntp_likelihood_eval = (
-                mntp_likelihood_items is not None
+                scheduled_benchmark_evals
+                and mntp_likelihood_items is not None
                 and accelerator.sync_gradients
                 and (
                     (
@@ -2019,6 +2277,12 @@ def train_hybrid_lm(
             "step": global_update_step,
             "global_micro_step": global_micro_step,
             "tokens_seen": int(cumulative_tokens_seen),
+            "source_tokens_seen": int(cumulative_source_tokens_seen),
+            "packing_mode": training_batch_packer.mode,
+            "objective_granularity": objective_granularity,
+            "objective_cycle_start": objective_cycle_start,
+            "causal_microsteps": epoch_causal_microsteps,
+            "masked_microsteps": epoch_masked_microsteps,
             "train_loss": epoch_loss_sum / max(1.0, epoch_tokens),
             "train_ce_loss": epoch_ce_sum / max(1.0, epoch_tokens),
         }
@@ -2110,6 +2374,40 @@ def train_hybrid_lm(
                 repo=model_repo,
             )
 
+    if eval_at_end and val_loader is not None:
+        val_losses = evaluate_hybrid_lm_loss(
+            model,
+            val_loader,
+            accelerator,
+            tokenizer=tokenizer,
+            hybrid_config=hybrid_config,
+            vocab_size=vocab_size,
+            max_batches=eval_max_batches,
+            batch_packer=training_batch_packer,
+        )
+        if accelerator.is_main_process:
+            record = {
+                "type": "validation",
+                "epoch": epochs,
+                "step": global_update_step,
+                "global_micro_step": global_micro_step,
+                "tokens_seen": int(cumulative_tokens_seen),
+                "source_tokens_seen": int(cumulative_source_tokens_seen),
+                "max_batches": eval_max_batches,
+                "at_end": True,
+                **val_losses,
+            }
+            if words_per_token is not None:
+                record["words_seen"] = cumulative_tokens_seen * words_per_token
+            history.append(record)
+            print(
+                f"[epoch {epochs:04d} final] "
+                f"val_causal_loss={val_losses['val_causal_loss']:.4f} "
+                f"val_mntp_loss={val_losses['val_mntp_loss']:.4f}",
+                flush=True,
+            )
+            save_json_atomic(history, metrics_path)
+
     if save_final:
         save_gpt_bert_checkpoint(
             model,
@@ -2120,10 +2418,10 @@ def train_hybrid_lm(
             repo=model_repo,
         )
 
+    tail_averaged_state = None
     if tail_average_fraction > 0.0:
-        averaged_state = None
         if tail_averager is not None:
-            averaged_state = tail_averager.averaged_state_dict(
+            tail_averaged_state = tail_averager.averaged_state_dict(
                 accelerator.unwrap_model(model)
             )
         save_gpt_bert_checkpoint(
@@ -2133,7 +2431,7 @@ def train_hybrid_lm(
             output_dir,
             name=str(tail_average_name),
             repo=model_repo,
-            state_dict=averaged_state,
+            state_dict=tail_averaged_state,
         )
         if accelerator.is_main_process:
             if tail_averager is None:
@@ -2145,6 +2443,35 @@ def train_hybrid_lm(
                 f"name={tail_average_name}",
                 flush=True,
             )
+
+    if benchmark_eval_mode == "final_only":
+        if tail_average_fraction > 0.0:
+            if accelerator.is_main_process:
+                if tail_averaged_state is None:
+                    raise RuntimeError(
+                        "Tail-averaged state was not available for evaluation."
+                    )
+                accelerator.unwrap_model(model).load_state_dict(tail_averaged_state)
+            final_benchmark_checkpoint_name = str(tail_average_name)
+            accelerator.wait_for_everyone()
+        run_ewok_context_eval(
+            epoch=epochs,
+            step=global_update_step,
+            tokens_seen=cumulative_tokens_seen,
+            at_end=True,
+        )
+        run_ewok_mntp_eval(
+            epoch=epochs,
+            step=global_update_step,
+            tokens_seen=cumulative_tokens_seen,
+            at_end=True,
+        )
+        run_mntp_likelihood_eval(
+            epoch=epochs,
+            step=global_update_step,
+            tokens_seen=cumulative_tokens_seen,
+            at_end=True,
+        )
 
     accelerator.wait_for_everyone()
     return history

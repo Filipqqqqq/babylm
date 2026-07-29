@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import glob
 import json
+from bisect import bisect_right
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
@@ -50,6 +51,7 @@ class TokenShardDatasetConfig:
     seed: int = 42
     max_blocks: int | None = None
     max_shards: int | None = None
+    span_shards: bool = False
 
 
 class TokenShardDataset(IterableDataset):
@@ -72,17 +74,29 @@ class TokenShardDataset(IterableDataset):
         self.shuffle_blocks = bool(config.shuffle_blocks)
         self.seed = int(config.seed)
         self.max_blocks = None if config.max_blocks is None else int(config.max_blocks)
+        self.span_shards = bool(config.span_shards)
         self.meta = _load_meta(self.data_dir)
 
         self.shards = _list_shards(self.data_dir, self.split, max_shards=config.max_shards)
         self.shard_sizes = [_count_uint16_tokens(path) for path in self.shards]
+        self.shard_offsets = [0]
+        for size in self.shard_sizes:
+            self.shard_offsets.append(self.shard_offsets[-1] + size)
         self.stride_tokens = self.batch_size * self.seq_len
         self.block_tokens = self.stride_tokens + 1
-        self.blocks_per_shard = [
-            max(0, 1 + (size - self.block_tokens) // self.stride_tokens)
-            for size in self.shard_sizes
-        ]
-        self.total_blocks = sum(self.blocks_per_shard)
+        if self.span_shards:
+            total_tokens = self.shard_offsets[-1]
+            self.blocks_per_shard = []
+            self.total_blocks = max(
+                0,
+                1 + (total_tokens - self.block_tokens) // self.stride_tokens,
+            )
+        else:
+            self.blocks_per_shard = [
+                max(0, 1 + (size - self.block_tokens) // self.stride_tokens)
+                for size in self.shard_sizes
+            ]
+            self.total_blocks = sum(self.blocks_per_shard)
         if self.total_blocks == 0:
             raise ValueError(
                 f"No valid {self.split!r} blocks under {self.data_dir}; need at least "
@@ -104,9 +118,12 @@ class TokenShardDataset(IterableDataset):
         self._iteration += 1
         rng = np.random.default_rng(self.seed + iteration)
 
-        schedule: list[tuple[int, int]] = []
-        for shard_idx, n_blocks in enumerate(self.blocks_per_shard):
-            schedule.extend((shard_idx, block_idx) for block_idx in range(n_blocks))
+        if self.span_shards:
+            schedule: list[int | tuple[int, int]] = list(range(self.total_blocks))
+        else:
+            schedule = []
+            for shard_idx, n_blocks in enumerate(self.blocks_per_shard):
+                schedule.extend((shard_idx, block_idx) for block_idx in range(n_blocks))
         if self.shuffle_blocks:
             rng.shuffle(schedule)
         if self.max_blocks is not None:
@@ -114,12 +131,44 @@ class TokenShardDataset(IterableDataset):
         schedule = schedule[worker_id::num_workers]
 
         memmaps: dict[int, np.memmap] = {}
-        for shard_idx, block_idx in schedule:
-            if shard_idx not in memmaps:
-                memmaps[shard_idx] = np.memmap(self.shards[shard_idx], dtype=np.uint16, mode="r")
-            start = block_idx * self.stride_tokens
-            end = start + self.block_tokens
-            chunk = np.asarray(memmaps[shard_idx][start:end], dtype=np.int64)
+        for scheduled_block in schedule:
+            if self.span_shards:
+                block_idx = int(scheduled_block)
+                start = block_idx * self.stride_tokens
+                end = start + self.block_tokens
+                parts: list[np.ndarray] = []
+                position = start
+                while position < end:
+                    shard_idx = bisect_right(self.shard_offsets, position) - 1
+                    shard_start = self.shard_offsets[shard_idx]
+                    local_start = position - shard_start
+                    local_end = min(self.shard_sizes[shard_idx], local_start + end - position)
+                    if shard_idx not in memmaps:
+                        memmaps[shard_idx] = np.memmap(
+                            self.shards[shard_idx],
+                            dtype=np.uint16,
+                            mode="r",
+                        )
+                    part = np.asarray(
+                        memmaps[shard_idx][local_start:local_end],
+                        dtype=np.int64,
+                    )
+                    if part.size == 0:
+                        break
+                    parts.append(part)
+                    position += int(part.size)
+                chunk = parts[0] if len(parts) == 1 else np.concatenate(parts)
+            else:
+                shard_idx, block_idx = scheduled_block
+                if shard_idx not in memmaps:
+                    memmaps[shard_idx] = np.memmap(
+                        self.shards[shard_idx],
+                        dtype=np.uint16,
+                        mode="r",
+                    )
+                start = block_idx * self.stride_tokens
+                end = start + self.block_tokens
+                chunk = np.asarray(memmaps[shard_idx][start:end], dtype=np.int64)
             if chunk.size != self.block_tokens:
                 continue
 
@@ -143,6 +192,7 @@ def build_token_shard_loader(
     num_workers: int = 0,
     seed: int = 42,
     pin_memory: bool = False,
+    span_shards: bool = False,
 ) -> tuple[DataLoader, TokenShardDataset]:
     """Build a DataLoader over fixed-size token-shard blocks."""
 
@@ -156,6 +206,7 @@ def build_token_shard_loader(
             seed=seed,
             max_blocks=max_blocks,
             max_shards=max_shards,
+            span_shards=span_shards,
         )
     )
     loader = DataLoader(

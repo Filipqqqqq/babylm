@@ -1,0 +1,240 @@
+diff --git a/strict/evaluation_pipeline/AoA_word/evaluation_functions.py b/strict/evaluation_pipeline/AoA_word/evaluation_functions.py
+index 5110577..58930f3 100644
+--- a/strict/evaluation_pipeline/AoA_word/evaluation_functions.py
++++ b/strict/evaluation_pipeline/AoA_word/evaluation_functions.py
+@@ -50,20 +50,32 @@ class StepSurprisalExtractor:
+         if isinstance(self.model_cache_dir, str):
+             self.model_cache_dir = Path(self.model_cache_dir)
+ 
++    def _checkpoint_source(self, step: str) -> tuple[str, str | None]:
++        """Resolve either a local checkpoint directory or a Hub revision."""
++
++        local_checkpoint = Path(self.model_name) / step
++        if local_checkpoint.is_dir():
++            return str(local_checkpoint), None
++        return self.model_name, step
++
+     def load_model_for_step(self, step: int) -> AutoModelForCausalLM:
+         """Load model and tokenizer for a specific step."""
+         try:
++            model_source, revision = self._checkpoint_source(str(step))
++            load_kwargs = {"trust_remote_code": True}
++            if revision is not None:
++                load_kwargs["revision"] = revision
+             if self.backend in ["mlm", "mntp"]:
+                 model = AutoModelForMaskedLM.from_pretrained(
+-                    self.model_name, trust_remote_code=True, revision=step
++                    model_source, **load_kwargs
+                 )
+             elif self.backend == "causal":
+                 model = AutoModelForCausalLM.from_pretrained(
+-                    self.model_name, trust_remote_code=True, revision=step
++                    model_source, **load_kwargs
+                 )
+             elif self.backend in ["enc_dec_mask", "enc_dec_prefix"]:
+                 model = AutoModelForSeq2SeqLM.from_pretrained(
+-                    self.model_name, trust_remote_code=True, revision=step
++                    model_source, **load_kwargs
+                 )
+             else:
+                 raise f"The backend {self.backend} is not implemented, please implemented yourself or raise an issue on the GitHub!"
+@@ -76,11 +88,16 @@ class StepSurprisalExtractor:
+ 
+     def load_tokenizer_for_step(self, step: int) -> AutoProcessor:
+         try:
++            model_source, revision = self._checkpoint_source(str(step))
++            load_kwargs = {
++                "trust_remote_code": True,
++                "padding_side": "right",
++            }
++            if revision is not None:
++                load_kwargs["revision"] = revision
+             processor = AutoProcessor.from_pretrained(
+-                self.model_name,
+-                trust_remote_code=True,
+-                padding_side="right",
+-                revision=step,
++                model_source,
++                **load_kwargs,
+             )
+             tokenizer = (
+                 processor.tokenizer if hasattr(processor, "tokenizer") else processor
+diff --git a/strict/evaluation_pipeline/AoA_word/run.py b/strict/evaluation_pipeline/AoA_word/run.py
+index 47fecec..856af81 100755
+--- a/strict/evaluation_pipeline/AoA_word/run.py
++++ b/strict/evaluation_pipeline/AoA_word/run.py
+@@ -142,7 +142,12 @@ def main() -> None:
+ 
+     cdi_human = args.word_path.parent / "cdi_human.csv"
+     if results_data.get("results") and cdi_human.is_file():
+-        tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
++        local_final = Path(args.model_name) / "final"
++        tokenizer_source = str(local_final) if local_final.is_dir() else args.model_name
++        tokenizer = AutoTokenizer.from_pretrained(
++            tokenizer_source,
++            trust_remote_code=True,
++        )
+         score = AoAEvaluator(cdi_human).compute_curve_fitness(results_data, tokenizer)["curve_fitness"]
+         score_file = result_file.parent / "aoa_score.json"
+         JsonProcessor.save_json({"aoa": score}, score_file)
+diff --git a/strict/evaluation_pipeline/collate_preds.py b/strict/evaluation_pipeline/collate_preds.py
+index ebd4397..66f41f3 100644
+--- a/strict/evaluation_pipeline/collate_preds.py
++++ b/strict/evaluation_pipeline/collate_preds.py
+@@ -569,7 +569,6 @@ def get_revision_fast_eval_metrics(args, revision_name):
+ 
+ def _calculate_target_results(results_dict: dict[str, dict[str, list[dict[str, str]]]], task: str, path_to_data: Path) -> dict[str, float]:
+     processed_results = {}
+-    data_key = "Target1" if task == "ewok" else "sentence_good"
+     for subtask in results_dict.keys():
+         correct = 0
+         total = 0
+@@ -579,7 +578,12 @@ def _calculate_target_results(results_dict: dict[str, dict[str, list[dict[str, s
+                 data = json.loads(data)
+                 total += 1
+                 res = result["pred"].strip() if isinstance(result["pred"], str) else result["pred"]
+-                target = data[data_key].strip() if isinstance(data[data_key], str) else data[data_key]
++                # EWoK predictions are saved as the selected full sentence,
++                # whereas BLiMP predictions are saved as the completion only.
++                if task == "ewok":
++                    target = " ".join((data["Context1"], data["Target1"])).strip()
++                else:
++                    target = data["sentence_good"].strip()
+                 if res == target:
+                     correct += 1
+             processed_results[subtask] = correct / total
+diff --git a/strict/evaluation_pipeline/reading/evaluation_functions.py b/strict/evaluation_pipeline/reading/evaluation_functions.py
+index ad48ad0..fc1826d 100644
+--- a/strict/evaluation_pipeline/reading/evaluation_functions.py
++++ b/strict/evaluation_pipeline/reading/evaluation_functions.py
+@@ -6,8 +6,22 @@ from evaluation_pipeline.utils import get_logits
+ DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+ 
+ 
+-def get_p(sentence, word, model, tokenizer):  # gets p of word (word) given context. Relies on model and tokenizer.
+-    inpts = tokenizer(sentence, return_tensors="pt").to(DEVICE)
++def _causal_inputs(sentence, tokenizer, prepend_bos=False):
++    inpts = tokenizer(sentence, return_tensors="pt")
++    if prepend_bos and (
++        inpts["input_ids"].shape[1] == 0
++        or inpts["input_ids"][0, 0].item() != tokenizer.bos_token_id
++    ):
++        bos = torch.tensor([[tokenizer.bos_token_id]], dtype=inpts["input_ids"].dtype)
++        inpts["input_ids"] = torch.cat((bos, inpts["input_ids"]), dim=1)
++        inpts["attention_mask"] = torch.cat(
++            (torch.ones_like(bos), inpts["attention_mask"]), dim=1
++        )
++    return inpts.to(DEVICE)
++
++
++def get_p(sentence, word, model, tokenizer, prepend_bos=False):  # gets p of word (word) given context. Relies on model and tokenizer.
++    inpts = _causal_inputs(sentence, tokenizer, prepend_bos)
+     with torch.no_grad():
+         outputs = model(**inpts)
+         logits = get_logits(outputs)[:, -1, :].cpu()
+@@ -78,8 +92,8 @@ def get_p_enc_dec(sentence, word, model, tokenizer):  # gets p of word (word) gi
+     return p
+ 
+ 
+-def get_p2(sentence, word, model, tokenizer):  # as get_p if len(tokenizer(word)) == 1; else, sums logP of subword tokens
+-    inpts = tokenizer(sentence, return_tensors="pt").to(DEVICE)
++def get_p2(sentence, word, model, tokenizer, prepend_bos=False):  # as get_p if len(tokenizer(word)) == 1; else, sums logP of subword tokens
++    inpts = _causal_inputs(sentence, tokenizer, prepend_bos)
+     with torch.no_grad():
+         outputs = model(**inpts)
+         logits = get_logits(outputs)[:, -1, :].cpu()
+@@ -96,7 +110,7 @@ def get_p2(sentence, word, model, tokenizer):  # as get_p if len(tokenizer(word)
+         sentence = sentence + tokenizer.decode(target_id)
+         for token in target[1:]:
+             t = tokenizer.decode(token)
+-            p = get_p(sentence, t, model, tokenizer)
++            p = get_p(sentence, t, model, tokenizer, prepend_bos=prepend_bos)
+             out_p.append(p)
+             # print(sentence, "--"+t, p)
+             sentence = sentence + t
+diff --git a/strict/evaluation_pipeline/reading/run.py b/strict/evaluation_pipeline/reading/run.py
+index f417d2a..d977cfa 100644
+--- a/strict/evaluation_pipeline/reading/run.py
++++ b/strict/evaluation_pipeline/reading/run.py
+@@ -23,6 +23,7 @@ def parse_args():
+     parser.add_argument("--backend", required=True, type=str, help="The evaluation backend strategy.", choices=["mlm", "mntp", "causal", "enc_dec"])
+     parser.add_argument("--number_of_mask_tokens_to_append", default=3, type=int, help="When using either mlm or mntp, the number of mask tokens to append to approximate causal generation.")
+     parser.add_argument("--revision_name", default=None, type=str, help="Name of the checkpoint/version of the model to test. (If None, the main will be used)")
++    parser.add_argument("--prepend_bos", action="store_true", help="Prepend the tokenizer BOS token to causal-LM inputs when the tokenizer does not add it automatically.")
+ 
+     args = parser.parse_args()
+ 
+@@ -66,7 +67,11 @@ if __name__ == "__main__":
+             args.model_path_or_name, revision=args.revision_name)
+ 
+     if args.backend == "causal":
+-        p2_function = get_p2
++        if args.prepend_bos and tokenizer.bos_token_id is None:
++            raise ValueError("--prepend_bos requires the tokenizer to define bos_token_id.")
++        p2_function = partial(get_p2, prepend_bos=args.prepend_bos)
++    elif args.prepend_bos:
++        raise ValueError("--prepend_bos is only supported by the causal backend.")
+     elif args.backend == "mlm":
+         p2_function = partial(get_p2_mlm, num_mask_tokens=args.number_of_mask_tokens_to_append)
+     elif args.backend == "mntp":
+diff --git a/strict/evaluation_pipeline/sentence_zero_shot/dataset.py b/strict/evaluation_pipeline/sentence_zero_shot/dataset.py
+index 0438d83..c4cd4b4 100644
+--- a/strict/evaluation_pipeline/sentence_zero_shot/dataset.py
++++ b/strict/evaluation_pipeline/sentence_zero_shot/dataset.py
+@@ -32,6 +32,11 @@ class CompletionRankingDataset(Dataset):
+                 args.model_path_or_name, padding_side="right",
+                 revision=args.revision_name)
+         self.tokenizer = self.processor.tokenizer if hasattr(self.processor, "tokenizer") else self.processor
++        self.prepend_bos = bool(getattr(args, "prepend_bos", False))
++        if self.prepend_bos and self.backend != "causal":
++            raise ValueError("--prepend_bos is only supported by the causal backend.")
++        if self.prepend_bos and self.tokenizer.bos_token_id is None:
++            raise ValueError("--prepend_bos requires the tokenizer to define bos_token_id.")
+ 
+         if self.tokenizer.pad_token_id is None:
+             if self.backend == "causal":
+@@ -86,6 +91,13 @@ class CompletionRankingDataset(Dataset):
+                 attention_mask = attention_mask[0]
+                 offset_mapping = offset_mapping[0]
+ 
++            if self.prepend_bos and (
++                not tokens or tokens[0] != self.tokenizer.bos_token_id
++            ):
++                tokens = [self.tokenizer.bos_token_id] + list(tokens)
++                attention_mask = [1] + list(attention_mask)
++                offset_mapping = [(0, 0)] + list(offset_mapping)
++
+             # Phrase mask (to determine the exact tokens associated with the completion/suffix)
+             start_idx = len(tokens) - len(sentence_tokens)
+             start_char_idx = len(sentence) - len(completion) + offset_mapping[start_idx][0]
+diff --git a/strict/evaluation_pipeline/sentence_zero_shot/run.py b/strict/evaluation_pipeline/sentence_zero_shot/run.py
+index 98c7f36..c6ecb47 100644
+--- a/strict/evaluation_pipeline/sentence_zero_shot/run.py
++++ b/strict/evaluation_pipeline/sentence_zero_shot/run.py
+@@ -39,6 +39,7 @@ def _parse_arguments():
+     parser.add_argument("--batch_size", default=64, type=int, help="Batch size for evaluation")
+     parser.add_argument("--non_causal_batch_size", default=64, type=int, help="Mini-batch size to process each batch of inputs involving masked tokens")
+     parser.add_argument("--full_sentence_scores", action="store_true", help="Whether to use the entire sentence to calculate the sentence scores rather than just the completion. (Only implemented for EWoK)")
++    parser.add_argument("--prepend_bos", action="store_true", help="Prepend the tokenizer BOS token to causal-LM inputs when the tokenizer does not add it automatically.")
+     parser.add_argument("--save_predictions", action="store_true", help="Whether or not to save predictions.")
+ 
+     return parser.parse_args()
+diff --git a/strict/evaluation_pipeline/hf_loading.py b/strict/evaluation_pipeline/hf_loading.py
+new file mode 100644
+index 0000000..2d66e59
+--- /dev/null
++++ b/strict/evaluation_pipeline/hf_loading.py
+@@ -0,0 +1,13 @@
++from transformers import AutoProcessor, AutoTokenizer
++
++
++def load_processor_or_tokenizer(model_path_or_name: str, **kwargs):
++    try:
++        return AutoProcessor.from_pretrained(model_path_or_name, **kwargs)
++    except ValueError as processor_error:
++        try:
++            return AutoTokenizer.from_pretrained(model_path_or_name, **kwargs)
++        except Exception as tokenizer_error:
++            raise ValueError(
++                f"Could not load a processor or tokenizer for {model_path_or_name!r}."
++            ) from tokenizer_error

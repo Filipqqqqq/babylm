@@ -24,10 +24,12 @@ from babysteps.cli.train_causal_lm import (
     default_babylm_eval_dir,
     estimate_words_per_token_from_dataset,
     load_yaml_config,
+    read_checkpoint_word_milestones,
     resolve_output_dir,
     validate_training_inputs,
 )
 from babysteps.data.token_shards import build_token_shard_loader
+from babysteps.data.hybrid_packing import build_training_batch_packer
 from babysteps.evaluation.blimp_likelihood import read_blimp_items
 from babysteps.evaluation.comps_likelihood import read_comps_items
 from babysteps.evaluation.entity_tracking_likelihood import read_entity_tracking_items
@@ -40,7 +42,11 @@ from babysteps.models import (
 )
 from babysteps.models.causal_lm import DEFAULT_GPT_BERT_REPO
 from babysteps.paths import resolve_path, validate_tokenizer_dir
-from babysteps.training.causal_lm_loop import save_json_atomic, set_all_seeds
+from babysteps.training.causal_lm_loop import (
+    normalize_benchmark_eval_mode,
+    save_json_atomic,
+    set_all_seeds,
+)
 from babysteps.training.hybrid_lm_loop import (
     MNTP_LIKELIHOOD_BENCHMARKS,
     sequence_length_schedule_from_config,
@@ -110,9 +116,16 @@ def first_token_id(tokenizer: Any, *attrs: str) -> int | None:
     return None
 
 
-def format_eval_interval(every_steps: int, every_words: float | None) -> str:
+def format_eval_interval(
+    every_steps: int,
+    every_words: float | None,
+    *,
+    benchmark_eval_mode: str = "scheduled",
+) -> str:
     """Return a compact human-readable evaluation interval."""
 
+    if benchmark_eval_mode == "final_only":
+        return "at final checkpoint only"
     pieces: list[str] = []
     if every_steps > 0:
         pieces.append(f"every {every_steps} steps")
@@ -354,7 +367,11 @@ def main() -> None:
     training_config = config["training"]
     hybrid_config = config.get("hybrid", {})
     logging_config = config.get("logging", {})
+    benchmark_eval_mode = normalize_benchmark_eval_mode(
+        logging_config.get("benchmark_eval_mode", "scheduled")
+    )
     checkpoint_config = config.get("checkpointing", {})
+    checkpoint_word_milestones = read_checkpoint_word_milestones(checkpoint_config)
     tail_average_config = checkpoint_config.get("tail_average", {}) or {}
     progress_config = config.get("progress", {})
     if "ewok_context_sensitivity" in config:
@@ -388,6 +405,7 @@ def main() -> None:
         ewok_context_enabled
         and ewok_context_every_steps <= 0
         and ewok_context_every_words is None
+        and benchmark_eval_mode != "final_only"
     ):
         raise ValueError(
             "Set ewok_context_sensitivity_full.every_steps or "
@@ -413,6 +431,7 @@ def main() -> None:
         ewok_mntp_enabled
         and ewok_mntp_every_steps <= 0
         and ewok_mntp_every_words is None
+        and benchmark_eval_mode != "final_only"
     ):
         raise ValueError(
             "Set ewok_mntp_context_sensitivity.every_steps or "
@@ -438,6 +457,7 @@ def main() -> None:
         mntp_likelihood_enabled
         and mntp_likelihood_every_steps <= 0
         and mntp_likelihood_every_words is None
+        and benchmark_eval_mode != "final_only"
     ):
         raise ValueError(
             "Set mntp_likelihood.every_steps or mntp_likelihood.every_words "
@@ -468,11 +488,14 @@ def main() -> None:
         if words_per_token <= 0:
             raise ValueError("words_per_token must be positive.")
 
-    word_interval_requested = any(
-        (
-            ewok_context_enabled and ewok_context_every_words is not None,
-            ewok_mntp_enabled and ewok_mntp_every_words is not None,
-            mntp_likelihood_enabled and mntp_likelihood_every_words is not None,
+    word_interval_requested = bool(checkpoint_word_milestones) or (
+        benchmark_eval_mode == "scheduled"
+        and any(
+            (
+                ewok_context_enabled and ewok_context_every_words is not None,
+                ewok_mntp_enabled and ewok_mntp_every_words is not None,
+                mntp_likelihood_enabled and mntp_likelihood_every_words is not None,
+            )
         )
     )
     estimate_words_per_token = bool(
@@ -648,6 +671,11 @@ def main() -> None:
     )
     resolve_padding_for_gpt_bert(tokenizer)
     validate_hybrid_config(config, tokenizer)
+    training_batch_packer = build_training_batch_packer(
+        data_config.get("packing_mode", "continuous"),
+        cls_token_id=first_token_id(tokenizer, "cls_token_id", "bos_token_id"),
+        sep_token_id=first_token_id(tokenizer, "sep_token_id", "eos_token_id"),
+    )
 
     model_config = config["model"]
     seq_len = int(data_config.get("seq_len", model_config.get("context_length", 512)))
@@ -684,6 +712,14 @@ def main() -> None:
         pin_memory=torch.cuda.is_available(),
     )
     validate_training_inputs(config, tokenizer, train_dataset, val_dataset)
+    if (
+        training_batch_packer.mode == "sid_wrapped"
+        and train_dataset.meta.get("document_format") != "eos_only"
+    ):
+        raise ValueError(
+            "data.packing_mode=sid_wrapped requires shards built with "
+            "shards.document_format=eos_only."
+        )
 
     if words_per_token is None and estimate_words_per_token:
         estimate = estimate_words_per_token_from_dataset(
@@ -724,6 +760,7 @@ def main() -> None:
                 + format_eval_interval(
                     ewok_context_every_steps,
                     ewok_context_every_words,
+                    benchmark_eval_mode=benchmark_eval_mode,
                 )
                 + ", "
                 + f"reductions={','.join(ewok_context_score_reductions)}",
@@ -747,6 +784,7 @@ def main() -> None:
                 + format_eval_interval(
                     ewok_mntp_every_steps,
                     ewok_mntp_every_words,
+                    benchmark_eval_mode=benchmark_eval_mode,
                 )
                 + ", "
                 + f"reductions={','.join(ewok_mntp_score_reductions)}",
@@ -774,6 +812,7 @@ def main() -> None:
                 + format_eval_interval(
                     mntp_likelihood_every_steps,
                     mntp_likelihood_every_words,
+                    benchmark_eval_mode=benchmark_eval_mode,
                 )
                 + ", "
                 + f"reductions={','.join(mntp_likelihood_score_reductions)}",
@@ -996,8 +1035,14 @@ def main() -> None:
                 ewok_context_step_steps,
                 ewok_context_word_steps,
             )
-            startup_eval = bool(logging_config.get("benchmark_eval_at_start", True))
-            suffix = "; plus startup eval at step 0" if startup_eval else ""
+            if benchmark_eval_mode == "final_only":
+                ewok_context_eval_steps = []
+                suffix = "; plus final-checkpoint eval"
+            else:
+                startup_eval = bool(
+                    logging_config.get("benchmark_eval_at_start", True)
+                )
+                suffix = "; plus startup eval at step 0" if startup_eval else ""
             print(
                 "EWoK causal eval estimate: "
                 f"{format_eval_step_preview(ewok_context_eval_steps)}{suffix}",
@@ -1022,8 +1067,14 @@ def main() -> None:
                 ewok_mntp_step_steps,
                 ewok_mntp_word_steps,
             )
-            startup_eval = bool(logging_config.get("benchmark_eval_at_start", True))
-            suffix = "; plus startup eval at step 0" if startup_eval else ""
+            if benchmark_eval_mode == "final_only":
+                ewok_mntp_eval_steps = []
+                suffix = "; plus final-checkpoint eval"
+            else:
+                startup_eval = bool(
+                    logging_config.get("benchmark_eval_at_start", True)
+                )
+                suffix = "; plus startup eval at step 0" if startup_eval else ""
             print(
                 "EWoK MNTP eval estimate: "
                 f"{format_eval_step_preview(ewok_mntp_eval_steps)}{suffix}",
@@ -1045,8 +1096,14 @@ def main() -> None:
                 total_update_steps=total_update_steps,
             )
             mntp_eval_steps = merge_eval_steps(mntp_step_steps, mntp_word_steps)
-            startup_eval = bool(logging_config.get("benchmark_eval_at_start", True))
-            suffix = "; plus startup eval at step 0" if startup_eval else ""
+            if benchmark_eval_mode == "final_only":
+                mntp_eval_steps = []
+                suffix = "; plus final-checkpoint eval"
+            else:
+                startup_eval = bool(
+                    logging_config.get("benchmark_eval_at_start", True)
+                )
+                suffix = "; plus startup eval at step 0" if startup_eval else ""
             print(
                 "MNTP benchmark eval estimate: "
                 f"{format_eval_step_preview(mntp_eval_steps)}{suffix}",
@@ -1112,9 +1169,11 @@ def main() -> None:
         seed=seed,
         log_every_steps=int(logging_config.get("log_every_steps", 50)),
         eval_every_steps=int(logging_config.get("eval_every_steps", 500)),
+        eval_at_end=bool(logging_config.get("eval_at_end", False)),
         eval_max_batches=logging_config.get("eval_max_batches", 20),
         gradient_clip_norm=training_config.get("gradient_clip_norm"),
         save_every_epochs=checkpoint_config.get("save_every_epochs", 1),
+        checkpoint_word_milestones=checkpoint_word_milestones,
         save_final=bool(checkpoint_config.get("save_final", True)),
         tail_average_fraction=(
             float(tail_average_config.get("fraction", 0.0))
@@ -1124,7 +1183,9 @@ def main() -> None:
         tail_average_every_steps=int(tail_average_config.get("every_steps", 10)),
         tail_average_name=str(tail_average_config.get("name", "model_tail_avg")),
         sequence_length_schedule=sequence_length_schedule,
+        training_batch_packer=training_batch_packer,
         benchmark_eval_at_start=bool(logging_config.get("benchmark_eval_at_start", True)),
+        benchmark_eval_mode=benchmark_eval_mode,
         nextlat_dynamics=nextlat_dynamics,
         nextlat_config=nextlat_config,
         nextlat_bos_token_id=first_token_id(tokenizer, "bos_token_id", "cls_token_id"),

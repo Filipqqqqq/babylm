@@ -43,6 +43,7 @@ from babysteps.paths import expand_env_vars, validate_tokenizer_dir
 
 ROOT = Path(__file__).resolve().parents[3]
 UINT16_LIMIT = 2**16
+DOCUMENT_FORMATS = ("bos_eos", "eos_only")
 
 
 def load_yaml_config(path: str | Path) -> dict[str, Any]:
@@ -291,7 +292,34 @@ class TokenShardSink:
         print(f"wrote {path} ({tokens.size:,} tokens)", flush=True)
 
 
-def encode_document_uint16(token_ids: Sequence[int], *, bos_token_id: int, eos_token_id: int) -> np.ndarray:
+def normalize_document_format(value: str | None) -> str:
+    """Normalize the document-boundary policy used in token streams."""
+
+    normalized = str(value or "bos_eos").strip().lower().replace("-", "_")
+    aliases = {
+        "wrapped": "bos_eos",
+        "cls_sep": "bos_eos",
+        "sep_only": "eos_only",
+        "sid": "eos_only",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in DOCUMENT_FORMATS:
+        raise ValueError(
+            f"shards.document_format must be one of {DOCUMENT_FORMATS}, got {value!r}."
+        )
+    return normalized
+
+
+def encode_document_uint16(
+    token_ids: Sequence[int],
+    *,
+    bos_token_id: int,
+    eos_token_id: int,
+    document_format: str = "bos_eos",
+) -> np.ndarray:
+    """Encode one document with a configurable token-stream boundary policy."""
+
+    document_format = normalize_document_format(document_format)
     ids = np.asarray(token_ids, dtype=np.int64)
     max_id = max(int(bos_token_id), int(eos_token_id))
     min_id = min(int(bos_token_id), int(eos_token_id))
@@ -301,10 +329,14 @@ def encode_document_uint16(token_ids: Sequence[int], *, bos_token_id: int, eos_t
     if min_id < 0 or max_id >= UINT16_LIMIT:
         raise ValueError(f"Token id out of uint16 range: min={min_id}, max={max_id}.")
 
-    out = np.empty((ids.size + 2,), dtype=np.uint16)
-    out[0] = int(bos_token_id)
-    if ids.size:
-        out[1:-1] = ids.astype(np.uint16, copy=False)
+    prefix_tokens = 1 if document_format == "bos_eos" else 0
+    out = np.empty((ids.size + prefix_tokens + 1,), dtype=np.uint16)
+    if document_format == "bos_eos":
+        out[0] = int(bos_token_id)
+        if ids.size:
+            out[1:-1] = ids.astype(np.uint16, copy=False)
+    elif ids.size:
+        out[:-1] = ids.astype(np.uint16, copy=False)
     out[-1] = int(eos_token_id)
     return out
 
@@ -319,6 +351,7 @@ def build_token_shards(
 ) -> dict[str, Any]:
     dataset_config = config["dataset"]
     shard_config = config["shards"]
+    document_format = normalize_document_format(shard_config.get("document_format"))
     output_dir = Path(shard_config["output_dir"])
     if output_dir.exists() and any(output_dir.iterdir()) and not overwrite:
         raise FileExistsError(
@@ -381,6 +414,7 @@ def build_token_shards(
                     token_ids,
                     bos_token_id=int(bos_token_id),
                     eos_token_id=int(eos_token_id),
+                    document_format=document_format,
                 )
             )
             docs_processed += 1
@@ -426,7 +460,12 @@ def build_token_shards(
             if getattr(tokenizer, "mask_token_id", None) is not None
             else None
         ),
-        "doc_format": "[BOS/CLS] + tokenizer(text) + [EOS/SEP]",
+        "document_format": document_format,
+        "doc_format": (
+            "[BOS/CLS] + tokenizer(text) + [EOS/SEP]"
+            if document_format == "bos_eos"
+            else "tokenizer(text) + [EOS/SEP]"
+        ),
         "shard_tokens": int(shard_config.get("shard_tokens", 1_000_000)),
         "val_shards": int(shard_config.get("val_shards", 1)),
         "num_shards_total": int(sink.next_shard_idx),

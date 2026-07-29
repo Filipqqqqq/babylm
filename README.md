@@ -2,42 +2,33 @@
 
 *Stronger Optimization and Causal Baselines for Data-Constrained Pretraining*
 
-BabySteps is our BabyLM 2026 system repository. We train language models from
-scratch under the Strict-Small (10M-word) and Strict (100M-word) budgets and
-study which changes actually improve the complete BabyLM evaluation—not only a
-single benchmark. This repository contains the training package, exact recipes,
-official evaluation wrappers, and the exploratory experiments behind the paper.
+This is the reproduction branch for our BabyLM 2026 workshop submission. It
+keeps one clear path through the repository: prepare the official data, train a
+selected model, validate and upload its checkpoints, and run the official
+evaluation. The larger experiment archive lives on
+[`jorge/research`](https://github.com/JorgeCMurillo/babylm-baby-steps/tree/jorge/research).
 
-[Paper summary](#paper-in-one-minute) · [Systems](#submitted-systems) ·
-[Reproduce](#choose-a-reproduction-level) · [Repository map](#repository-map) ·
-[Negative results](#exploratory-and-negative-results) · [Citation](#citation)
+[Results](#submitted-systems) · [Install](#install) · [Prepare data](#1-prepare-data) ·
+[Train](#2-train-a-model) · [Upload](#3-validate-and-upload) ·
+[Evaluate](#4-run-the-official-evaluation)
 
 ## Paper in one minute
 
-Our main result is simple: optimizer and learning-rate selection produced larger
-and more reliable gains than the curriculum, synthetic-data, teacher-supervision,
-and corpus-mixing interventions we tested.
-
-- AdaMuon plus tail-weight averaging was strongest for our 10M GPT-BERT system.
-- Lower-rate Muon was strongest for our 100M GPT-BERT system; the best optimizer
-  recipe changed with scale.
-- A modern Llama-style decoder trained with Muon and Liger kernels beat our
-  completed reevaluation of the official GPT-2 strict checkpoint on all seven
-  NLP benchmark categories.
-- Small evaluation suites showed substantial run-to-run variance, so differences
-  of only a few points should be interpreted cautiously.
-
-The Llama–GPT-2 comparison is a comparison of practical systems, not a controlled
-architecture ablation: architecture, optimizer, implementation, and
-hyperparameters change together.
+Optimizer and learning-rate selection mattered more than the curriculum,
+synthetic-data, teacher-supervision, and corpus-mixing interventions we tested.
+AdaMuon with final-weight averaging was strongest at 10M words, while the best
+100M GPT-BERT used a different Muon recipe. A Llama-style causal system trained
+with Muon and Liger beat our complete reevaluation of the official GPT-2 Strict
+checkpoint across all seven NLP categories. This compares practical systems,
+not architecture alone, and small evaluation suites varied across retrains.
 
 ## Submitted systems
 
-| System | Track | Model and objective | Optimizer | Final weights |
+| System | Track | Model | Optimizer and final weights | Public recipe |
 | --- | --- | --- | --- | --- |
-| **MurphysLaw-10M-mixed** | Strict-Small | GPT-BERT, mixed, MNTP eval | AdaMuon, LR 0.02 / aux 0.006 | Final-20% weight average |
-| **SidBert-100M-mixed** | Strict | GPT-BERT, mixed, MNTP eval | Muon, LR 0.005 / aux 0.007 | Last step |
-| **Chatty BERT** | Strict | 127.6M Llama-style causal decoder | Muon, LR 0.01 / aux 1e-4, Liger | Last step |
+| **MurphysLaw-10M-mixed** | Strict-Small | GPT-BERT, mixed objective | AdaMuon; final-20% weight average | Ready |
+| **SidBert-100M-mixed** | Strict | GPT-BERT, mixed objective | Muon; last step | **Release gate** |
+| **Chatty BERT** | Strict | 127.6M Llama-style causal decoder | Muon + Liger; last step | Ready |
 
 Despite its leaderboard name, Chatty BERT is a decoder-only Llama-style model,
 not a BERT-family model.
@@ -46,155 +37,162 @@ not a BERT-family model.
 
 | System | BLiMP | BLiMP Supplement | SuperGLUE | NLP average |
 | --- | ---: | ---: | ---: | ---: |
-| MurphysLaw (10M) | 71.6 | 63.9 | 69.9–70.1¹ | 53.6² |
-| SidBert selected run (100M) | 80.2 | 73.6 | 73.5 | 57.3² |
-| Chatty BERT (100M) | 80.57 | 69.88 | 70.19 | 56.18³ |
-| Official GPT-2 strict, reevaluated | 74.73 | 65.00 | 66.06 | 52.79³ |
+| MurphysLaw (10M) | 71.6 | 63.9 | 69.9–70.1 | 53.6 |
+| SidBert selected run (100M) | 80.2 | 73.6 | 73.5 | 57.3 |
+| Chatty BERT (100M) | 80.57 | 69.88 | 70.19 | 56.18 |
+| Official GPT-2 Strict, reevaluated | 74.73 | 65.00 | 66.06 | 52.79 |
 
-¹ Identically configured development twin; ² six-suite development mean; ³ seven-suite mean from the completed causal-baseline comparison.
+The reported Chatty BERT run used an effective batch of 64: 16 sequences per
+microbatch × 4 accumulation steps. At sequence length 1,024, that is 65,536
+tokens per update. The manuscript configuration table should report
+`27,010 × 65,536`, not the later batch-128 retrain's `13,510 × 131,072`.
 
-The reported Chatty BERT scores use 27,010 updates at 65,536 tokens/update; the manuscript table should replace `13,510 × 131,072`.
+## SidBert release gate
 
-## Choose a reproduction level
+The original standalone 100M SidBert YAML has not yet been supplied. This branch
+does not guess or relabel another experiment as the exact submission recipe.
+Until that file and its matching shard-preparation config are added, the
+three-model reproduction is intentionally incomplete and `main` should not be
+published as final. A focused test keeps this limitation visible.
 
-### 1. Evaluate released weights
+## Install
 
-This is the recommended and least expensive way to verify the paper. Initialize
-the pinned official evaluator and install the evaluation dependencies:
+Python 3.10–3.12 is supported. Clone the pinned official evaluator with the
+repository, create an environment, and install the project:
 
 ```bash
 git clone --recurse-submodules https://github.com/JorgeCMurillo/babylm-baby-steps.git
 cd babylm-baby-steps
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ".[eval]"
+pip install -e ".[dev,eval,liger]"
+bash scripts/eval/setup_babylm_eval.sh
 ```
 
-Evaluate a Hub-hosted Strict-Small GPT-BERT model in MNTP mode:
+The setup helper accepts `--check`, requires the pinned evaluator commit, and
+refuses unrelated tracked changes. It applies only the compatibility patch in
+[`patches/babylm-eval/compat.patch`](patches/babylm-eval/compat.patch).
 
-```bash
-bash scripts/eval/eval_babylm_strict_small_submission.sh \
-  <hugging-face-repo-id> 8e-5 mntp
-```
-
-Evaluate a Hub-hosted Strict causal model:
-
-```bash
-bash scripts/eval/eval_babylm_strict_submission.sh \
-  <hugging-face-repo-id> 3e-5
-```
-
-The wrappers run full zero-shot evaluation, SuperGLUE finetuning, milestone
-evaluation, Global-PIQA, Age-of-Acquisition, and result collation through the
-pinned [official BabyLM evaluator](external/babylm-eval/).
-
-### 2. Quick training example (smoke test)
-
-**Start here to train a model.** This tiny causal recipe validates model
-construction, Muon, logging, and checkpoint writing before a full run:
-
-```bash
-pip install -e ".[dev,liger]"
-python scripts/train/train_causal_lm.py \
-  --config configs/train/smoke/llama_tiny_bpe16384_10m_muon_liger_smoke.yaml
-```
-
-### 3. Full paper-model training
-
-Full runs require the official BabyLM corpus, prepared token shards, bf16-capable
-NVIDIA GPUs, and substantial compute. By default, reusable artifacts and run
-outputs live outside Git:
+Reusable files and training runs stay outside Git by default:
 
 ```text
 ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/
 ${BABYSTEPS_RUNS_DIR:-~/babylm-baby-steps-runs}/
 ```
 
-The current paper-facing recipes are:
+## Reproduce a system
 
-| System | Training recipe | Status |
-| --- | --- | --- |
-| MurphysLaw | [`gpt_bert_baseline_mixed_..._adamuon_...yaml`](configs/train/gpt_bert_baseline_mixed_babylm2026_strict_small_adamuon_lr0p02_aux0p006_tailavg_seed42.yaml) | Canonical optimizer/tail-average recipe |
-| SidBert | `configs/train/` | Exact standalone 100M submission config still needs consolidation |
-| Chatty BERT | [`llama_12l896_..._auxlr1e4_bos_...yaml`](configs/train/llama_12l896_bpe16384_babylm2026_strict_muon_liger_submission_auxlr1e4_bos_seed42.yaml) | Reported-score recipe; effective batch 64 |
+Full runs download the official BabyLM corpus and need substantial GPU compute.
+Run all commands from the repository root.
 
-Do not substitute the 100M masked-focus LAMB example for SidBert: it is a
-different objective and optimizer. The missing standalone SidBert mapping is a
-known release-blocking documentation task rather than an implied recipe.
+### 1. Prepare data
 
-**Training commands.** Prepare datasets and token shards using the
-[data guide](data/README.md), then run a configured trainer:
+Build MurphysLaw's Strict-Small GPT-BERT shards:
 
 ```bash
-python scripts/train/train_hybrid_lm.py --config <gpt-bert-config.yaml>
-python scripts/train/train_causal_lm.py --config <llama-config.yaml>
+python scripts/data/build_token_shards.py --config configs/tokenization/submission/murphyslaw_strict_small_shards.yaml
 ```
 
-## Evaluation cautions
+Build Chatty BERT's Strict byte-BPE tokenizer and shards:
 
-- Seed-identical GPU retrains are not bit-identical. In our submission retrain,
-  BLiMP moved by 0.1 points while the 82-item BLiMP Supplement moved by 4.5.
-- The official GPT-2 leaderboard row was incomplete, so the paper compares
-  Chatty BERT with a completed reevaluation of the official checkpoint.
-- Report the evaluation backend. GPT-BERT submissions use MNTP; Chatty BERT and
-  GPT-2 use causal scoring.
-- Report the aggregation set. Six-suite development averages and seven-suite
-  causal-comparison averages are not interchangeable.
+```bash
+python scripts/data/build_token_shards.py --config configs/tokenization/submission/chatty_bert_strict_shards.yaml
+```
 
-## Exploratory and negative results
+The submitted Chatty BERT tokenizer prepends `<s>` when ordinary evaluation
+code encodes a sequence. Add that behavior without changing its vocabulary or
+raw tokenization:
 
-The repository retains failed and inconclusive experiments because they are
-useful controls, but they are not recommended submission recipes. Tested
-interventions include curriculum corpora, TinyStories, targeted synthetic text,
-teacher-weighted objectives, corpus mixtures, entity-state curricula, spatial
-ranking, and NextLat objectives.
+```bash
+python scripts/tokenization/prepare_submission_bos_tokenizer.py --source ~/babylm-baby-steps-cache/tokenizers/babylm2026_strict_byte_bpe_16384 --output ~/babylm-baby-steps-cache/tokenizers/babylm2026_strict_byte_bpe_16384_bos_default
+```
 
-Start with the [research summary](docs/research_summary/README.md), then consult:
+See [`data/README.md`](data/README.md) for paths and cache behavior.
 
-- [targeted and synthetic-data workflows](scripts/synthetic_data_generation/README.md);
-- [entity-tracking experiment report](docs/entity_tracking_experiment_report.md);
-- [auxiliary-objective and project decisions](docs/decisions.md); and
-- [operational runbook](docs/runbook.md).
+### 2. Train a model
 
-Some research-summary pages describe promising partial benchmark movements from
-the broader experimental archive. The workshop paper's conclusion is based on
-the complete aggregate, including downstream finetuning tradeoffs.
+MurphysLaw uses the hybrid causal/MNTP trainer and the paper's local-reference
+AdaMuon recipe:
+
+```bash
+python scripts/train/train_hybrid_lm.py --config configs/train/submission/murphyslaw_strict_small.yaml
+```
+
+Chatty BERT uses the causal trainer:
+
+```bash
+python scripts/train/train_causal_lm.py --config configs/train/submission/chatty_bert_strict.yaml
+```
+
+To check the causal path before a full run, use the retained tiny Llama recipe:
+
+```bash
+python scripts/train/train_causal_lm.py --config configs/train/smoke/llama_tiny_bpe16384_10m_muon_liger_smoke.yaml
+```
+
+The launchers are intentionally thin. Their reusable implementation is the
+installed `babysteps` package under [`src/babysteps/`](src/babysteps/). The
+[`scripts` guide](scripts/README.md) explains that layout in plain language.
+
+### 3. Validate and upload
+
+The uploader checks `final` and every required `chck_<N>M` directory before it
+contacts Hugging Face. Repositories are private by default. Start with a dry run:
+
+```bash
+python scripts/hf/upload_babylm_submission.py --run-dir /path/to/training/run --repo-id USER/MODEL --track strict-small --dry-run
+```
+
+Use `--track strict` for Chatty BERT or the future SidBert recipe. Remove
+`--dry-run` only after validation succeeds; pass `--public` only if public
+creation is intended.
+
+### 4. Run the official evaluation
+
+MurphysLaw uses MNTP scoring, which is the Strict-Small wrapper's default:
+
+```bash
+bash scripts/eval/eval_babylm_strict_small_submission.sh USER/MURPHYSLAW 8e-5
+```
+
+Chatty BERT uses causal scoring, the Strict wrapper's default:
+
+```bash
+bash scripts/eval/eval_babylm_strict_submission.sh USER/CHATTY-BERT 8e-5
+```
+
+SidBert will use the same Strict wrapper with an explicit `mntp` backend:
+
+```bash
+bash scripts/eval/eval_babylm_strict_submission.sh USER/SIDBERT 8e-5 mntp
+```
+
+The wrappers run zero-shot tasks, SuperGLUE finetuning, official word-milestone
+revisions, Global-PIQA, Age-of-Acquisition, and collation. They do not run during
+repository CI.
 
 ## Repository map
 
 ```text
-configs/        Data, tokenization, training, evaluation, and sweep recipes
-data/           Small versioned datasets and data documentation
-docs/           Research narrative, experiment reports, decisions, and runbook
-external/       Pinned official BabyLM evaluation submodule
-scripts/        Thin data, training, evaluation, analysis, and upload entrypoints
-src/babysteps/  Reusable Python package
-tests/          Focused submission checks and training smoke tests
+configs/        Two verified submission recipes, matching data recipes, and smoke/eval configs
+data/           Cache policy and data instructions; generated content is ignored
+external/       Pinned official BabyLM evaluator submodule
+patches/        Code-only evaluator compatibility patch
+scripts/        Data, training, validation/upload, tokenizer, and evaluation commands
+src/babysteps/  Reusable Python runtime used by the thin scripts
+tests/          Three submission-focused test files
 ```
 
-Raw corpora, checkpoints, caches, logs, and generated evaluation outputs should
-remain outside Git. Use `BABYLM_DATA_ROOT`, `BABYSTEPS_CACHE_DIR`, and
-`BABYSTEPS_RUNS_DIR` to override machine-local paths when needed.
+Exploratory configs, sweeps, synthetic-data tools, reports, and research datasets
+remain available on [`jorge/research`](https://github.com/JorgeCMurillo/babylm-baby-steps/tree/jorge/research).
 
-## Development
+## Tests
 
-The project supports Python 3.10–3.12. Run `pytest -q` before changing training
-or evaluation behavior. Keep scripts thin and commit each publication config.
+The reduced suite runs CPU updates and repository checks; it does not perform a
+full GPU run or official evaluation:
 
-Dependency ranges live in [`pyproject.toml`](pyproject.toml). For archival
-reproduction, also record exact PyTorch, CUDA, Transformers, Liger, driver, GPU,
-and evaluation-submodule versions with the run artifacts.
-
-## Citation
-
-```bibtex
-@misc{satheesh2026babysteps,
-  title  = {BabySteps at BabyLM 2026: Stronger Optimization and Causal
-            Baselines for Data-Constrained Pretraining},
-  author = {Satheesh, Siddhi and Murillo, Jorge},
-  year   = {2026}
-}
+```bash
+pytest -q
 ```
 
-A repository license has not yet been specified. Add a `LICENSE` file before
-public archival release so that reuse terms are explicit.
+See [`tests/README.md`](tests/README.md) for what each of the three files covers.
