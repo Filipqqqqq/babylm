@@ -294,21 +294,6 @@ Run the same command for the matched baseline, 1%, and 2% checkpoints. Also
 compare the standard BabyLM evaluation suite to check whether a targeted gain
 comes with broader regressions.
 
-## Tests
-
-Run the focused unit and integration tests with:
-
-```bash
-python -m pytest \
-  tests/test_container_state_world.py \
-  tests/test_container_state_generation.py \
-  -q
-```
-
-These tests cover state-transition invariants, deterministic generation,
-replay correctness, leakage checks, validation holds-outs, likelihood-reader
-compatibility, and equality of the baseline and treatment training recipes.
-
 ## Interpreting the First Run
 
 The most informative initial outcome is the pattern across slices:

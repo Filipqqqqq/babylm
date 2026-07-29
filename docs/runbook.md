@@ -20,33 +20,22 @@ git submodule update --init --recursive
 4. Record detailed provenance in a sidecar manifest beside the generated data.
 5. Save run outputs under `runs/` or an external run directory.
 
-## GPT-2 10M Baseline Checks
+## Submission Checks
 
-Before changing the GPT-2 small training path, run the parity checks:
-
-```bash
-pytest -q tests/test_gpt2_small_parity.py
-```
-
-For a stronger check with full GPT-2 small dimensions:
+Model users can run the deterministic CPU smoke check without learning the test
+suite:
 
 ```bash
-BABYSTEPS_PARITY_FULL_GPT2_SMALL=1 pytest -q tests/test_gpt2_small_parity.py
+python scripts/smoke_10_batch_deterministic.py --device cpu
 ```
 
-For a deterministic 10-batch training smoke test:
+Maintainers can run the compact submission checks before publishing:
 
 ```bash
-python scripts/smoke_10_batch_deterministic.py
+pytest -q tests/test_submission_configs.py \
+  tests/test_submission_training_smoke.py \
+  tests/test_submission_evaluation.py
 ```
-
-For the same check on one GPU:
-
-```bash
-CUDA_VISIBLE_DEVICES=0 python scripts/smoke_10_batch_deterministic.py --device cuda
-```
-
-These checks compare the new implementation with the relevant behavior of the older BabyLM 10M `train_gpt.py` without importing that script or triggering its Hugging Face side effects.
 
 ## GPT-2 + Muon 10M Runs
 

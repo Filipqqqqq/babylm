@@ -95,7 +95,6 @@ construction, Muon, logging, and checkpoint writing before a full run:
 
 ```bash
 pip install -e ".[dev,liger]"
-pytest -q
 python scripts/train/train_causal_lm.py \
   --config configs/train/smoke/llama_tiny_bpe16384_10m_muon_liger_smoke.yaml
 ```
@@ -170,7 +169,7 @@ docs/           Research narrative, experiment reports, decisions, and runbook
 external/       Pinned official BabyLM evaluation submodule
 scripts/        Thin data, training, evaluation, analysis, and upload entrypoints
 src/babysteps/  Reusable Python package
-tests/          Regression, parity, and smoke tests
+tests/          Focused submission checks and training smoke tests
 ```
 
 Raw corpora, checkpoints, caches, logs, and generated evaluation outputs should
