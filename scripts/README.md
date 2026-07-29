@@ -1,282 +1,109 @@
 # Scripts
 
-Preferred entrypoints live in small topical folders:
+This folder contains the commands used to prepare data, train models, evaluate
+checkpoints, and analyze results. Run these commands from the repository root.
 
-```text
-scripts/data/                                      dataset preparation and tokenization
-scripts/train/                                     training entrypoints
-scripts/eval/                                      evaluation launchers and wrappers
-scripts/sweeps/                                    training sweep launchers
-scripts/analysis/                                  plotting, result summaries, and lexical reports
-scripts/hf/                                        Hugging Face download/upload helpers
-```
+Most files here are small launchers. They read a YAML configuration—a plain-text
+recipe containing paths and settings—and call reusable Python code in
+`src/babysteps/`. If you want to change how an operation works, look in
+`src/babysteps/`; if you only want to run it, start here.
 
-The root-level Python scripts are compatibility shims for older commands. New
-docs and new automation should prefer the organized paths above.
+## New Here? Start With a Smoke Check
 
-Lexical analysis helpers:
-
-See `src/babysteps/analysis/lexical/README.md` for the conceptual guide and
-output-file descriptions.
-
-The lexical context summary writes raw neighbor columns plus
-`top_left_content_neighbors` and `top_right_content_neighbors`, which filter
-common English stopwords by default. Use `--include-context-stopwords` to make
-those content-neighbor columns match the raw neighbor counts.
+Install the project, then run the small deterministic CPU check:
 
 ```bash
-python scripts/analysis/report_lexical_analysis.py --max-docs 10000
-
-python scripts/analysis/report_lexical_analysis.py \
-  --config configs/analysis/lexical_babylm2026_strict_small.yaml
-
-python scripts/analysis/export_ewok_lexical_targets.py
-
-python scripts/analysis/report_lexical_analysis.py \
-  --config configs/analysis/lexical_babylm2026_strict_small_ewok.yaml
-
-python scripts/analysis/export_comps_lexical_targets.py
-
-python scripts/analysis/report_lexical_analysis.py \
-  --config configs/analysis/lexical_babylm2026_strict_small_comps_concepts.yaml
-
-python scripts/analysis/plot_comps_lexical_frequencies.py \
-  --target-coverage /path/to/comps/target_coverage.csv \
-  --n 30
-
-python scripts/analysis/plot_domain_concept_frequencies.py \
-  --target-coverage /path/to/target_coverage.csv \
-  --concepts configs/analysis/targets/ewok_fast_domain_concepts.yaml
-
-python scripts/analysis/benchmark_spacy_pipe.py \
-  --max-docs 5000 \
-  --batch-sizes 64,128,256,512 \
-  --n-processes 1,2,4
+pip install -e ".[dev]"
+python scripts/smoke_10_batch_deterministic.py --device cpu
 ```
 
-EWoK LM context-sensitivity diagnostics:
+This small test confirms that the basic model and training code work. It does
+not train a submission model or require the BabyLM dataset.
+
+## Folder Guide
+
+| Folder | What it contains |
+| --- | --- |
+| `data/` | Commands that prepare text, train tokenizers, and split tokenized text into manageable files called shards. |
+| `train/` | The supported GPT-BERT and causal-language-model training launchers. |
+| `eval/` | Checkpoint evaluation and focused diagnostic commands. |
+| `analysis/` | Commands that summarize results and create tables or plots. |
+| `hf/` | Helpers for uploading checkpoints to Hugging Face. |
+| `experiments/` | Builders for specific controlled experiments. |
+| `sweeps/` | Multi-run and machine-specific GPU launchers. Read each file before running it. |
+| `synthetic_data_generation/` | Commands for targeted curricula and synthetic training text. |
+
+## The Usual Workflow
+
+### 1. Prepare data
+
+Data preparation is controlled by a YAML file. For example, this command builds
+the tokenizer cache and token shards for the Strict-Small GPT-BERT baseline:
 
 ```bash
-python scripts/eval/eval_ewok_context_sensitivity.py \
+python scripts/data/build_token_shards.py \
+  --config configs/tokenization/babylm2026_strict_small_gpt_bert_baseline_mixed_shards.yaml
+```
+
+This step downloads or reads the configured dataset and writes reusable files
+under `${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}`. See the
+[data guide](../data/README.md) for the expected inputs and outputs.
+
+### 2. Train a model
+
+Use the hybrid launcher for GPT-BERT models and the causal launcher for GPT-2 or
+Llama-style models:
+
+```bash
+python scripts/train/train_hybrid_lm.py --config <gpt-bert-config.yaml>
+python scripts/train/train_causal_lm.py --config <causal-lm-config.yaml>
+```
+
+For example, the paper-facing MurphysLaw recipe starts with:
+
+```bash
+python scripts/train/train_hybrid_lm.py \
+  --config configs/train/gpt_bert_baseline_mixed_babylm2026_strict_small_adamuon_lr0p02_aux0p006_tailavg_seed42.yaml
+```
+
+Full paper runs require prepared token shards, a bf16-capable NVIDIA GPU, and
+substantial time. The [root README](../README.md) identifies the selected
+recipes and explains which launcher to use.
+
+### 3. Evaluate saved models
+
+Evaluation depends on the model objective and BabyLM track. Inspect the command
+first, then use `--dry-run` to see the external evaluation commands without
+executing them:
+
+```bash
+python scripts/eval/eval_babylm_checkpoints.py --help
+
+python scripts/eval/eval_babylm_checkpoints.py \
   --run-dir /path/to/training/run \
-  --batch-size 64
-
-python scripts/analysis/plot_ewok_context_dynamics.py \
-  --summary /path/to/training/run/benchmarks/ewok/context_summary.csv
+  --dry-run
 ```
 
-The same evaluator can run during training by adding a top-level config block:
+The official evaluation code is the pinned `external/babylm-eval/` submodule.
+GPT-BERT models use masked-next-token-prediction (MNTP) scoring; causal models
+use causal scoring. Check the root README before comparing scores produced by
+different evaluation methods or task sets.
 
-```yaml
-ewok_context_sensitivity_full:
-  enabled: true
-  every_steps: 500
-  batch_size: 64
-  score_reduction: sum
-  plot: true
-  plot_every_evals: 1
-```
+## Older Root-Level Commands
 
-By default this uses the full-eval EWoK folder:
+Files such as `scripts/train_causal_lm.py` and `scripts/build_token_shards.py`
+keep older commands working by forwarding them to the organized locations. New
+documentation and automation should use `scripts/train/`, `scripts/data/`, and
+the other folders above. The root-level smoke-check script is a real test, not
+one of these forwarding files.
 
-```text
-external/babylm-eval/strict/evaluation_data/full_eval/ewok_filtered
-```
+## More Detailed Guides
 
-If that folder is absent, EWoK evaluation fails loudly.
+- [Project overview and selected paper recipes](../README.md)
+- [Data layout and preparation](../data/README.md)
+- [Operational runbook](../docs/runbook.md)
+- [Synthetic-data workflows](synthetic_data_generation/README.md)
+- [Lexical-analysis guide](../src/babysteps/analysis/lexical/README.md)
 
-During training, EWoK context-sensitivity outputs are written under:
-
-```text
-<run_dir>/benchmarks/ewok_full/context_items.jsonl
-<run_dir>/benchmarks/ewok_full/context_summary.csv
-<run_dir>/benchmarks/ewok_full/context_domain_dynamics.png
-```
-
-Benchmark plot x-axis:
-
-Training writes exact `tokens_seen` into benchmark item and summary files. To
-also write `words_seen`, provide a conversion factor:
-
-```yaml
-logging:
-  benchmark_plot_x_axis: words_seen
-  words_per_token: 0.57
-```
-
-or equivalently:
-
-```yaml
-logging:
-  benchmark_plot_x_axis: words_seen
-  tokens_per_word: 1.75
-```
-
-Or let training estimate the conversion once from a deterministic prefix of the
-training tokens:
-
-```yaml
-logging:
-  benchmark_plot_x_axis: words_seen
-  estimate_words_per_token: true
-  words_per_token_sample_tokens: 4096
-```
-
-If `benchmark_plot_x_axis: words_seen` is set without an explicit conversion,
-training estimates `words_per_token` automatically. The estimate is approximate
-and is written back into the saved run config.
-
-`benchmark_plot_x_axis` can be `step`, `tokens_seen`, or `words_seen`. The
-standalone plotting scripts accept the same choice with `--x-axis`.
-
-Benchmark diagnostics can be scheduled by optimizer-update step, by estimated
-training words, or by both. For example:
-
-```yaml
-logging:
-  estimate_words_per_token: true
-
-entity_tracking_likelihood:
-  enabled: true
-  every_words: 1000000
-```
-
-Validation loss also accepts `logging.eval_every_words`. Word-based scheduling
-uses `words_seen = tokens_seen * words_per_token`; if no conversion is supplied,
-training estimates it automatically when a word interval is configured.
-
-BLiMP likelihood diagnostics:
-
-```bash
-python scripts/analysis/plot_blimp_likelihood_dynamics.py \
-  --summary /path/to/training/run/benchmarks/blimp/likelihood_summary.csv \
-  --label BLiMP \
-  --summary /path/to/training/run/benchmarks/blimp_supplement/likelihood_summary.csv \
-  --label "BLiMP Supplement"
-```
-
-The same scorer can run during training by adding a top-level config block:
-
-```yaml
-blimp_likelihood:
-  enabled: true
-  every_steps: 500
-  batch_size: 64
-  plot: true
-  plot_every_evals: 1
-```
-
-By default this evaluates both local full-eval folders:
-
-```text
-external/babylm-eval/strict/evaluation_data/full_eval/blimp_filtered
-external/babylm-eval/strict/evaluation_data/full_eval/supplement_filtered
-```
-
-During training, BLiMP likelihood outputs are written under:
-
-```text
-<run_dir>/benchmarks/blimp/likelihood_items.jsonl
-<run_dir>/benchmarks/blimp/likelihood_summary.csv
-<run_dir>/benchmarks/blimp/overall_accuracy.png
-<run_dir>/benchmarks/blimp/field_dynamics.png
-<run_dir>/benchmarks/blimp/linguistics_term_dynamics.png
-<run_dir>/benchmarks/blimp_supplement/likelihood_items.jsonl
-<run_dir>/benchmarks/blimp_supplement/likelihood_summary.csv
-<run_dir>/benchmarks/blimp_supplement/overall_accuracy.png
-<run_dir>/benchmarks/blimp_supplement/uid_dynamics.png
-<run_dir>/benchmarks/blimp_likelihood_overall_accuracy.png
-```
-
-Entity Tracking likelihood diagnostics:
-
-```bash
-python scripts/analysis/plot_entity_tracking_dynamics.py \
-  --summary /path/to/training/run/benchmarks/entity_tracking/likelihood_summary.csv
-```
-
-The same scorer can run during training by adding a top-level config block:
-
-```yaml
-entity_tracking_likelihood:
-  enabled: true
-  every_steps: 500
-  batch_size: 64
-  plot: true
-  plot_every_evals: 1
-```
-
-By default this evaluates the local full-eval folder:
-
-```text
-external/babylm-eval/strict/evaluation_data/full_eval/entity_tracking
-```
-
-During training, Entity Tracking likelihood outputs are written under:
-
-```text
-<run_dir>/benchmarks/entity_tracking/likelihood_items.jsonl
-<run_dir>/benchmarks/entity_tracking/likelihood_summary.csv
-<run_dir>/benchmarks/entity_tracking/overall_accuracy.png
-<run_dir>/benchmarks/entity_tracking/family_dynamics.png
-<run_dir>/benchmarks/entity_tracking/family_numops_dynamics.png
-```
-
-COMPS likelihood diagnostics:
-
-```bash
-python scripts/analysis/plot_comps_dynamics.py \
-  --summary /path/to/training/run/benchmarks/comps/likelihood_summary.csv
-```
-
-The same scorer can run during training by adding a top-level config block:
-
-```yaml
-comps_likelihood:
-  enabled: true
-  every_steps: 500
-  batch_size: 64
-  plot: true
-  plot_every_evals: 1
-```
-
-By default this evaluates the local full-eval folder:
-
-```text
-external/babylm-eval/strict/evaluation_data/full_eval/comps
-```
-
-The overall COMPS score is the official-style macro average over the four
-COMPS subtasks. Item-level correctness is strict: the acceptable prefix must
-assign higher continuation likelihood than the unacceptable prefix.
-
-During training, COMPS likelihood outputs are written under:
-
-```text
-<run_dir>/benchmarks/comps/likelihood_items.jsonl
-<run_dir>/benchmarks/comps/likelihood_summary.csv
-<run_dir>/benchmarks/comps/overall_accuracy.png
-<run_dir>/benchmarks/comps/subtask_dynamics.png
-<run_dir>/benchmarks/comps/negative_sample_type_dynamics.png
-```
-
-MNTP Hugging Face likelihood diagnostics:
-
-```bash
-python scripts/eval/eval_mntp_likelihood_hf.py \
-  --model BabyLM-community/babylm-baseline-10m-gpt-bert-causal-focus \
-  --trust-remote-code \
-  --score-reduction both
-```
-
-This mirrors the BabyLM zero-shot MNTP convention: mask each scored token and
-read that token's log probability from the previous position's logits. It writes
-one summary CSV and, unless `--no-items` is set, one per-item JSONL under the
-chosen output directory.
-
-Removed deprecated aliases:
-
-```text
-scripts/build_hf_token_shards.py  -> scripts/data/build_token_shards.py
-scripts/train_gpt2_small.py       -> scripts/train/train_causal_lm.py
-```
+When adding a new command, keep the launcher small, put reusable logic in
+`src/babysteps/`, and put experiment settings in `configs/`.

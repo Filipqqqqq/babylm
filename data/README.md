@@ -171,4 +171,4 @@ inputs unless a config or manifest explicitly points to them.
 - Keep tokenizers, token shards, and other reusable caches under
   `${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}`.
 
-See `manifests/blessed_synthetic_data.md` for the current blessed data lanes.
+See the root `README.md` for the current paper-facing training recipes.
