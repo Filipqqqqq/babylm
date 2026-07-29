@@ -11,7 +11,7 @@ if [[ $# -lt 1 || $# -gt 3 ]]; then
 fi
 
 MODEL_REPO="$1"
-FINETUNE_LR="${2:-${BABYSTEPS_SUPERGLUE_LR:-8e-5}}"
+FINETUNE_LR="${2:-${BABYSTEPS_SUPERGLUE_LR:-3e-5}}"
 BACKEND="${3:-${BABYSTEPS_EVAL_BACKEND:-causal}}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"

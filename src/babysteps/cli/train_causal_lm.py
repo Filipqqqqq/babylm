@@ -461,7 +461,7 @@ def main() -> None:
             / "configs"
             / "train"
             / "smoke"
-            / "gpt2_bpe16384_babylm2026_strict_small_smoke.yaml"
+            / "llama_tiny_bpe16384_10m_muon_liger_smoke.yaml"
         ),
         help="Path to a YAML training config.",
     )

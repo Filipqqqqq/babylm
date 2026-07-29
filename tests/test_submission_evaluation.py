@@ -87,6 +87,8 @@ def test_track_wrappers_have_documented_defaults_and_backend_override() -> None:
 
     assert 'BACKEND="${3:-${BABYSTEPS_EVAL_BACKEND:-mntp}}"' in strict_small
     assert 'BACKEND="${3:-${BABYSTEPS_EVAL_BACKEND:-causal}}"' in strict
+    assert 'FINETUNE_LR="${2:-${BABYSTEPS_SUPERGLUE_LR:-8e-5}}"' in strict_small
+    assert 'FINETUNE_LR="${2:-${BABYSTEPS_SUPERGLUE_LR:-3e-5}}"' in strict
     assert 'eval_zero_shot.sh "$MODEL_REPO" "$BACKEND"' in strict_small
     assert 'eval_zero_shot.sh "$MODEL_REPO" "$BACKEND"' in strict
     assert 'collate_preds.sh "${MODEL_REPO##*/}" "$BACKEND"' in strict_small
@@ -191,7 +193,11 @@ def test_readme_links_and_command_targets_exist() -> None:
             assert (markdown.parent / target).resolve().exists(), f"Broken link in {markdown}: {target}"
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    command_target = re.compile(r"(?:python|bash) ((?:scripts|src)/[A-Za-z0-9_./*-]+)")
-    for target in command_target.findall(readme):
+    command_target = re.compile(
+        r"(?:python|bash) ((?:scripts|src)/[A-Za-z0-9_./*-]+)"
+        r"|accelerate launch --num_processes \d+ ((?:scripts|src)/[A-Za-z0-9_./*-]+)"
+    )
+    for direct_target, accelerate_target in command_target.findall(readme):
+        target = direct_target or accelerate_target
         if "*" not in target:
             assert (ROOT / target).is_file(), f"Missing README command target: {target}"

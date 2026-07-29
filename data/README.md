@@ -4,12 +4,13 @@
 contains only this guide; `data/*` is ignored so an existing local cache is not
 deleted when the repository layout changes.
 
-The two public preparation recipes stream the official datasets from Hugging
+The three public preparation recipes stream the official datasets from Hugging
 Face:
 
 | Model | Dataset | Config |
 | --- | --- | --- |
 | MurphysLaw | `BabyLM-community/BabyLM-2026-Strict-Small` | `configs/tokenization/submission/murphyslaw_strict_small_shards.yaml` |
+| SidBert | `BabyLM-community/BabyLM-2026-Strict` | `configs/tokenization/submission/sidbert_strict_shards.yaml` |
 | Chatty BERT | `BabyLM-community/BabyLM-2026-Strict` | `configs/tokenization/submission/chatty_bert_strict_shards.yaml` |
 
 Run a recipe from the repository root:
@@ -39,8 +40,9 @@ python scripts/tokenization/prepare_submission_bos_tokenizer.py \
   --output ~/babylm-baby-steps-cache/tokenizers/babylm2026_strict_byte_bpe_16384_bos_default
 ```
 
-The original SidBert shard-preparation config will be added with its exact
-training YAML. It is deliberately not reconstructed from another experiment.
+SidBert's recipe uses the official 100M mixed GPT-BERT tokenizer, writes
+document boundaries as SEP, and leaves sequence-level CLS/SEP wrapping to the
+trainer.
 
 Generated data, downloaded models, and evaluation results should stay local.
 The historical datasets and generation tools remain on

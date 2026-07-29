@@ -1431,6 +1431,8 @@ def train_hybrid_lm(
         run_spatial_auxiliary_eval(epoch=0, step=0, tokens_seen=0.0)
 
     for epoch in range(1, int(epochs) + 1):
+        if global_update_step >= total_update_steps:
+            break
         model.train()
         epoch_loss_sum = 0.0
         epoch_ce_sum = 0.0
@@ -1483,6 +1485,8 @@ def train_hybrid_lm(
         )
 
         for input_ids, _loader_labels, _loss_mask, attention_mask in progress:
+            if global_update_step >= total_update_steps:
+                break
             active_sequence_length = sequence_length_for_step(
                 global_update_step,
                 total_update_steps,
@@ -2373,6 +2377,13 @@ def train_hybrid_lm(
                 name=f"checkpoint-epoch-{epoch:04d}",
                 repo=model_repo,
             )
+
+    if global_update_step != total_update_steps:
+        raise RuntimeError(
+            "Training ended before the configured optimizer-step target: "
+            f"completed {global_update_step:,} of {total_update_steps:,} updates. "
+            "Increase training.epochs or verify the shard and distributed settings."
+        )
 
     if eval_at_end and val_loader is not None:
         val_losses = evaluate_hybrid_lm_loss(

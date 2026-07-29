@@ -489,7 +489,8 @@ def main() -> None:
             ROOT
             / "configs"
             / "tokenization"
-            / "babylm2026_strict_byte_bpe_16384_shards.yaml"
+            / "submission"
+            / "murphyslaw_strict_small_shards.yaml"
         ),
         help="Path to a token-shard build config.",
     )

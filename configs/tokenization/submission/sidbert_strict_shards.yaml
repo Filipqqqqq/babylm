@@ -1,0 +1,25 @@
+name: sidbert_strict_shards
+
+dataset:
+  name: BabyLM-community/BabyLM-2026-Strict
+  config: default
+  split: train
+  text_field: text
+  streaming: true
+
+tokenizer:
+  kind: pretrained
+  source: BabyLM-community/babylm-baseline-100m-gpt-bert-mixed
+  trust_remote_code: true
+  model_max_length: 512
+  output_dir: ${BABYSTEPS_GPT_BERT_BASELINE_100M_MIXED_TOKENIZER_DIR:-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/tokenizers/gpt_bert_baseline_100m_mixed}
+
+shards:
+  output_dir: ${BABYSTEPS_BABYLM2026_STRICT_GPT_BERT_MIXED_SID_SHARDS_DIR:-${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_shards/babylm2026_strict_gpt_bert_mixed_sid_eos_only}
+  shard_tokens: 1000000
+  val_shards: 1
+  batch_docs: 512
+  max_shards:
+  # SidBert inserts SEP between source documents, then wraps each packed
+  # curriculum-length sequence with CLS/SEP during training.
+  document_format: eos_only

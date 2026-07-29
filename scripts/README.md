@@ -16,9 +16,10 @@ python scripts/data/build_token_shards.py \
   --config configs/tokenization/submission/murphyslaw_strict_small_shards.yaml
 ```
 
-Use `chatty_bert_strict_shards.yaml` instead for Chatty BERT. The command reads
-the official Hugging Face dataset and writes the tokenizer and binary shards to
-the external BabySteps cache. See the [data guide](../data/README.md).
+Use `sidbert_strict_shards.yaml` or `chatty_bert_strict_shards.yaml` for the
+100M systems. The command reads the official Hugging Face dataset and writes the
+tokenizer and binary shards to the external cache. See the
+[data guide](../data/README.md).
 
 ### 2. Train
 
@@ -27,6 +28,13 @@ GPT-BERT models use the hybrid launcher:
 ```bash
 python scripts/train/train_hybrid_lm.py \
   --config configs/train/submission/murphyslaw_strict_small.yaml
+```
+
+SidBert requires the two processes recorded by its submission recipe:
+
+```bash
+accelerate launch --num_processes 2 scripts/train/train_hybrid_lm.py \
+  --config configs/train/submission/sidbert_strict.yaml
 ```
 
 Causal models use the causal launcher:

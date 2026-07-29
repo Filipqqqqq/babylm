@@ -342,7 +342,8 @@ def main() -> None:
             ROOT
             / "configs"
             / "train"
-            / "gpt_bert_baseline_causal_focus_babylm2026_strict_small.yaml"
+            / "submission"
+            / "murphyslaw_strict_small.yaml"
         ),
         help="Path to a YAML hybrid training config.",
     )
@@ -644,6 +645,16 @@ def main() -> None:
         gradient_accumulation_steps=int(training_config.get("gradient_accumulation_steps", 1)),
         mixed_precision=training_config.get("mixed_precision", "no"),
     )
+    expected_world_size = run_config.get("expected_world_size")
+    if (
+        expected_world_size is not None
+        and int(expected_world_size) != accelerator.num_processes
+    ):
+        raise ValueError(
+            "This recipe requires "
+            f"run.expected_world_size={int(expected_world_size)}, but Accelerate "
+            f"started {accelerator.num_processes} process(es)."
+        )
 
     if accelerator.is_main_process:
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -974,8 +985,27 @@ def main() -> None:
 
     epochs = int(training_config.get("epochs", 1))
     grad_accum = int(training_config.get("gradient_accumulation_steps", 1))
-    updates_per_epoch = max(1, (len(train_loader) + grad_accum - 1) // grad_accum)
-    total_update_steps = epochs * updates_per_epoch
+    batches_per_process = max(
+        1,
+        (len(train_loader) + accelerator.num_processes - 1)
+        // accelerator.num_processes,
+    )
+    updates_per_epoch = max(
+        1,
+        (batches_per_process + grad_accum - 1) // grad_accum,
+    )
+    inferred_total_update_steps = epochs * updates_per_epoch
+    configured_total_steps = training_config.get("total_steps")
+    total_update_steps = (
+        int(configured_total_steps)
+        if configured_total_steps is not None
+        else inferred_total_update_steps
+    )
+    if total_update_steps <= 0:
+        raise ValueError("training.total_steps must be positive when it is set.")
+    if configured_total_steps is not None and total_update_steps > inferred_total_update_steps:
+        epochs = (total_update_steps + updates_per_epoch - 1) // updates_per_epoch
+        inferred_total_update_steps = epochs * updates_per_epoch
     warmup_steps = training_config.get("warmup_steps")
     if warmup_steps is None:
         warmup_steps = int(float(training_config.get("warmup_ratio", 0.016)) * total_update_steps)
@@ -994,6 +1024,13 @@ def main() -> None:
             f"tokens/update~={tokens_per_update:,}",
             flush=True,
         )
+        if configured_total_steps is not None:
+            print(
+                "Training step cap: "
+                f"configured={total_update_steps:,}, "
+                f"epoch-derived upper bound={inferred_total_update_steps:,}",
+                flush=True,
+            )
         if sequence_length_schedule:
             phases = ", ".join(
                 f"seq_len={phase_seq_len} through {until_fraction:.0%}"
