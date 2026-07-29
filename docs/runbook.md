@@ -8,16 +8,16 @@
 git submodule update --init --recursive
 ```
 
-2. Copy `manifests/paths.example.yaml` to `manifests/paths.local.yaml`.
-3. Edit the local paths for the current machine.
-4. Keep raw data, generated caches, checkpoints, and evaluation results outside git.
+2. Export `BABYLM_DATA_ROOT`, `BABYSTEPS_CACHE_DIR`, or `BABYSTEPS_RUNS_DIR`
+   when the defaults do not match the current machine.
+3. Keep raw data, caches, checkpoints, and evaluation results outside Git.
 
 ## Adding a Workflow
 
 1. Start with a config in `configs/`.
 2. Put reusable code in `src/babysteps/`.
 3. Add a small wrapper in `scripts/` if the workflow needs a command-line entry point.
-4. Record generated artifacts in `manifests/datasets.md`.
+4. Record detailed provenance in a sidecar manifest beside the generated data.
 5. Save run outputs under `runs/` or an external run directory.
 
 ## GPT-2 10M Baseline Checks

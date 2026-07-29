@@ -165,7 +165,7 @@ the complete aggregate, including downstream finetuning tradeoffs.
 
 ```text
 configs/        Data, tokenization, training, evaluation, and sweep recipes
-data/           Small versioned datasets, manifests, and data documentation
+data/           Small versioned datasets and data documentation
 docs/           Research narrative, experiment reports, decisions, and runbook
 external/       Pinned official BabyLM evaluation submodule
 scripts/        Thin data, training, evaluation, analysis, and upload entrypoints
@@ -174,7 +174,8 @@ tests/          Regression, parity, and smoke tests
 ```
 
 Raw corpora, checkpoints, caches, logs, and generated evaluation outputs should
-remain outside Git. Machine-local paths belong in `manifests/paths.local.yaml`.
+remain outside Git. Use `BABYLM_DATA_ROOT`, `BABYSTEPS_CACHE_DIR`, and
+`BABYSTEPS_RUNS_DIR` to override machine-local paths when needed.
 
 ## Development
 

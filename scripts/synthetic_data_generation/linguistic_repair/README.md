@@ -199,5 +199,5 @@ python scripts/train/train_hybrid_lm.py \
 - Recover the original QA-easy gains while preserving turn-taking.
 - Preserve Entity Tracking, especially `nothing.` targets, when adding targeted
   BLIMP Supplement patches.
-- Decide which linguistic repair configs and generated outputs should become
-  blessed artifacts in `manifests/blessed_synthetic_data.md`.
+- Decide which linguistic repair configs and generated outputs are stable enough
+  to document as paper-facing artifacts.

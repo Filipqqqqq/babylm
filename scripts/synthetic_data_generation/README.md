@@ -320,8 +320,7 @@ checks.
 
 ## Open Questions
 
-- Which generated outputs should become blessed artifacts in
-  `manifests/blessed_synthetic_data.md`?
+- Which generated outputs are stable enough to document as paper-facing artifacts?
 - Which repair lines need child READMEs beyond `linguistic_repair/` and the
   existing concept-curriculum config docs?
 - Which mixes are stable enough to recommend as reference baselines for future

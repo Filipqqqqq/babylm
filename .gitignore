@@ -25,7 +25,6 @@ git_pat.txt
 fireworks_api.txt
 *.key
 *.pem
-manifests/paths.local.yaml
 configs/**/*.local.yaml
 
 # Generated outputs
