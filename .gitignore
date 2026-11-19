@@ -11,6 +11,9 @@ __pycache__/
 venv/
 env/
 
+# Machine specific constraints
+constraints.txt
+
 # Notebooks
 .ipynb_checkpoints/
 
