@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -A <allocation>
+#SBATCH -A lu2025-7-98
 #SBATCH -p gpua40i
 #SBATCH --gres=gpu:1
 #SBATCH -t 01:00:00
