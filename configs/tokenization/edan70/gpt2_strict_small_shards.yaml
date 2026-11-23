@@ -1,0 +1,21 @@
+name: gpt2_strict_small_shards
+
+dataset:
+  name: BabyLM-community/BabyLM-2026-Strict-Small
+  config: default
+  split: train
+  text_field: text
+  streaming: true
+
+tokenizer:
+  kind: pretrained
+  source: BabyLM-community/BabyLM-2026-Baseline-GPT2-Strict-Small
+  model_max_length: 512
+  output_dir: ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/tokenizers/gpt2_baseline_strict_small
+
+shards:
+  output_dir: ${BABYSTEPS_CACHE_DIR:-~/babylm-baby-steps-cache}/token_shards/babylm2026_strict_small_gpt2_baseline
+  shard_tokens: 1000000
+  val_shards: 1
+  batch_docs: 512
+  max_shards:
