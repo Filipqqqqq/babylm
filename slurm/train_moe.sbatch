@@ -2,7 +2,7 @@
 #SBATCH -A lu2025-7-98
 #SBATCH -p gpua40i
 #SBATCH --gres=gpu:1
-#SBATCH -t 06:00:00
+#SBATCH -t 08:00:00
 #SBATCH -J moe-seed42
 #SBATCH -o logs/%x_%j.out
 #SBATCH -e logs/%x_%j.err
