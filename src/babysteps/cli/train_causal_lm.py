@@ -1322,7 +1322,18 @@ def main() -> None:
     if accelerator.is_main_process:
         print(f"Model architecture: {architecture}", flush=True)
         print(f"Liger kernel applied: {liger_applied}", flush=True)
-        if architecture == "llama":
+        if architecture == "moe":
+            moe_cfg = model.config
+            print(
+                "MoE: "
+                f"experts={moe_cfg.num_experts} top_k={moe_cfg.num_experts_per_tok} "
+                f"expert_size={moe_cfg.moe_intermediate_size} "
+                f"shared_expert_size={moe_cfg.shared_expert_intermediate_size} "
+                f"aux_coef={moe_cfg.router_aux_loss_coef} "
+                f"z_coef={getattr(moe_cfg, 'babysteps_router_z_loss_coef', 0.0)}",
+                flush=True,
+            )
+        if architecture in ("llama", "moe"):
             print(
                 "LLaMA dropout: "
                 f"attention={float(getattr(model.config, 'attention_dropout', 0.0))} "
@@ -1332,6 +1343,16 @@ def main() -> None:
             )
         params = sum(p.numel() for p in model.parameters())
         print(f"Model parameters: {params:,}", flush=True)
+        if architecture == "moe":
+            per_expert = sum(
+                p.numel() for p in model.model.layers[0].mlp.experts[0].parameters()
+            )
+            inactive = (
+                (model.config.num_experts - model.config.num_experts_per_tok)
+                * per_expert
+                * model.config.num_hidden_layers
+            )
+            print(f"Active parameters per token: {params - inactive:,}", flush=True)
         if nextlat_config.enabled:
             nextlat_params = (
                 sum(p.numel() for p in nextlat_dynamics.parameters())

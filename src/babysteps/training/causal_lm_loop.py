@@ -48,6 +48,7 @@ from babysteps.evaluation.ewok_context_sensitivity import (
     evaluate_ewok_context_sensitivity,
 )
 from babysteps.training.branch_scoring import BranchScoreReduction
+from babysteps.training.moe import compute_moe_router_losses, moe_settings_from_model
 from babysteps.training.nextlat import (
     LatentDynamicsMLP,
     NextLatConfig,
@@ -499,6 +500,9 @@ def train_causal_lm(
     blimp_eval_count = 0
     entity_tracking_eval_count = 0
     comps_eval_count = 0
+    # Sparse MoE models need their router losses added to the LM loss here,
+    # because this loop computes cross-entropy itself from the logits.
+    moe_settings = moe_settings_from_model(accelerator.unwrap_model(model))
     nextlat_enabled = (
         nextlat_dynamics is not None
         and nextlat_config is not None
@@ -1126,6 +1130,10 @@ def train_causal_lm(
         window_spatial_auxiliary_batches = 0
         window_optimizer_step_seconds = 0.0
         window_optimizer_steps = 0
+        window_moe_aux_loss_sum = 0.0
+        window_moe_z_loss_sum = 0.0
+        window_moe_max_load_ratio = 0.0
+        window_moe_batches = 0
 
         progress = tqdm(
             train_loader,
@@ -1153,6 +1161,7 @@ def train_causal_lm(
                 if nextlat_dynamics is not None
                 else (model,)
             )
+            moe_result = None
             with accelerator.accumulate(*accumulate_models):
                 with accelerator.autocast():
                     if nextlat_enabled:
@@ -1195,6 +1204,26 @@ def train_causal_lm(
                             batch_nextlat_kl_weight * nextlat_result.kl_loss
                         )
                         total_loss = loss + weighted_nextlat_loss + weighted_nextlat_kl_loss
+                        if moe_settings is not None:
+                            moe_result = compute_moe_router_losses(
+                                outputs,
+                                moe_settings,
+                                attention_mask=attention_mask,
+                            )
+                            total_loss = total_loss + moe_result.weighted_loss
+                    elif moe_settings is not None:
+                        outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+                        loss, token_count = compute_causal_lm_loss_from_logits(
+                            logits=outputs.logits,
+                            labels=labels,
+                            loss_mask=loss_mask,
+                        )
+                        moe_result = compute_moe_router_losses(
+                            outputs,
+                            moe_settings,
+                            attention_mask=attention_mask,
+                        )
+                        total_loss = loss + moe_result.weighted_loss
                     else:
                         loss, token_count = compute_causal_lm_loss(
                             model,
@@ -1406,6 +1435,15 @@ def train_causal_lm(
             window_loss_sum += loss_sum_value
             window_total_loss_sum += total_loss_sum_value
             window_tokens += token_count_value
+            if moe_result is not None:
+                # Local (per-process) router statistics; BabySteps runs single-GPU.
+                window_moe_aux_loss_sum += float(moe_result.aux_loss.detach().item())
+                window_moe_z_loss_sum += float(moe_result.z_loss.detach().item())
+                window_moe_max_load_ratio = max(
+                    window_moe_max_load_ratio,
+                    float(moe_result.max_load_ratio.item()),
+                )
+                window_moe_batches += 1
             if nextlat_loss_sum is not None and nextlat_transition_count is not None:
                 nextlat_loss_sum_value = nextlat_loss_sum.item()
                 nextlat_transition_count_value = nextlat_transition_count.item()
@@ -1591,6 +1629,15 @@ def train_causal_lm(
                         " spatial_aux_loss="
                         f"{record['spatial_auxiliary_loss']:.4f}"
                     )
+                if window_moe_batches:
+                    record["moe_aux_loss"] = window_moe_aux_loss_sum / window_moe_batches
+                    record["moe_z_loss"] = window_moe_z_loss_sum / window_moe_batches
+                    record["moe_max_load_ratio"] = window_moe_max_load_ratio
+                    message += (
+                        f" moe_aux_loss={record['moe_aux_loss']:.4f}"
+                        f" moe_z_loss={record['moe_z_loss']:.4f}"
+                        f" moe_max_load_ratio={window_moe_max_load_ratio:.2f}"
+                    )
                 if profile_optimizer_steps and window_optimizer_steps:
                     optimizer_step_ms = (
                         1000.0 * window_optimizer_step_seconds / window_optimizer_steps
@@ -1617,6 +1664,10 @@ def train_causal_lm(
                 window_spatial_auxiliary_batches = 0
                 window_optimizer_step_seconds = 0.0
                 window_optimizer_steps = 0
+                window_moe_aux_loss_sum = 0.0
+                window_moe_z_loss_sum = 0.0
+                window_moe_max_load_ratio = 0.0
+                window_moe_batches = 0
 
             validation_word_due = (
                 current_words_seen is not None

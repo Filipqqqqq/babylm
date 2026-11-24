@@ -45,10 +45,18 @@ def _is_embedding_or_head(name: str) -> bool:
     return "embedding" in lowered or ("embed" in lowered and "mlp" not in lowered)
 
 
+def _is_moe_router(name: str) -> bool:
+    """MoE router/gate matrices are tiny and conventionally trained with AdamW."""
+
+    return name.endswith(("mlp.gate.weight", "mlp.shared_expert_gate.weight"))
+
+
 def _is_muon_eligible(name: str, param: torch.nn.Parameter) -> bool:
     if param.ndim < 2:
         return False
     if _is_embedding_or_head(name):
+        return False
+    if _is_moe_router(name):
         return False
     return True
 

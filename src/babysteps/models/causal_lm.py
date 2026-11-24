@@ -17,11 +17,14 @@ from transformers import (
     GPT2Config,
     LlamaConfig,
     PretrainedConfig,
+    Qwen2MoeConfig,
 )
 
 
 DEFAULT_GPT_BERT_REPO = "BabyLM-community/babylm-baseline-10m-gpt-bert-causal-focus"
-SUPPORTED_MODEL_ARCHES = ("gpt2", "llama", "gpt_bert")
+SUPPORTED_MODEL_ARCHES = ("gpt2", "llama", "moe", "gpt_bert")
+# Model types that share the LLaMA-style dropout hooks below.
+LLAMA_STYLE_MODEL_TYPES = ("llama", "qwen2_moe")
 
 
 def normalize_model_arch(model_arch: str | None) -> str:
@@ -39,6 +42,9 @@ def normalize_model_arch(model_arch: str | None) -> str:
         "gptbert": "gpt_bert",
         "gpt-bert": "gpt_bert",
         "gpt_bert": "gpt_bert",
+        "moe": "moe",
+        "qwen2-moe": "moe",
+        "qwen2moe": "moe",
     }
     if arch not in aliases:
         supported = ", ".join(SUPPORTED_MODEL_ARCHES)
@@ -73,10 +79,10 @@ def _token_id(tokenizer: Any, primary: str, fallback: str | None = None) -> int 
     return None if value is None else int(value)
 
 
-def _llama_rope_kwargs(rope_theta: float) -> dict[str, Any]:
+def _llama_rope_kwargs(rope_theta: float, config_class: type = LlamaConfig) -> dict[str, Any]:
     """Return RoPE kwargs for the installed Transformers LLaMA config surface."""
 
-    llama_params = inspect.signature(LlamaConfig.__init__).parameters
+    llama_params = inspect.signature(config_class.__init__).parameters
     if "rope_parameters" in llama_params:
         return {
             "rope_parameters": {
@@ -94,6 +100,78 @@ def resolve_model_vocab_size(model_config: dict[str, Any], tokenizer: Any) -> in
     if vocab_size is None or int(vocab_size) <= 0:
         vocab_size = len(tokenizer)
     return int(vocab_size)
+
+
+def _build_moe_config(
+    shared_kwargs: dict[str, Any],
+    *,
+    rope_theta: float,
+    dense_intermediate_size: int,
+    num_experts: int,
+    top_k: int,
+    expert_intermediate_size: int | None,
+    shared_intermediate_size: int | None,
+    norm_topk_prob: bool,
+    router_aux_loss_coef: float,
+    router_z_loss_coef: float,
+) -> PretrainedConfig:
+    """Build a sparse Mixture-of-Experts decoder config.
+
+    Uses the Hugging Face Qwen2-MoE implementation so checkpoints load with the
+    stock ``AutoModelForCausalLM`` (no remote code) in the official evaluator.
+    Attention is configured to match the LLaMA blocks (no QKV bias), so the
+    only architectural change relative to ``architecture: llama`` is the
+    feed-forward layer: ``num_experts`` routed SwiGLU experts with top-k
+    routing plus one always-on shared SwiGLU expert.
+
+    Defaults keep active feed-forward compute close to the dense model:
+    each routed expert and the shared expert get
+    ``dense_intermediate_size // (top_k + 1)``.
+    """
+
+    num_experts = int(num_experts)
+    top_k = int(top_k)
+    if num_experts < 1:
+        raise ValueError(f"model.moe_num_experts must be >= 1, got {num_experts}.")
+    if not 1 <= top_k <= num_experts:
+        raise ValueError(
+            f"model.moe_top_k must be in [1, moe_num_experts], got {top_k} "
+            f"with {num_experts} experts."
+        )
+    default_expert_size = max(1, int(dense_intermediate_size) // (top_k + 1))
+    expert_size = (
+        int(expert_intermediate_size)
+        if expert_intermediate_size is not None and int(expert_intermediate_size) > 0
+        else default_expert_size
+    )
+    shared_size = (
+        int(shared_intermediate_size)
+        if shared_intermediate_size is not None
+        else default_expert_size
+    )
+    if shared_size < 0:
+        raise ValueError("model.moe_shared_intermediate_size must be >= 0.")
+    if float(router_aux_loss_coef) < 0.0 or float(router_z_loss_coef) < 0.0:
+        raise ValueError("MoE router loss coefficients must be non-negative.")
+
+    config = Qwen2MoeConfig(
+        **shared_kwargs,
+        qkv_bias=False,
+        use_sliding_window=False,
+        decoder_sparse_step=1,
+        mlp_only_layers=[],
+        num_experts=num_experts,
+        num_experts_per_tok=top_k,
+        moe_intermediate_size=expert_size,
+        shared_expert_intermediate_size=shared_size,
+        norm_topk_prob=bool(norm_topk_prob),
+        output_router_logits=True,
+        router_aux_loss_coef=float(router_aux_loss_coef),
+        **_llama_rope_kwargs(float(rope_theta), Qwen2MoeConfig),
+    )
+    # Read by the BabySteps causal training loop; ignored by Transformers.
+    config.babysteps_router_z_loss_coef = float(router_z_loss_coef)
+    return config
 
 
 def build_causal_lm_config(
@@ -117,6 +195,13 @@ def build_causal_lm_config(
     attention_dropout: float = 0.0,
     llama_embd_pdrop: float = 0.0,
     llama_resid_pdrop: float = 0.0,
+    moe_num_experts: int = 8,
+    moe_top_k: int = 2,
+    moe_intermediate_size: int | None = None,
+    moe_shared_intermediate_size: int | None = None,
+    moe_norm_topk_prob: bool = True,
+    moe_router_aux_loss_coef: float = 0.01,
+    moe_router_z_loss_coef: float = 0.001,
 ) -> PretrainedConfig:
     """Build a from-scratch causal-LM config for a supported architecture."""
 
@@ -165,7 +250,7 @@ def build_causal_lm_config(
                 f"got n_head={n_head} and llama_num_key_value_heads={num_key_value_heads}."
             )
 
-        config = LlamaConfig(
+        shared_kwargs = dict(
             vocab_size=vocab_size,
             hidden_size=n_embd,
             intermediate_size=intermediate_size,
@@ -181,8 +266,25 @@ def build_causal_lm_config(
                 name="model.attention_dropout",
             ),
             tie_word_embeddings=bool(llama_tie_word_embeddings),
-            **_llama_rope_kwargs(float(rope_theta)),
         )
+        if arch == "moe":
+            config = _build_moe_config(
+                shared_kwargs,
+                rope_theta=float(rope_theta),
+                dense_intermediate_size=intermediate_size,
+                num_experts=moe_num_experts,
+                top_k=moe_top_k,
+                expert_intermediate_size=moe_intermediate_size,
+                shared_intermediate_size=moe_shared_intermediate_size,
+                norm_topk_prob=moe_norm_topk_prob,
+                router_aux_loss_coef=moe_router_aux_loss_coef,
+                router_z_loss_coef=moe_router_z_loss_coef,
+            )
+        else:
+            config = LlamaConfig(
+                **shared_kwargs,
+                **_llama_rope_kwargs(float(rope_theta)),
+            )
         config.babysteps_llama_embd_pdrop = _dropout_probability(
             llama_embd_pdrop,
             name="model.llama_embd_pdrop",
@@ -267,6 +369,13 @@ def build_causal_lm_config_from_dict(
             ("llama_resid_pdrop", "llama_hidden_dropout", "hidden_dropout"),
             llama_dropout,
         ),
+        moe_num_experts=int(model_config.get("moe_num_experts", 8)),
+        moe_top_k=int(model_config.get("moe_top_k", 2)),
+        moe_intermediate_size=model_config.get("moe_intermediate_size"),
+        moe_shared_intermediate_size=model_config.get("moe_shared_intermediate_size"),
+        moe_norm_topk_prob=bool(model_config.get("moe_norm_topk_prob", True)),
+        moe_router_aux_loss_coef=float(model_config.get("moe_router_aux_loss_coef", 0.01)),
+        moe_router_z_loss_coef=float(model_config.get("moe_router_z_loss_coef", 0.001)),
     )
 
 
@@ -278,7 +387,7 @@ def apply_llama_training_dropout(model, hf_config: PretrainedConfig):
     two points without changing checkpoint evaluation behavior.
     """
 
-    if getattr(hf_config, "model_type", None) != "llama":
+    if getattr(hf_config, "model_type", None) not in LLAMA_STYLE_MODEL_TYPES:
         return model
 
     embed_dropout = float(getattr(hf_config, "babysteps_llama_embd_pdrop", 0.0))
